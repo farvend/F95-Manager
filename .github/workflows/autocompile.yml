@@ -42,18 +42,71 @@ jobs:
     needs: build-windows
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
     
     steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Для получения всей истории коммитов
+    
     - name: Download artifact
       uses: actions/download-artifact@v4
       with:
         name: windows-executable
         path: ./artifacts
     
+    - name: Get the version
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+    
+    - name: Create source archive
+      run: |
+        mkdir release
+        cp -r artifacts/* release/
+        git archive --format=zip --output=release/source-${{ steps.get_version.outputs.VERSION }}.zip HEAD
+        git archive --format=tar.gz --output=release/source-${{ steps.get_version.outputs.VERSION }}.tar.gz HEAD
+    
+    - name: Generate changelog
+      id: changelog
+      run: |
+        if git describe --tags --abbrev=0 HEAD^ >/dev/null 2>&1; then
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^)
+          echo "Previous tag: $PREVIOUS_TAG"
+          {
+            echo 'CHANGELOG<<EOF'
+            echo "## What's Changed"
+            echo ""
+            git log $PREVIOUS_TAG..HEAD --pretty=format:"- %s (%h)" --reverse
+            echo ""
+            echo ""
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREVIOUS_TAG...${{ steps.get_version.outputs.VERSION }}"
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
+        else
+          {
+            echo 'CHANGELOG<<EOF'
+            echo "## Initial Release"
+            echo ""
+            git log --pretty=format:"- %s (%h)" --reverse
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
+        fi
+    
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        files: ./artifacts/*.exe
-        generate_release_notes: true
+        name: Release ${{ steps.get_version.outputs.VERSION }}
+        body: |
+          ${{ steps.changelog.outputs.CHANGELOG }}
+          
+          ## Downloads
+          - 📦 **Windows executable** - Pre-built binary for Windows
+          - 📄 **Source code** - Available in zip and tar.gz formats below
+        files: |
+          release/*
+        generate_release_notes: false
+        draft: false
+        prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
