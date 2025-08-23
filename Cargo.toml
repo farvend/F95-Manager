@@ -1,0 +1,32 @@
+[package]
+name = "f95_2"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = "4.5.45"
+derive_more = {version = "2.0.1", features = ["full"]}
+eframe = { version = "0.27", default-features = false, features = ["wgpu", "glow", "default_fonts"] }
+reqwest = { version = "0.12.23", features = ["json", "rustls-tls", "stream"] }
+serde = { version = "1.0.219", features = ["derive"] }
+strum = {version = "0.27.2", features = ["derive"]}
+tokio = { version = "1", features = ["rt-multi-thread", "fs", "io-util", "full"] }
+image = { version = "0.25.5", features = ["png", "jpeg", "webp", "gif"] }
+lazy_static = "1.5.0"
+serde_json = "1.0.142"
+regex = "1.11.1"
+derive-getters = "0.5.0"
+crossbeam-channel = "0.5.15"
+log = "0.4"
+env_logger = "0.11"
+zip = { version = "0.6", default-features = false, features = ["deflate"] }
+threadpool = "1.8"
+bitflags = "2.6"
+rfd = "0.14"
+
+[profile.release]
+opt-level = "z"
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"
