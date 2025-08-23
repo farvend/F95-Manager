@@ -198,7 +198,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
                     }
-                    if ui.button("Cancel").clicked() {
+                    if ctx.input(|i| i.viewport().close_requested()) {
                         *SETTINGS_OPEN.write().unwrap() = false;
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
