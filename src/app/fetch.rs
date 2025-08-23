@@ -78,190 +78,86 @@ impl super::NoLagApp {
         self.counter = self.counter.wrapping_add(1);
         let req_id = self.counter;
 
-        let tx = self.tx.clone();
-        let ctx2 = ctx.clone();
-
-        // Library ignores user filters to ensure we can find all installed games
-        let filters = crate::parser::F95Filters::default().with_category("games");
-
-        // Capture installed thread_ids with existing folders + keep id->folder mapping for fallbacks
-        let installs: Vec<(u64, std::path::PathBuf)> = {
-            let st = crate::app::settings::APP_SETTINGS.read().unwrap();
-            st.downloaded_games
-                .iter()
-                .filter(|g| crate::app::settings::game_folder_exists(&g.folder))
-                .map(|g| (g.thread_id, g.folder.clone()))
-                .collect()
-        };
-        // Include in-progress downloads as library targets as well
-        let mut targets: Vec<u64> = installs.iter().map(|(id, _)| *id).collect();
+        // Build targets and snapshot cache
+        let installs: Vec<(u64, std::path::PathBuf)> = helpers::collect_installs();
         let downloading_ids: std::collections::HashSet<u64> =
             self.downloads.keys().copied().collect();
-        for id in downloading_ids.iter() {
-            if !targets.contains(id) {
-                targets.push(*id);
-            }
-        }
-        // Include persisted pending downloads (from previous sessions/errors)
-        let pending_ids: Vec<u64> = {
-            let st = crate::app::settings::APP_SETTINGS.read().unwrap();
-            st.pending_downloads.clone()
-        };
-        for id in pending_ids {
-            if !targets.contains(&id) {
-                targets.push(id);
-            }
-        }
+        let pending_ids: Vec<u64> = helpers::collect_pending_ids();
+        let targets: Vec<u64> = helpers::build_targets(&installs, &downloading_ids, &pending_ids);
         log::info!(
             "Library targets count: {} (installed: {}, downloading: {})",
             targets.len(),
             installs.len(),
             downloading_ids.len()
         );
-        // Direct mode: build Library strictly from installed thread pages (no list scanning).
-        // 1) Reuse already loaded cards from the previous result to avoid redundant requests.
-        // 2) Create placeholders for the rest.
-        // 3) Enrich ONLY cards with missing data (cover/tags/screens) by fetching the thread page.
-        {
-            use std::collections::HashMap;
 
-            // Snapshot current results so we don't re-fetch if a card is already filled
-            let existing_map: HashMap<u64, crate::parser::F95Thread> = {
-                if let Some(msg) = &self.last_result {
-                    msg.data
-                        .iter()
-                        .map(|t| (t.thread_id.get(), t.clone()))
-                        .collect()
-                } else {
-                    HashMap::new()
-                }
-            };
+        // Snapshot current results so we don't re-fetch if a card is already filled
+        let existing_map =
+            helpers::build_existing_map(self.last_result.as_ref());
 
-            let installs2 = installs.clone();
-            let targets2 = targets.clone();
-            let tx2 = self.tx.clone();
-            let ctx3 = ctx.clone();
-            let req_id2 = req_id;
+        let installs2 = installs.clone();
+        let targets2 = targets.clone();
+        let tx2 = self.tx.clone();
+        let ctx3 = ctx.clone();
+        let req_id2 = req_id;
+        let existing_map2 = existing_map;
 
-            super::rt().spawn(async move {
-                use std::collections::HashMap;
-
-                if targets2.is_empty() {
-                    let empty = crate::parser::F95Msg {
-                        data: Vec::new(),
-                        pagination: crate::parser::Pagination { page: 1, total: 1 },
-                        count: 0,
-                    };
-                    let _ = tx2.send((req_id2, Ok(empty)));
-                    ctx3.request_repaint();
-                    return;
-                }
-
-                // Initial list from cache (if any) + placeholders
-                let install_map: HashMap<u64, std::path::PathBuf> =
-                    installs2.iter().cloned().collect();
-
-                let mut all_found: Vec<crate::parser::F95Thread> = Vec::new();
-                for id in targets2.iter() {
-                    if let Some(ex) = existing_map.get(id) {
-                        all_found.push(ex.clone());
-                    } else {
-                        let title = install_map
-                            .get(id)
-                            .and_then(|folder| folder.file_name().and_then(|s| s.to_str()))
-                            .map(|s| s.to_string())
-                            .unwrap_or_else(|| format!("Thread #{}", id));
-                        all_found.push(crate::parser::F95Thread {
-                            thread_id: ThreadId(*id),
-                            title,
-                            creator: String::new(),
-                            version: String::new(),
-                            views: 0,
-                            likes: 0,
-                            prefixes: Vec::new(),
-                            tags: Vec::new(),
-                            rating: 0.0,
-                            cover: String::new(),
-                            screens: Vec::new(),
-                            date: String::new(),
-                            watched: false,
-                            ignored: false,
-                            is_new: false,
-                            ts: 0,
-                        });
-                    }
-                }
-
-                // Send initial snapshot
-                log::info!("Direct library initial: items={}", all_found.len());
-                let mut result = crate::parser::F95Msg {
-                    data: all_found.clone(),
-                    pagination: crate::parser::Pagination { page: 1, total: 1 },
-                    count: all_found.len() as u64,
-                };
-                let _ = tx2.send((req_id2, Ok(result)));
+        super::rt().spawn(async move {
+            if targets2.is_empty() {
+                let empty = helpers::make_msg_from_threads(Vec::new());
+                let _ = tx2.send((req_id2, Ok(empty)));
                 ctx3.request_repaint();
+                return;
+            }
 
-                // Enrich only cards with missing data, strictly from the thread page
-                let to_enrich: Vec<u64> = all_found
-                    .iter()
-                    .filter(|t| t.cover.is_empty() || t.tags.is_empty() || t.screens.is_empty())
-                    .map(|t| t.thread_id.get())
-                    .collect();
+            // Initial list from cache (if any) + placeholders
+            let install_map: std::collections::HashMap<u64, std::path::PathBuf> =
+                helpers::build_install_map(&installs2);
 
-                for id in to_enrich {
-                    log::info!("Direct enrich thread {}", id);
-                    if let Some(mut meta) = crate::parser::game_info::thread_meta::fetch_thread_meta(id).await {
-                        // Snapshot before moving fields
-                        let has_title = meta.title.as_ref().is_some();
-                        let has_cover = meta.cover.as_ref().is_some();
-                        let sc_len = meta.screens.len();
-                        let tg_len = meta.tag_ids.len();
+            let mut all_found: Vec<crate::parser::F95Thread> =
+                helpers::fill_threads_from_targets(&targets2, &existing_map2, &install_map);
 
-                        if let Some(th) = all_found.iter_mut().find(|t| t.thread_id.get() == id) {
-                            // Title: replace folder-name fallback if needed
-                            if let Some(tt) = meta.title.take() {
-                                let looks_like_folder = install_map
-                                    .get(&id)
-                                    .and_then(|p| p.file_name().and_then(|s| s.to_str()))
-                                    .map(|n| n == th.title)
-                                    .unwrap_or(false);
-                                if th.title.is_empty() || looks_like_folder {
-                                    th.title = tt;
-                                }
-                            }
-                            // Media/tags only if missing
-                            if let Some(c) = meta.cover.take() {
-                                if th.cover.is_empty() {
-                                    th.cover = c;
-                                }
-                            }
-                            //if sc_len > 0 && th.screens.is_empty() {
-                                th.screens = meta.screens;
-                                
-                            //}
-                            if tg_len > 0 && th.tags.is_empty() {
-                                th.tags = meta.tag_ids;
-                            }
-                        }
+            // Send initial snapshot
+            log::info!("Direct library initial: items={}", all_found.len());
+            let mut result = helpers::make_msg_from_threads(all_found.clone());
+            let _ = tx2.send((req_id2, Ok(result)));
+            ctx3.request_repaint();
 
-                        log::info!("Direct meta fetched for {}: title={} cover={} screens={} tags={}", id, has_title, has_cover, sc_len, tg_len);
+            // Enrich only cards with missing data, strictly from the thread page
+            let to_enrich: Vec<u64> = all_found
+                .iter()
+                .filter(|t| helpers::needs_enrich(t))
+                .map(|t| t.thread_id.get())
+                .collect();
 
-                        // Push incremental update
-                        result = crate::parser::F95Msg {
-                            data: all_found.clone(),
-                            pagination: crate::parser::Pagination { page: 1, total: 1 },
-                            count: all_found.len() as u64,
-                        };
-                        let _ = tx2.send((req_id2, Ok(result)));
-                        ctx3.request_repaint();
+            for id in to_enrich {
+                log::info!("Direct enrich thread {}", id);
+                if let Some(mut meta) =
+                    crate::parser::game_info::thread_meta::fetch_thread_meta(id).await
+                {
+                    if let Some(th) = all_found.iter_mut().find(|t| t.thread_id.get() == id) {
+                        let (has_title, has_cover, sc_len, tg_len) =
+                            helpers::apply_meta(th, meta, &install_map);
+                        log::info!(
+                            "Direct meta fetched for {}: title={} cover={} screens={} tags={}",
+                            id,
+                            has_title,
+                            has_cover,
+                            sc_len,
+                            tg_len
+                        );
                     }
-                }
-            });
 
-            // Do not scan listing pages at all in Library mode
-            return;
-        }
+                    // Push incremental update
+                    let result2 = helpers::make_msg_from_threads(all_found.clone());
+                    let _ = tx2.send((req_id2, Ok(result2)));
+                    ctx3.request_repaint();
+                }
+            }
+        });
+
+        // Do not scan listing pages at all in Library mode
+        return;
     }
 
     /// Start background prefetch of Library data right after app start.
@@ -276,110 +172,40 @@ impl super::NoLagApp {
         let tx = self.lib_tx.clone();
         let ctx2 = ctx.clone();
 
-        // Capture installed thread_ids with existing folders + keep id->folder mapping for fallbacks
-        let installs: Vec<(u64, std::path::PathBuf)> = {
-            let st = crate::app::settings::APP_SETTINGS.read().unwrap();
-            st.downloaded_games
-                .iter()
-                .filter(|g| crate::app::settings::game_folder_exists(&g.folder))
-                .map(|g| (g.thread_id, g.folder.clone()))
-                .collect()
-        };
-        // Include current in-progress downloads as library targets
-        let mut targets: Vec<u64> = installs.iter().map(|(id, _)| *id).collect();
+        let installs: Vec<(u64, std::path::PathBuf)> = helpers::collect_installs();
         let downloading_ids: std::collections::HashSet<u64> =
             self.downloads.keys().copied().collect();
-        for id in downloading_ids.iter() {
-            if !targets.contains(id) {
-                targets.push(*id);
-            }
-        }
-        // Include persisted pending downloads (from previous sessions/errors)
-        let pending_ids: Vec<u64> = {
-            let st = crate::app::settings::APP_SETTINGS.read().unwrap();
-            st.pending_downloads.clone()
-        };
-        for id in pending_ids {
-            if !targets.contains(&id) {
-                targets.push(id);
-            }
-        }
+        let pending_ids: Vec<u64> = helpers::collect_pending_ids();
+        let targets: Vec<u64> = helpers::build_targets(&installs, &downloading_ids, &pending_ids);
 
         // Snapshot current results so we don't re-fetch if a card is already filled
-        let existing_map: std::collections::HashMap<u64, crate::parser::F95Thread> = {
-            if let Some(msg) = &self.last_result {
-                msg.data
-                    .iter()
-                    .map(|t| (t.thread_id.get(), t.clone()))
-                    .collect()
-            } else {
-                std::collections::HashMap::new()
-            }
-        };
+        let existing_map: std::collections::HashMap<u64, crate::parser::F95Thread> =
+            helpers::build_existing_map(self.last_result.as_ref());
 
         super::rt().spawn(async move {
-            use std::collections::HashMap;
-            use crate::parser::game_info::ThreadId;
-
             if targets.is_empty() {
-                let empty = crate::parser::F95Msg {
-                    data: Vec::new(),
-                    pagination: crate::parser::Pagination { page: 1, total: 1 },
-                    count: 0,
-                };
+                let empty = helpers::make_msg_from_threads(Vec::new());
                 let _ = tx.send(Ok(empty));
                 ctx2.request_repaint();
                 return;
             }
 
             // Initial list from cache (if any) + placeholders
-            let install_map: HashMap<u64, std::path::PathBuf> =
-                installs.iter().cloned().collect();
+            let install_map: std::collections::HashMap<u64, std::path::PathBuf> =
+                helpers::build_install_map(&installs);
 
-            let mut all_found: Vec<crate::parser::F95Thread> = Vec::new();
-            for id in targets.iter() {
-                if let Some(ex) = existing_map.get(id) {
-                    all_found.push(ex.clone());
-                } else {
-                    let title = install_map
-                        .get(id)
-                        .and_then(|folder| folder.file_name().and_then(|s| s.to_str()))
-                        .map(|s| s.to_string())
-                        .unwrap_or_else(|| format!("Thread #{}", id));
-                    all_found.push(crate::parser::F95Thread {
-                        thread_id: ThreadId(*id),
-                        title,
-                        creator: String::new(),
-                        version: String::new(),
-                        views: 0,
-                        likes: 0,
-                        prefixes: Vec::new(),
-                        tags: Vec::new(),
-                        rating: 0.0,
-                        cover: String::new(),
-                        screens: Vec::new(),
-                        date: String::new(),
-                        watched: false,
-                        ignored: false,
-                        is_new: false,
-                        ts: 0,
-                    });
-                }
-            }
+            let mut all_found: Vec<crate::parser::F95Thread> =
+                helpers::fill_threads_from_targets(&targets, &existing_map, &install_map);
 
             // Send initial snapshot
-            let mut result = crate::parser::F95Msg {
-                data: all_found.clone(),
-                pagination: crate::parser::Pagination { page: 1, total: 1 },
-                count: all_found.len() as u64,
-            };
+            let mut result = helpers::make_msg_from_threads(all_found.clone());
             let _ = tx.send(Ok(result.clone()));
             ctx2.request_repaint();
 
             // Enrich only cards with missing data, strictly from the thread page (concurrently)
             let to_enrich: Vec<u64> = all_found
                 .iter()
-                .filter(|t| t.cover.is_empty() || t.tags.is_empty() || t.screens.is_empty())
+                .filter(|t| helpers::needs_enrich(t))
                 .map(|t| t.thread_id.get())
                 .collect();
 
@@ -393,47 +219,21 @@ impl super::NoLagApp {
 
             while let Some(joined) = set.join_next().await {
                 if let Ok((id, Some(mut meta))) = joined {
-                    // Snapshot before moving fields
-                    let has_title = meta.title.as_ref().is_some();
-                    let has_cover = meta.cover.as_ref().is_some();
-                    let sc_len = meta.screens.len();
-                    let tg_len = meta.tag_ids.len();
-
                     if let Some(th) = all_found.iter_mut().find(|t| t.thread_id.get() == id) {
-                        // Title: replace folder-name fallback if needed
-                        if let Some(tt) = meta.title.take() {
-                            let looks_like_folder = install_map
-                                .get(&id)
-                                .and_then(|p| p.file_name().and_then(|s| s.to_str()))
-                                .map(|n| n == th.title)
-                                .unwrap_or(false);
-                            if th.title.is_empty() || looks_like_folder {
-                                th.title = tt;
-                            }
-                        }
-                        // Media/tags only if missing
-                        if let Some(c) = meta.cover.take() {
-                            if th.cover.is_empty() {
-                                th.cover = c;
-                            }
-                        }
-                        th.screens = meta.screens;
-                        if tg_len > 0 && th.tags.is_empty() {
-                            th.tags = meta.tag_ids;
-                        }
+                        let (has_title, has_cover, sc_len, tg_len) =
+                            helpers::apply_meta(th, meta, &install_map);
+                        log::info!(
+                            "Prefetch meta for {}: title={} cover={} screens={} tags={}",
+                            id,
+                            has_title,
+                            has_cover,
+                            sc_len,
+                            tg_len
+                        );
                     }
 
-                    log::info!(
-                        "Prefetch meta for {}: title={} cover={} screens={} tags={}",
-                        id, has_title, has_cover, sc_len, tg_len
-                    );
-
                     // Push incremental update
-                    result = crate::parser::F95Msg {
-                        data: all_found.clone(),
-                        pagination: crate::parser::Pagination { page: 1, total: 1 },
-                        count: all_found.len() as u64,
-                    };
+                    result = helpers::make_msg_from_threads(all_found.clone());
                     let _ = tx.send(Ok(result.clone()));
                     ctx2.request_repaint();
                 }
@@ -447,115 +247,44 @@ impl super::NoLagApp {
         let tx = self.lib_tx.clone();
         let ctx2 = ctx.clone();
 
-        // Capture installed thread_ids with existing folders + keep id->folder mapping for fallbacks
-        let installs: Vec<(u64, std::path::PathBuf)> = {
-            let st = crate::app::settings::APP_SETTINGS.read().unwrap();
-            st.downloaded_games
-                .iter()
-                .filter(|g| crate::app::settings::game_folder_exists(&g.folder))
-                .map(|g| (g.thread_id, g.folder.clone()))
-                .collect()
-        };
-        // Include current in-progress downloads as library targets too
-        let mut targets: Vec<u64> = installs.iter().map(|(id, _)| *id).collect();
+        let installs: Vec<(u64, std::path::PathBuf)> = helpers::collect_installs();
         let downloading_ids: std::collections::HashSet<u64> =
             self.downloads.keys().copied().collect();
-        for id in downloading_ids.iter() {
-            if !targets.contains(id) {
-                targets.push(*id);
-            }
-        }
-        // Include persisted pending downloads (from previous sessions/errors)
-        let pending_ids: Vec<u64> = {
-            let st = crate::app::settings::APP_SETTINGS.read().unwrap();
-            st.pending_downloads.clone()
-        };
-        for id in pending_ids {
-            if !targets.contains(&id) {
-                targets.push(id);
-            }
-        }
+        let pending_ids: Vec<u64> = helpers::collect_pending_ids();
+        let targets: Vec<u64> = helpers::build_targets(&installs, &downloading_ids, &pending_ids);
 
         // Snapshot current results (prefer existing lib_result) so we don't re-fetch if a card is already filled
-        let existing_map: std::collections::HashMap<u64, crate::parser::F95Thread> = {
-            if let Some(msg) = &self.lib_result {
-                msg.data
-                    .iter()
-                    .map(|t| (t.thread_id.get(), t.clone()))
-                    .collect()
-            } else if let Some(msg) = &self.last_result {
-                msg.data
-                    .iter()
-                    .map(|t| (t.thread_id.get(), t.clone()))
-                    .collect()
+        let existing_map: std::collections::HashMap<u64, crate::parser::F95Thread> =
+            if self.lib_result.is_some() {
+                helpers::build_existing_map(self.lib_result.as_ref())
             } else {
-                std::collections::HashMap::new()
-            }
-        };
+                helpers::build_existing_map(self.last_result.as_ref())
+            };
 
         super::rt().spawn(async move {
-            use std::collections::HashMap;
-            use crate::parser::game_info::ThreadId;
-
             if targets.is_empty() {
-                let empty = crate::parser::F95Msg {
-                    data: Vec::new(),
-                    pagination: crate::parser::Pagination { page: 1, total: 1 },
-                    count: 0,
-                };
+                let empty = helpers::make_msg_from_threads(Vec::new());
                 let _ = tx.send(Ok(empty));
                 ctx2.request_repaint();
                 return;
             }
 
             // Initial list from cache (if any) + placeholders
-            let install_map: HashMap<u64, std::path::PathBuf> =
-                installs.iter().cloned().collect();
+            let install_map: std::collections::HashMap<u64, std::path::PathBuf> =
+                helpers::build_install_map(&installs);
 
-            let mut all_found: Vec<crate::parser::F95Thread> = Vec::new();
-            for id in targets.iter() {
-                if let Some(ex) = existing_map.get(id) {
-                    all_found.push(ex.clone());
-                } else {
-                    let title = install_map
-                        .get(id)
-                        .and_then(|folder| folder.file_name().and_then(|s| s.to_str()))
-                        .map(|s| s.to_string())
-                        .unwrap_or_else(|| format!("Thread #{}", id));
-                    all_found.push(crate::parser::F95Thread {
-                        thread_id: ThreadId(*id),
-                        title,
-                        creator: String::new(),
-                        version: String::new(),
-                        views: 0,
-                        likes: 0,
-                        prefixes: Vec::new(),
-                        tags: Vec::new(),
-                        rating: 0.0,
-                        cover: String::new(),
-                        screens: Vec::new(),
-                        date: String::new(),
-                        watched: false,
-                        ignored: false,
-                        is_new: false,
-                        ts: 0,
-                    });
-                }
-            }
+            let mut all_found: Vec<crate::parser::F95Thread> =
+                helpers::fill_threads_from_targets(&targets, &existing_map, &install_map);
 
             // Send initial snapshot
-            let mut result = crate::parser::F95Msg {
-                data: all_found.clone(),
-                pagination: crate::parser::Pagination { page: 1, total: 1 },
-                count: all_found.len() as u64,
-            };
+            let mut result = helpers::make_msg_from_threads(all_found.clone());
             let _ = tx.send(Ok(result.clone()));
             ctx2.request_repaint();
 
             // Enrich only cards with missing data, strictly from the thread page (concurrently)
             let to_enrich: Vec<u64> = all_found
                 .iter()
-                .filter(|t| t.cover.is_empty() || t.tags.is_empty() || t.screens.is_empty())
+                .filter(|t| helpers::needs_enrich(t))
                 .map(|t| t.thread_id.get())
                 .collect();
 
@@ -570,37 +299,12 @@ impl super::NoLagApp {
             while let Some(joined) = set.join_next().await {
                 if let Ok((id, Some(mut meta))) = joined {
                     if let Some(th) = all_found.iter_mut().find(|t| t.thread_id.get() == id) {
-                        // Title: replace folder-name fallback if needed
-                        if let Some(tt) = meta.title.take() {
-                            let looks_like_folder = install_map
-                                .get(&id)
-                                .and_then(|p| p.file_name().and_then(|s| s.to_str()))
-                                .map(|n| n == th.title)
-                                .unwrap_or(false);
-                            if th.title.is_empty() || looks_like_folder {
-                                th.title = tt;
-                            }
-                        }
-                        // Media/tags only if missing
-                        if let Some(c) = meta.cover.take() {
-                            if th.cover.is_empty() {
-                                th.cover = c;
-                            }
-                        }
-                        th.screens = meta.screens;
-                        if !th.tags.is_empty() {
-                            // keep
-                        } else {
-                            th.tags = meta.tag_ids;
-                        }
+                        let (_has_title, _has_cover, _sc_len, _tg_len) =
+                            helpers::apply_meta(th, meta, &install_map);
                     }
 
                     // Push incremental update
-                    result = crate::parser::F95Msg {
-                        data: all_found.clone(),
-                        pagination: crate::parser::Pagination { page: 1, total: 1 },
-                        count: all_found.len() as u64,
-                    };
+                    result = helpers::make_msg_from_threads(all_found.clone());
                     let _ = tx.send(Ok(result.clone()));
                     ctx2.request_repaint();
                 }

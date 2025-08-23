@@ -21,16 +21,18 @@ pub fn is_open() -> bool {
 }
 
 pub fn draw_logs_viewport(ctx: &egui::Context) {
-    // Only draw if opened
+    // Only draw if opened; also keep one extra frame if closing to let OS process Close.
     let is_open = LOGS_OPEN.read().map(|g| *g).unwrap_or(false);
     if !is_open {
+        *LOGS_OPEN.write().unwrap() = false;
+                    ctx.request_repaint();
         return;
     }
 
     let viewport_id = egui::ViewportId::from_hash_of("logs_window");
 
     //ctx.show_viewport_immediate(
-    ctx.show_viewport_deferred(
+    ctx.show_viewport_immediate(
         viewport_id,
         egui::ViewportBuilder::default()
             .with_title("Logs")
@@ -38,11 +40,13 @@ pub fn draw_logs_viewport(ctx: &egui::Context) {
             .with_resizable(true),
         move |ctx, _class| {
             // If user clicked the OS close (X), mark as closed and ensure viewport closes.
+            // Keep a short "closing" phase so the OS can process the command without leaving a grey window.
             if ctx.input(|i| i.viewport().close_requested()) {
                 if let Ok(mut v) = LOGS_OPEN.write() {
                     *v = false;
                 }
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                ctx.request_repaint();
                 return;
             }
             egui::CentralPanel::default().show(ctx, |ui| {

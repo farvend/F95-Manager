@@ -1,6 +1,7 @@
 // Логика приложения вынесена из main.rs, чтобы убрать глубокую вложенность в конце main.
 // Здесь находится состояние NoLagApp и отрисовка UI. Получение данных и runtime вынесены в подмодули.
 
+use eframe::egui::RichText;
 use eframe::{egui, App};
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
@@ -30,7 +31,6 @@ const UNZIP_WEIGHT: f32 = 1.0 - DOWNLOAD_WEIGHT;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Screen {
-    AuthNotice,
     AuthLogin,
     Main,
 }
@@ -99,7 +99,7 @@ impl Default for NoLagApp {
                 .map(|s| s.trim().is_empty())
                 .unwrap_or(true)
         };
-        let screen = if need_auth { Screen::AuthNotice } else { Screen::Main };
+        let screen = if need_auth { Screen::AuthLogin } else { Screen::Main };
         Self {
             counter: 0,
             page: 1,
@@ -176,16 +176,6 @@ impl App for NoLagApp {
         if self.screen != Screen::Main {
             egui::CentralPanel::default().show(ctx, |ui| {
                 match self.screen {
-                    Screen::AuthNotice => {
-                        ui.add_space(24.0);
-                        ui.vertical_centered(|ui| {
-                            ui.heading("You need to authorize");
-                            ui.add_space(8.0);
-                            if ui.button("Continue").clicked() {
-                                self.screen = Screen::AuthLogin;
-                            }
-                        });
-                    }
                     Screen::AuthLogin => {
                         ui.add_space(24.0);
                         ui.vertical_centered(|ui| {
@@ -258,6 +248,8 @@ impl App for NoLagApp {
                                 self.start_fetch(ctx);
                             }
                         }
+                        ui.add_space(8.0);
+                        ui.label(RichText::new("This information is needed to get download links from games' pages").small());
                     }
                     Screen::Main => {}
                 }
