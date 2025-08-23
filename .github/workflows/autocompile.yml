@@ -25,6 +25,12 @@ jobs:
         override: true
         components: rustfmt, clippy
     
+    # Специализированный кеш для Rust (проще и эффективнее)
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        cache-on-failure: true
+    
     - name: Build
       run: cargo build --release --verbose
     
@@ -36,8 +42,9 @@ jobs:
       with:
         name: windows-executable
         path: target/release/*.exe
+        retention-days: 30
         
-  # Создание релиза при пуше тега
+  # Создание релиза при пуше тега (как вы и хотели)
   release:
     needs: build-windows
     runs-on: ubuntu-latest
@@ -72,7 +79,6 @@ jobs:
       run: |
         if git describe --tags --abbrev=0 HEAD^ >/dev/null 2>&1; then
           PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^)
-          echo "Previous tag: $PREVIOUS_TAG"
           {
             echo 'CHANGELOG<<EOF'
             echo "## What's Changed"
