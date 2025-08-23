@@ -21,8 +21,9 @@ jobs:
     - name: Setup Rust
       uses: actions-rs/toolchain@v1
       with:
-        toolchain: stable
+        toolchain: nightly
         override: true
+        components: rustfmt, clippy
     
     - name: Build
       run: cargo build --release --verbose
