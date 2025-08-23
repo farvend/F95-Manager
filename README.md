@@ -1,6 +1,9 @@
 # F95 Standalone Client
 
-A native desktop client (Rust + egui) for fast browsing, filtering, and downloading F95zone games. Allows to easily download, unzip and run games. Library that holds all installed games
+Desktop client for F95zone - browse, download, and manage games from a native app.
+
+Built with Rust + egui for speed and efficiency. Features include advanced search, 
+automated downloads with extraction, and a built-in library to organize your collection.
 
 
 ## Install
