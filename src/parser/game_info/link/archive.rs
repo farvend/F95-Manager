@@ -6,9 +6,12 @@ use std::{
     process::Command,
     sync::mpsc as std_mpsc,
 };
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use threadpool::ThreadPool;
 use tokio::sync::mpsc::UnboundedSender;
 use zip::ZipArchive;
+use sevenz_rust;
 
 use crate::game_download::{GameDownloadStatus, Progress};
 
@@ -238,6 +241,18 @@ fn archive_dest_dir(archive_path: &Path, dest_base: &Path) -> PathBuf {
     dest_base.join(stem)
 }
 
+fn extract_with_sevenz(
+    archive_path: &Path,
+    dest_base: &Path,
+) -> Result<(PathBuf, Option<PathBuf>), String> {
+    let dest_dir = archive_dest_dir(archive_path, dest_base);
+    std::fs::create_dir_all(&dest_dir).map_err(|e| format!("Create dest dir failed: {e}"))?;
+    match sevenz_rust::decompress_file(archive_path, &dest_dir) {
+        Ok(()) => Ok((dest_dir.clone(), find_first_exe(&dest_dir))),
+        Err(e) => Err(format!("7z decompress (pure Rust) failed: {e}")),
+    }
+}
+
 fn is_memory_alloc_failure(s: &str) -> bool {
     let lc = s.to_ascii_lowercase();
     lc.contains("memory allocation")
@@ -249,13 +264,17 @@ fn is_memory_alloc_failure(s: &str) -> bool {
 fn try_unrar(archive_path: &Path, dest_dir: &Path) -> Result<(), String> {
     let mut last_err: Option<String> = None;
     for bin in ["unrar", "unrar.exe", "WinRAR.exe"] {
-        match Command::new(bin)
-            .arg("x")
+        let mut cmd = Command::new(bin);
+        cmd.arg("x")
             .arg("-y")
             .arg("-o+")
             .arg(archive_path.as_os_str())
-            .arg(dest_dir.as_os_str())
-            .output()
+            .arg(dest_dir.as_os_str());
+        #[cfg(windows)]
+        {
+            cmd.creation_flags(0x08000000);
+        }
+        match cmd.output()
         {
             Ok(out) => {
                 if out.status.success() {
@@ -293,12 +312,16 @@ fn extract_with_7z(
     let mut last_err: Option<String> = None;
     let mut last_out: Option<String> = None;
     for bin in ["7z", "7z.exe"] {
-        match Command::new(bin)
-            .arg("x")
+        let mut cmd = Command::new(bin);
+        cmd.arg("x")
             .arg("-y")
             .arg(archive_path.as_os_str())
-            .arg(format!("-o\"{}\"", dest_dir.to_string_lossy()))
-            .output()
+            .arg(format!("-o\"{}\"", dest_dir.to_string_lossy()));
+        #[cfg(windows)]
+        {
+            cmd.creation_flags(0x08000000);
+        }
+        match cmd.output()
         {
             Ok(out) => {
                 if out.status.success() {
@@ -354,6 +377,9 @@ pub fn extract_archive(
     // - .gz, .bz2, .xz (single-file archives)
     if name_lower.ends_with(".zip") {
         return unzip_with_threadpool(archive_path, dest_base, sd);
+    }
+    if name_lower.ends_with(".7z") {
+        return extract_with_sevenz(archive_path, dest_base);
     }
 
     const SUPPORTED_7Z: [&str; 12] = [
