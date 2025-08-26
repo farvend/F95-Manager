@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::app::settings::store::{
-    downloaded_game_exe, downloaded_game_folder, record_downloaded_game,
+    downloaded_game_exe, downloaded_game_folder, record_downloaded_game, APP_SETTINGS,
 };
 use super::open::reveal_in_file_manager;
 
@@ -20,6 +20,62 @@ fn run_executable(path: &Path) {
         Ok(p) => p,
         Err(_) => path.to_path_buf(),
     };
+
+    // Try custom launch template if provided (uses {{path}} placeholder)
+    {
+        let template = APP_SETTINGS.read().map(|s| s.custom_launch.clone()).unwrap_or_default();
+        if !template.trim().is_empty() {
+            let path_s = abs_exe.to_string_lossy().to_string();
+            
+            let cmdline = template.replace("{{path}}", &format!("\"{}\"", path_s));
+
+            // Split command line into program and args respecting quotes (simple parser)
+            fn split_cmdline(s: &str) -> Vec<String> {
+                let mut out = Vec::new();
+                let mut cur = String::new();
+                let mut in_quotes = false;
+                for ch in s.chars() {
+                    match ch {
+                        '"' => in_quotes = !in_quotes,
+                        c if c.is_whitespace() && !in_quotes => {
+                            if !cur.is_empty() {
+                                out.push(cur.clone());
+                                cur.clear();
+                            }
+                        }
+                        _ => cur.push(ch),
+                    }
+                }
+                if !cur.is_empty() {
+                    out.push(cur);
+                }
+                out
+            }
+
+            let parts = split_cmdline(&cmdline);
+            if let Some((prog, args)) = parts.split_first() {
+                let mut child = std::process::Command::new(prog);
+                if let Some(d) = &dir {
+                    child.current_dir(d);
+                }
+                child.args(args);
+                log::info!("Custom launch (direct): {} {:?}", prog, args);
+                match child.spawn() {
+                    Ok(_) => {
+                        log::info!("Launched game (custom): {}", abs_exe.to_string_lossy());
+                        return;
+                    }
+                    Err(e) => {
+                        log::error!("Custom launch failed: {}", e);
+                        return;
+                    }
+                }
+            } else {
+                log::error!("Custom launch: empty command after parsing");
+                return;
+            }
+        }
+    }
 
     // Try CMD start first (ShellExecute-like) — closest to manual run in cmd
     {

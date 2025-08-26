@@ -27,6 +27,9 @@ pub struct AppSettings {
     pub warn_tags: Vec<u32>,
     #[serde(default)]
     pub warn_prefixes: Vec<u32>,
+    // Custom launch command template; use {{path}} placeholder for the game's exe path
+    #[serde(default)]
+    pub custom_launch: String,
 }
 
 impl Default for AppSettings {
@@ -39,6 +42,7 @@ impl Default for AppSettings {
             hidden_threads: Vec::new(),
             warn_tags: Vec::new(),
             warn_prefixes: Vec::new(),
+            custom_launch: String::new(),
         }
     }
 }

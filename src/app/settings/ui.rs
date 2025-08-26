@@ -15,6 +15,7 @@ lazy_static! {
     pub static ref SETTINGS_OPEN: RwLock<bool> = RwLock::new(false);
     static ref TEMP_DIR_INPUT: RwLock<String> = RwLock::new(String::new());
     static ref EXTRACT_DIR_INPUT: RwLock<String> = RwLock::new(String::new());
+    static ref CUSTOM_LAUNCH_INPUT: RwLock<String> = RwLock::new(String::new());
     // State for extract-dir change confirmation and migration
     static ref MOVE_CONFIRM_OPEN: RwLock<bool> = RwLock::new(false);
     static ref PENDING_TEMP_DIR: RwLock<String> = RwLock::new(String::new());
@@ -43,6 +44,10 @@ pub fn open_settings() {
     {
         let mut ext = EXTRACT_DIR_INPUT.write().unwrap();
         *ext = s.extract_dir.to_string_lossy().to_string();
+    }
+    {
+        let mut cl = CUSTOM_LAUNCH_INPUT.write().unwrap();
+        *cl = s.custom_launch.clone();
     }
     {
         let mut v = WARN_TAGS_INPUT.write().unwrap();
@@ -101,6 +106,17 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                         }
                     }
                 });
+                ui.add_space(8.0);
+                ui.separator();
+
+                ui.label("Custom launch command (use {{path}} placeholder):");
+                {
+                    let mut custom_val = CUSTOM_LAUNCH_INPUT.read().unwrap().clone();
+                    if ui.add(egui::TextEdit::singleline(&mut custom_val).hint_text("\"C:\\\\Start.exe\" /box:TestBox {{path}}")).changed() {
+                        *CUSTOM_LAUNCH_INPUT.write().unwrap() = custom_val;
+                    }
+                }
+
                 ui.add_space(8.0);
                 ui.separator();
                 ui.label("Warn on tags/prefixes:");
@@ -187,11 +203,13 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                             {
                                 let warn_tags = WARN_TAGS_INPUT.read().unwrap().clone();
                                 let warn_prefixes = WARN_PREFIXES_INPUT.read().unwrap().clone();
+                                let custom_launch = CUSTOM_LAUNCH_INPUT.read().unwrap().clone();
                                 let mut st = APP_SETTINGS.write().unwrap();
                                 st.temp_dir = std::path::PathBuf::from(temp_val);
                                 st.extract_dir = new_extract_pb;
                                 st.warn_tags = warn_tags;
                                 st.warn_prefixes = warn_prefixes;
+                                st.custom_launch = custom_launch;
                             } // drop write lock before saving to avoid deadlock
                             save_settings_to_disk();
                             *SETTINGS_OPEN.write().unwrap() = false;
@@ -279,12 +297,14 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     let new_extract = std::path::PathBuf::from(&new_extract_str);
                     let warn_tags = WARN_TAGS_INPUT.read().unwrap().clone();
                     let warn_prefixes = WARN_PREFIXES_INPUT.read().unwrap().clone();
+                    let custom_launch = CUSTOM_LAUNCH_INPUT.read().unwrap().clone();
                     {
                         let mut st = APP_SETTINGS.write().unwrap();
                         st.temp_dir = std::path::PathBuf::from(new_temp);
                         st.extract_dir = new_extract.clone();
                         st.warn_tags = warn_tags;
                         st.warn_prefixes = warn_prefixes;
+                        st.custom_launch = custom_launch;
                         for (tid, nf, ne) in moved {
                             if let Some(entry) = st.downloaded_games.iter_mut().find(|e| e.thread_id == tid) {
                                 entry.folder = nf;
