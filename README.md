@@ -11,7 +11,7 @@ automated downloads with extraction, and a built-in library to organize your col
 Requirements:
 - Windows 10+ (other OS might work; focus is Windows).
 
-1. Go to [https://github.com/farvend/F95-Manager/releases](https://github.com/farvend/F95-Manager/releases/tag/v1.1.0)
+1. Go to https://github.com/farvend/F95-Manager/releases/latest
 3. Download `F95_manager.exe`
 4. Run the executable
 5. Log in to your F95zone account
