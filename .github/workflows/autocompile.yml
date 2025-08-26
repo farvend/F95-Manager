@@ -44,7 +44,7 @@ jobs:
         path: target/release/*.exe
         retention-days: 30
         
-  # Создание релиза при пуше тега (как вы и хотели)
+  # Создание релиза при пуше тега
   release:
     needs: build-windows
     runs-on: ubuntu-latest
@@ -55,7 +55,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # Для получения всей истории коммитов
+        fetch-depth: 0  # Для получения всей истории коммитов (на случай fallback)
     
     - name: Download artifact
       uses: actions/download-artifact@v4
@@ -74,29 +74,70 @@ jobs:
         git archive --format=zip --output=release/source-${{ steps.get_version.outputs.VERSION }}.zip HEAD
         git archive --format=tar.gz --output=release/source-${{ steps.get_version.outputs.VERSION }}.tar.gz HEAD
     
-    - name: Generate changelog
+    - name: Extract tag message or generate changelog
       id: changelog
       run: |
-        if git describe --tags --abbrev=0 HEAD^ >/dev/null 2>&1; then
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^)
-          {
-            echo 'CHANGELOG<<EOF'
-            echo "## What's Changed"
-            echo ""
-            git log $PREVIOUS_TAG..HEAD --pretty=format:"- %s (%h)" --reverse
-            echo ""
-            echo ""
-            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREVIOUS_TAG...${{ steps.get_version.outputs.VERSION }}"
-            echo 'EOF'
-          } >> $GITHUB_OUTPUT
+        TAG_NAME="${{ steps.get_version.outputs.VERSION }}"
+        TAG_MESSAGE=$(git show -s --format=%B $TAG_NAME 2>/dev/null || echo "")
+        
+        if [ -n "$TAG_MESSAGE" ]; then
+          # Если тег annotated, используем его сообщение как тело релиза
+          # Игнорируем первую строку (subject), берем тело
+          BODY=$(echo "$TAG_MESSAGE" | tail -n +3)
+          if [ -n "$BODY" ]; then
+            {
+              echo 'CHANGELOG<<EOF'
+              echo "$BODY"
+              echo 'EOF'
+            } >> $GITHUB_OUTPUT
+          else
+            # Fallback, если тело пустое
+            echo "No custom body found in tag message. Falling back to generated changelog."
+            if git describe --tags --abbrev=0 HEAD^ >/dev/null 2>&1; then
+              PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^)
+              {
+                echo 'CHANGELOG<<EOF'
+                echo "## What's Changed"
+                echo ""
+                git log $PREVIOUS_TAG..HEAD --pretty=format:"- %s (%h)" --reverse
+                echo ""
+                echo ""
+                echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREVIOUS_TAG...$TAG_NAME"
+                echo 'EOF'
+              } >> $GITHUB_OUTPUT
+            else
+              {
+                echo 'CHANGELOG<<EOF'
+                echo "## Initial Release"
+                echo ""
+                git log --pretty=format:"- %s (%h)" --reverse
+                echo 'EOF'
+              } >> $GITHUB_OUTPUT
+            fi
+          fi
         else
-          {
-            echo 'CHANGELOG<<EOF'
-            echo "## Initial Release"
-            echo ""
-            git log --pretty=format:"- %s (%h)" --reverse
-            echo 'EOF'
-          } >> $GITHUB_OUTPUT
+          # Если тег не annotated, fallback на генерацию
+          if git describe --tags --abbrev=0 HEAD^ >/dev/null 2>&1; then
+            PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^)
+            {
+              echo 'CHANGELOG<<EOF'
+              echo "## What's Changed"
+              echo ""
+              git log $PREVIOUS_TAG..HEAD --pretty=format:"- %s (%h)" --reverse
+              echo ""
+              echo ""
+              echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREVIOUS_TAG...$TAG_NAME"
+              echo 'EOF'
+            } >> $GITHUB_OUTPUT
+          else
+            {
+              echo 'CHANGELOG<<EOF'
+              echo "## Initial Release"
+              echo ""
+              git log --pretty=format:"- %s (%h)" --reverse
+              echo 'EOF'
+            } >> $GITHUB_OUTPUT
+          fi
         fi
     
     - name: Create Release
@@ -112,7 +153,7 @@ jobs:
         files: |
           release/*
         generate_release_notes: false
-        draft: false
+        draft: true  # Делаем draft, чтобы вы могли отредактировать перед публикацией (измените на false для авто-публикации)
         prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
