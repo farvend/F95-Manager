@@ -15,7 +15,7 @@ pub struct ThreadMeta {
     pub version: String,
 }
 lazy_static! {
-    static ref RE_OG_TITLE: Regex = Regex::new(r#"</span>[\w ]* *\[.*\] *\[.*\]"#).unwrap();
+    static ref RE_OG_TITLE: Regex = Regex::new(r#"</span>.* *\[.*\] *\[.*\]<"#).unwrap();
     static ref RE_ATTACH: Regex = Regex::new(
         r#"href="(https://attachments\.f95zone\.to/\d+/\d+/\d+_[A-Za-z0-9_\-]+\.[A-Za-z0-9]+(?:\?[^\s"'<>]*)?)""#
     ).unwrap();
@@ -49,7 +49,9 @@ pub async fn fetch_thread_meta(thread_id: u64) -> Option<ThreadMeta> {
     let full_title = &RE_OG_TITLE
         .captures(&text)
         .and_then(|cap| cap.get(0))?
-        .as_str()[7..];
+        .as_str()
+        .rsplit_once("</span>")?
+        .1;
     let mut title_parts = full_title.split('[');
     // Title from OG meta
     let title = title_parts.next()?.trim().to_string();

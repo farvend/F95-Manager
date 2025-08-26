@@ -95,20 +95,26 @@ impl super::NoLagApp {
             }
 
             while let Some(joined) = set.join_next().await {
-                if let Ok((id, Some(mut meta))) = joined {
-                    if let Some(th) = all_found.iter_mut().find(|t| t.thread_id.get() == id) {
-                        let (sc_len, tg_len) =
-                            helpers::apply_meta(th, meta);
-                        log::info!(
-                            "Prefetch meta for {id}: screens={sc_len} tags={tg_len}"
-                        );
-                    }
+                if let Ok((id, mut meta)) = joined {
+                    if let Some(meta) = meta {
+                        if let Some(th) = all_found.iter_mut().find(|t| t.thread_id.get() == id) {
+                            let (sc_len, tg_len) =
+                                helpers::apply_meta(th, meta);
+                            log::info!(
+                                "Prefetch meta for {id}: screens={sc_len} tags={tg_len}"
+                            );
+                        }
 
-                    // Push incremental update
-                    result = helpers::make_msg_from_threads(all_found.clone());
-                    let _ = tx.send(Ok(result.clone()));
-                    ctx2.request_repaint();
+                        // Push incremental update
+                        result = helpers::make_msg_from_threads(all_found.clone());
+                        let _ = tx.send(Ok(result.clone()));
+                        ctx2.request_repaint();
+                    } else {
+                        log::warn!("Couldn't prefetch metadata for {id} from F95 page.");
+
+                    }
                 }
+                    
             }
         });
     }
@@ -168,6 +174,8 @@ impl super::NoLagApp {
                     let result2 = helpers::make_msg_from_threads(all_found.clone());
                     let _ = tx2.send((req_id, Ok(result2)));
                     ctx3.request_repaint();
+                } else {
+                    log::warn!("Couldn't fetch metadata for {id} from F95 page.");
                 }
             }
         });
