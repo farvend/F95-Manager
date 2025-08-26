@@ -139,33 +139,22 @@ pub fn needs_enrich(t: &crate::parser::F95Thread) -> bool {
 /// Apply parsed metadata to a thread in-place and report metrics for logging.
 pub fn apply_meta(
     th: &mut crate::parser::F95Thread,
-    mut meta: crate::parser::game_info::thread_meta::ThreadMeta,
-    install_map: &HashMap<u64, PathBuf>,
-) -> (bool, bool, usize, usize) {
+    meta: crate::parser::game_info::thread_meta::ThreadMeta,
+) -> (usize, usize) {
     let id = th.thread_id.get();
 
-    let has_title = meta.title.as_ref().is_some();
-    let has_cover = meta.cover.as_ref().is_some();
-    let sc_len = meta.screens.len();
-    let tg_len = meta.tag_ids.len();
+    let screens_len = meta.screens.len();
+    let tags_len = meta.tag_ids.len();
 
-    // Title: always prefer thread page title when available
-    if let Some(tt) = meta.title.take() {
-        dbg!(&th.title);
-        th.title = tt;
-    }
-    // Media/tags only if missing
-    if let Some(c) = meta.cover.take() {
-        if th.cover.is_empty() {
-            th.cover = c;
-        }
-    }
-    // Replace screens with parsed ones (always)
+    th.title = meta.title;
+    th.cover = meta.cover;
     th.screens = meta.screens;
-
-    if tg_len > 0 && th.tags.is_empty() {
+    th.creator = meta.creator;
+    th.version = meta.version;
+    
+    if tags_len > 0 && th.tags.is_empty() {
         th.tags = meta.tag_ids;
     }
 
-    (has_title, has_cover, sc_len, tg_len)
+    (screens_len, tags_len)
 }

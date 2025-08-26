@@ -97,11 +97,10 @@ impl super::NoLagApp {
             while let Some(joined) = set.join_next().await {
                 if let Ok((id, Some(mut meta))) = joined {
                     if let Some(th) = all_found.iter_mut().find(|t| t.thread_id.get() == id) {
-                        let (has_title, has_cover, sc_len, tg_len) =
-                            helpers::apply_meta(th, meta, &install_map);
+                        let (sc_len, tg_len) =
+                            helpers::apply_meta(th, meta);
                         log::info!(
-                            "Prefetch meta for {}: title={} cover={} screens={} tags={}",
-                            id, has_title, has_cover, sc_len, tg_len
+                            "Prefetch meta for {id}: screens={sc_len} tags={tg_len}"
                         );
                     }
 
@@ -158,11 +157,10 @@ impl super::NoLagApp {
                     crate::parser::game_info::thread_meta::fetch_thread_meta(id).await
                 {
                     if let Some(th) = all_found.iter_mut().find(|t| t.thread_id.get() == id) {
-                        let (has_title, has_cover, sc_len, tg_len) =
-                            helpers::apply_meta(th, meta, &install_map);
+                        let (sc_len, tg_len) =
+                            helpers::apply_meta(th, meta);
                         log::info!(
-                            "Direct meta fetched for {}: title={} cover={} screens={} tags={}",
-                            id, has_title, has_cover, sc_len, tg_len
+                            "Direct meta fetched for {id}: screens={sc_len} tags={tg_len}"
                         );
                     }
 

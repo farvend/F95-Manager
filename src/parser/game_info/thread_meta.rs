@@ -7,27 +7,28 @@ use crate::tags::TAGS;
 
 #[derive(Debug, Clone)]
 pub struct ThreadMeta {
-    pub title: Option<String>,
-    pub cover: Option<String>,
+    pub title: String,
+    pub cover: String,
     pub screens: Vec<String>,
     pub tag_ids: Vec<u32>,
+    pub creator: String,
+    pub version: String,
+}
+lazy_static! {
+    static ref RE_OG_TITLE: Regex = Regex::new(r#"</span>[\w ]* *\[.*\] *\[.*\]"#).unwrap();
+    static ref RE_ATTACH: Regex = Regex::new(
+        r#"href="(https://attachments\.f95zone\.to/\d+/\d+/\d+_[A-Za-z0-9_\-]+\.[A-Za-z0-9]+(?:\?[^\s"'<>]*)?)""#
+    ).unwrap();
+    static ref RE_COVER: Regex = Regex::new(
+        r#"src="(https://attachments\.f95zone\.to/\d+/\d+/\d+_[A-Za-z0-9_\-]+\.[A-Za-z0-9]+(?:\?[^\s"'<>]*)?)""#
+    ).unwrap();
+    static ref RE_TAG_BLOCK: Regex = Regex::new(r#"(?s)<span class="js-tagList">(.+?)</span>"#).unwrap();
+    static ref RE_TAG_TEXT: Regex = Regex::new(r#">([^<>]+)<"#).unwrap();
 }
 
 /// Fetch thread page and extract cover, screenshots and tag IDs.
 /// Uses regex-based parsing as suggested and maps tag names to IDs via tags.json.
 pub async fn fetch_thread_meta(thread_id: u64) -> Option<ThreadMeta> {
-    lazy_static! {
-        static ref RE_OG_TITLE: Regex = Regex::new(r#"</span>[\w ]*\["#).unwrap();
-        static ref RE_ATTACH: Regex = Regex::new(
-            r#"href="(https://attachments\.f95zone\.to/\d+/\d+/\d+_[A-Za-z0-9_\-]+\.[A-Za-z0-9]+(?:\?[^\s"'<>]*)?)""#
-        ).unwrap();
-        static ref RE_COVER: Regex = Regex::new(
-            r#"src="(https://attachments\.f95zone\.to/\d+/\d+/\d+_[A-Za-z0-9_\-]+\.[A-Za-z0-9]+(?:\?[^\s"'<>]*)?)""#
-        ).unwrap();
-        static ref RE_TAG_BLOCK: Regex = Regex::new(r#"(?s)<span class="js-tagList">(.+?)</span>"#).unwrap();
-        static ref RE_TAG_TEXT: Regex = Regex::new(r#">([^<>]+)<"#).unwrap();
-    }
-
     let url = format!("https://f95zone.to/threads/{}/", thread_id);
 
     let client = Client::builder()
@@ -45,14 +46,19 @@ pub async fn fetch_thread_meta(thread_id: u64) -> Option<ThreadMeta> {
         .await
         .ok()?;
 
-    // Title from OG meta
-    let title = RE_OG_TITLE
+    let full_title = &RE_OG_TITLE
         .captures(&text)
-        .and_then(|cap| cap.get(0))
-        .map(|m| {
-            let result = m.as_str();
-            result[7..result.len()-2].to_string()
-        });
+        .and_then(|cap| cap.get(0))?
+        .as_str()[7..];
+    let mut title_parts = full_title.split('[');
+    // Title from OG meta
+    let title = title_parts.next()?.trim().to_string();
+
+    let version = title_parts.next()?.trim();
+    let version = version[..version.len()-1].to_string();
+
+    let author = title_parts.next()?.trim();
+    let author = author[..author.len()-1].to_string();
 
     // Screenshots: https://attachments.f95zone.to/2025/08/5195249_1755719682348.png
     // Allow optional query string; accept [A-Za-z0-9_\-] in filename.
@@ -69,8 +75,7 @@ pub async fn fetch_thread_meta(thread_id: u64) -> Option<ThreadMeta> {
     let cover = RE_COVER
         .captures(&text)
         .and_then(|cap| cap.get(1))
-        .map(|m| m.as_str().to_string())
-        .or_else(|| screens.get(0).cloned());
+        .map(|m| m.as_str().to_string())?;
 
     // Tags block: <span class="js-tagList"> ... </span> (non-greedy + dotall)
     let mut tag_ids: Vec<u32> = Vec::new();
@@ -104,5 +109,5 @@ pub async fn fetch_thread_meta(thread_id: u64) -> Option<ThreadMeta> {
         }
     }
 
-    Some(ThreadMeta { title, cover, screens, tag_ids })
+    Some(ThreadMeta { title, cover, screens, tag_ids, version, creator: author })
 }
