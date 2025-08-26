@@ -22,7 +22,7 @@ pub fn create_download_task(page: F95Page) -> mpsc::Receiver<GameDownloadStatus>
     let (tx, rx) = mpsc::channel();
     
     rt.spawn(async move {
-        let binding = match page.get_download_links().await {
+        let downloads = match page.get_download_links().await {
             Ok(b) => b,
             Err(err) => {
                 let msg = match err {
@@ -54,19 +54,15 @@ pub fn create_download_task(page: F95Page) -> mpsc::Receiver<GameDownloadStatus>
         };
 
         // Try preferred platform first, then common priority, then any with most links
-        let selected = binding
+        let selected = downloads
             .iter()
-            .find(|e| e.platform().contains(preferred_platform))
-            .or_else(|| binding.iter().find(|e| e.platform().contains(Platform::WINDOWS)))
-            .or_else(|| binding.iter().find(|e| e.platform().contains(Platform::LINUX)))
-            .or_else(|| binding.iter().find(|e| e.platform().contains(Platform::MAC)))
-            .or_else(|| binding.iter().find(|e| e.platform().contains(Platform::ANDROID)))
-            .or_else(|| binding.iter().max_by_key(|e| e.links().len()));
+            .find(|e| e.platform().contains(preferred_platform));
 
         let links = match selected {
             Some(pd) if !pd.links().is_empty() => pd.links(),
             _ => {
-                let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error("No suitable platform downloads found".into())));
+                let message = format!("No suitable platform downloads found. Available: {:?}", downloads.iter().map(|e| e.platform()));
+                let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(message)));
                 return;
             }
         };
