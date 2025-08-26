@@ -60,7 +60,7 @@ pub async fn fetch_thread_meta(thread_id: u64) -> Option<ThreadMeta> {
     let version = version[..version.len()-1].to_string();
 
     let author = title_parts.next()?.trim();
-    let author = author[..author.len()-1].to_string();
+    let author = author[..author.len()-2].to_string();
 
     // Screenshots: https://attachments.f95zone.to/2025/08/5195249_1755719682348.png
     // Allow optional query string; accept [A-Za-z0-9_\-] in filename.
