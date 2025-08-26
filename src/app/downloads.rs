@@ -68,7 +68,7 @@ impl super::NoLagApp {
                     }
                 }
             }
-            if state.completed {
+            if state.completed && state.error.is_none() {
                 done.push(*id);
             }
         }

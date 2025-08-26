@@ -16,6 +16,8 @@ lazy_static! {
     static ref TEMP_DIR_INPUT: RwLock<String> = RwLock::new(String::new());
     static ref EXTRACT_DIR_INPUT: RwLock<String> = RwLock::new(String::new());
     static ref CUSTOM_LAUNCH_INPUT: RwLock<String> = RwLock::new(String::new());
+    // Toggle: cache metadata/images on download click
+    static ref CACHE_ON_DOWNLOAD_INPUT: RwLock<bool> = RwLock::new(false);
     // State for extract-dir change confirmation and migration
     static ref MOVE_CONFIRM_OPEN: RwLock<bool> = RwLock::new(false);
     static ref PENDING_TEMP_DIR: RwLock<String> = RwLock::new(String::new());
@@ -48,6 +50,10 @@ pub fn open_settings() {
     {
         let mut cl = CUSTOM_LAUNCH_INPUT.write().unwrap();
         *cl = s.custom_launch.clone();
+    }
+    {
+        let mut b = CACHE_ON_DOWNLOAD_INPUT.write().unwrap();
+        *b = s.cache_on_download;
     }
     {
         let mut v = WARN_TAGS_INPUT.write().unwrap();
@@ -119,6 +125,13 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
 
                 ui.add_space(8.0);
                 ui.separator();
+                // Toggle: cache metadata/images on download click
+                ui.horizontal(|ui| {
+                    let mut cache_val = *CACHE_ON_DOWNLOAD_INPUT.read().unwrap();
+                    if ui.checkbox(&mut cache_val, "Cache metadata/images on download").on_hover_text("Saves thread meta to cache/<id>/meta.json and images (cover + screenshots) to cache/<id> when you click download.").changed() {
+                        *CACHE_ON_DOWNLOAD_INPUT.write().unwrap() = cache_val;
+                    }
+                });
                 ui.label("Warn on tags/prefixes:");
 
                 ui.label("Warn tags:");
@@ -204,12 +217,14 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                                 let warn_tags = WARN_TAGS_INPUT.read().unwrap().clone();
                                 let warn_prefixes = WARN_PREFIXES_INPUT.read().unwrap().clone();
                                 let custom_launch = CUSTOM_LAUNCH_INPUT.read().unwrap().clone();
+                                let cache_on_download = *CACHE_ON_DOWNLOAD_INPUT.read().unwrap();
                                 let mut st = APP_SETTINGS.write().unwrap();
                                 st.temp_dir = std::path::PathBuf::from(temp_val);
                                 st.extract_dir = new_extract_pb;
                                 st.warn_tags = warn_tags;
                                 st.warn_prefixes = warn_prefixes;
                                 st.custom_launch = custom_launch;
+                                st.cache_on_download = cache_on_download;
                             } // drop write lock before saving to avoid deadlock
                             save_settings_to_disk();
                             *SETTINGS_OPEN.write().unwrap() = false;
@@ -298,6 +313,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     let warn_tags = WARN_TAGS_INPUT.read().unwrap().clone();
                     let warn_prefixes = WARN_PREFIXES_INPUT.read().unwrap().clone();
                     let custom_launch = CUSTOM_LAUNCH_INPUT.read().unwrap().clone();
+                    let cache_on_download = *CACHE_ON_DOWNLOAD_INPUT.read().unwrap();
                     {
                         let mut st = APP_SETTINGS.write().unwrap();
                         st.temp_dir = std::path::PathBuf::from(new_temp);
@@ -305,6 +321,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                         st.warn_tags = warn_tags;
                         st.warn_prefixes = warn_prefixes;
                         st.custom_launch = custom_launch;
+                        st.cache_on_download = cache_on_download;
                         for (tid, nf, ne) in moved {
                             if let Some(entry) = st.downloaded_games.iter_mut().find(|e| e.thread_id == tid) {
                                 entry.folder = nf;

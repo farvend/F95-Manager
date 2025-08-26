@@ -22,6 +22,7 @@ mod errors_ui;
 mod runtime;
 mod fetch;
 mod downloads;
+mod cache;
 pub use runtime::rt;
 pub use runtime::RUNTIME;
 pub use fetch::CoverMsg;

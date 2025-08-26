@@ -30,6 +30,9 @@ pub struct AppSettings {
     // Custom launch command template; use {{path}} placeholder for the game's exe path
     #[serde(default)]
     pub custom_launch: String,
+    // Cache metadata/images on download click (default: false)
+    #[serde(default)]
+    pub cache_on_download: bool,
 }
 
 impl Default for AppSettings {
@@ -43,6 +46,7 @@ impl Default for AppSettings {
             warn_tags: Vec::new(),
             warn_prefixes: Vec::new(),
             custom_launch: String::new(),
+            cache_on_download: false,
         }
     }
 }
