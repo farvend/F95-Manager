@@ -23,6 +23,7 @@ zip = { version = "0.6", default-features = false, features = ["deflate"] }
 threadpool = "1.8"
 bitflags = "2.6"
 rfd = "0.14"
+sevenz-rust = { version = "0.6.1", features = ["bzip2", "zstd", "aes", "cbc"] }
 
 [profile.release]
 opt-level = "z"
