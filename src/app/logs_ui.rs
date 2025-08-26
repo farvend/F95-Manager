@@ -25,7 +25,7 @@ pub fn draw_logs_viewport(ctx: &egui::Context) {
     let is_open = LOGS_OPEN.read().map(|g| *g).unwrap_or(false);
     if !is_open {
         *LOGS_OPEN.write().unwrap() = false;
-                    ctx.request_repaint();
+        //ctx.request_repaint();
         return;
     }
 
