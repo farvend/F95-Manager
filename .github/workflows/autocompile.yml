@@ -3,8 +3,6 @@ name: Build
 on:
   push:
     branches: [ "main" ]
-    tags:
-      - 'v*'
   pull_request:
     branches: [ "main" ]
 
@@ -25,7 +23,6 @@ jobs:
         override: true
         components: rustfmt, clippy
     
-    # Специализированный кеш для Rust (проще и эффективнее)
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
       with:
@@ -37,6 +34,14 @@ jobs:
     - name: Run tests
       run: cargo test --verbose
     
+    - name: Get version from Cargo.toml
+      id: cargo_version
+      run: |
+        $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"').Matches.Groups[1].Value
+        echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+        echo "Version found: $version"
+      shell: pwsh
+    
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
@@ -44,75 +49,87 @@ jobs:
         path: target/release/*.exe
         retention-days: 30
         
-  # Создание релиза при пуше тега (как вы и хотели)
-  release:
+  create-release:
     needs: build-windows
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    # Только при пуше в main (не при PR)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
     
     steps:
     - uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # Для получения всей истории коммитов
+        fetch-depth: 0
+    
+    - name: Get version from Cargo.toml
+      id: cargo_version
+      run: |
+        VERSION=$(grep "^version" Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version found: $VERSION"
+    
+    - name: Check if release exists
+      id: check_release
+      run: |
+        if gh release view "v${{ steps.cargo_version.outputs.VERSION }}" >/dev/null 2>&1; then
+          echo "EXISTS=true" >> $GITHUB_OUTPUT
+          echo "Release v${{ steps.cargo_version.outputs.VERSION }} already exists, skipping"
+        else
+          echo "EXISTS=false" >> $GITHUB_OUTPUT
+          echo "Will create release v${{ steps.cargo_version.outputs.VERSION }}"
+        fi
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Download artifact
+      if: steps.check_release.outputs.EXISTS == 'false'
       uses: actions/download-artifact@v4
       with:
         name: windows-executable
         path: ./artifacts
     
-    - name: Get the version
-      id: get_version
-      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-    
-    - name: Create source archive
+    - name: Create source archives
+      if: steps.check_release.outputs.EXISTS == 'false'
       run: |
         mkdir release
         cp -r artifacts/* release/
-        git archive --format=zip --output=release/source-${{ steps.get_version.outputs.VERSION }}.zip HEAD
-        git archive --format=tar.gz --output=release/source-${{ steps.get_version.outputs.VERSION }}.tar.gz HEAD
+        # Переименовываем exe файлы, добавляя версию
+        cd release
+        for file in *.exe; do
+          if [ -f "$file" ]; then
+            name="${file%.exe}"
+            mv "$file" "${name}-v${{ steps.cargo_version.outputs.VERSION }}.exe"
+          fi
+        done
+        cd ..
+        # Создаём архивы исходников
+        git archive --format=zip --output=release/source-v${{ steps.cargo_version.outputs.VERSION }}.zip HEAD
+        git archive --format=tar.gz --output=release/source-v${{ steps.cargo_version.outputs.VERSION }}.tar.gz HEAD
     
-    - name: Generate changelog
-      id: changelog
-      run: |
-        if git describe --tags --abbrev=0 HEAD^ >/dev/null 2>&1; then
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^)
-          {
-            echo 'CHANGELOG<<EOF'
-            echo "## What's Changed"
-            echo ""
-            git log $PREVIOUS_TAG..HEAD --pretty=format:"- %s (%h)" --reverse
-            echo ""
-            echo ""
-            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREVIOUS_TAG...${{ steps.get_version.outputs.VERSION }}"
-            echo 'EOF'
-          } >> $GITHUB_OUTPUT
-        else
-          {
-            echo 'CHANGELOG<<EOF'
-            echo "## Initial Release"
-            echo ""
-            git log --pretty=format:"- %s (%h)" --reverse
-            echo 'EOF'
-          } >> $GITHUB_OUTPUT
-        fi
-    
-    - name: Create Release
+    - name: Create Draft Release
+      if: steps.check_release.outputs.EXISTS == 'false'
       uses: softprops/action-gh-release@v1
       with:
-        name: Release ${{ steps.get_version.outputs.VERSION }}
+        tag_name: v${{ steps.cargo_version.outputs.VERSION }}
+        name: Release v${{ steps.cargo_version.outputs.VERSION }}
         body: |
-          ${{ steps.changelog.outputs.CHANGELOG }}
+          <!-- Отредактируйте это описание перед публикацией -->
           
-          ## Downloads
-          - 📦 **Windows executable** - Pre-built binary for Windows
-          - 📄 **Source code** - Available in zip and tar.gz formats below
+          ## 📝 Release Notes
+          
+          _Описание изменений будет добавлено перед публикацией..._
+          
+          ---
+          
+          ## 📦 Downloads
+          
+          - **Windows executable** - Pre-built binary for Windows
+          - **Source code** - Available in zip and tar.gz formats below
         files: |
           release/*
         generate_release_notes: false
-        draft: false
+        draft: true  # Всегда создаём как черновик
         prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
