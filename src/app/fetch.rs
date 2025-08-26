@@ -30,6 +30,151 @@ pub enum CoverMsg {
 }
 
 impl super::NoLagApp {
+    // Common helpers to reduce duplication in library fetch pipelines
+    fn compute_library_targets(&self) -> (Vec<(u64, std::path::PathBuf)>, Vec<u64>) {
+        let installs: Vec<(u64, std::path::PathBuf)> = helpers::collect_installs();
+        let downloading_ids: std::collections::HashSet<u64> =
+            self.downloads.keys().copied().collect();
+        let pending_ids: Vec<u64> = helpers::collect_pending_ids();
+        let targets: Vec<u64> = helpers::build_targets(&installs, &downloading_ids, &pending_ids);
+        (installs, targets)
+    }
+
+    fn build_existing_map_for_refresh(
+        &self,
+    ) -> std::collections::HashMap<u64, crate::parser::F95Thread> {
+        if self.lib_result.is_some() {
+            helpers::build_existing_map(self.lib_result.as_ref())
+        } else {
+            helpers::build_existing_map(self.last_result.as_ref())
+        }
+    }
+
+    fn spawn_lib_pipeline_concurrent(
+        &self,
+        ctx: &egui::Context,
+        installs: Vec<(u64, std::path::PathBuf)>,
+        targets: Vec<u64>,
+        existing_map: std::collections::HashMap<u64, crate::parser::F95Thread>,
+    ) {
+        let tx = self.lib_tx.clone();
+        let ctx2 = ctx.clone();
+        super::rt().spawn(async move {
+            if targets.is_empty() {
+                let empty = helpers::make_msg_from_threads(Vec::new());
+                let _ = tx.send(Ok(empty));
+                ctx2.request_repaint();
+                return;
+            }
+
+            // Initial list from cache (if any) + placeholders
+            let install_map: std::collections::HashMap<u64, std::path::PathBuf> =
+                helpers::build_install_map(&installs);
+
+            let mut all_found: Vec<crate::parser::F95Thread> =
+                helpers::fill_threads_from_targets(&targets, &existing_map, &install_map);
+
+            // Send initial snapshot
+            let mut result = helpers::make_msg_from_threads(all_found.clone());
+            let _ = tx.send(Ok(result.clone()));
+            ctx2.request_repaint();
+
+            // Enrich only cards with missing data, strictly from the thread page (concurrently)
+            let to_enrich: Vec<u64> = all_found
+                .iter()
+                .filter(|t| helpers::needs_enrich(t))
+                .map(|t| t.thread_id.get())
+                .collect();
+
+            let mut set = tokio::task::JoinSet::new();
+            for id in to_enrich {
+                set.spawn(async move {
+                    let meta = crate::parser::game_info::thread_meta::fetch_thread_meta(id).await;
+                    (id, meta)
+                });
+            }
+
+            while let Some(joined) = set.join_next().await {
+                if let Ok((id, Some(mut meta))) = joined {
+                    if let Some(th) = all_found.iter_mut().find(|t| t.thread_id.get() == id) {
+                        let (has_title, has_cover, sc_len, tg_len) =
+                            helpers::apply_meta(th, meta, &install_map);
+                        log::info!(
+                            "Prefetch meta for {}: title={} cover={} screens={} tags={}",
+                            id, has_title, has_cover, sc_len, tg_len
+                        );
+                    }
+
+                    // Push incremental update
+                    result = helpers::make_msg_from_threads(all_found.clone());
+                    let _ = tx.send(Ok(result.clone()));
+                    ctx2.request_repaint();
+                }
+            }
+        });
+    }
+
+    fn spawn_lib_pipeline_sequential_with_req(
+        &self,
+        ctx: &egui::Context,
+        req_id: u64,
+        installs: Vec<(u64, std::path::PathBuf)>,
+        targets: Vec<u64>,
+        existing_map: std::collections::HashMap<u64, crate::parser::F95Thread>,
+    ) {
+        let tx2 = self.tx.clone();
+        let ctx3 = ctx.clone();
+        super::rt().spawn(async move {
+            if targets.is_empty() {
+                let empty = helpers::make_msg_from_threads(Vec::new());
+                let _ = tx2.send((req_id, Ok(empty)));
+                ctx3.request_repaint();
+                return;
+            }
+
+            // Initial list from cache (if any) + placeholders
+            let install_map: std::collections::HashMap<u64, std::path::PathBuf> =
+                helpers::build_install_map(&installs);
+
+            let mut all_found: Vec<crate::parser::F95Thread> =
+                helpers::fill_threads_from_targets(&targets, &existing_map, &install_map);
+
+            // Send initial snapshot
+            log::info!("Direct library initial: items={}", all_found.len());
+            let result = helpers::make_msg_from_threads(all_found.clone());
+            let _ = tx2.send((req_id, Ok(result)));
+            ctx3.request_repaint();
+
+            // Enrich only cards with missing data, strictly from the thread page
+            let to_enrich: Vec<u64> = all_found
+                .iter()
+                .filter(|t| helpers::needs_enrich(t))
+                .map(|t| t.thread_id.get())
+                .collect();
+
+            for id in to_enrich {
+                log::info!("Direct enrich thread {}", id);
+                if let Some(mut meta) =
+                    crate::parser::game_info::thread_meta::fetch_thread_meta(id).await
+                {
+                    if let Some(th) = all_found.iter_mut().find(|t| t.thread_id.get() == id) {
+                        let (has_title, has_cover, sc_len, tg_len) =
+                            helpers::apply_meta(th, meta, &install_map);
+                        log::info!(
+                            "Direct meta fetched for {}: title={} cover={} screens={} tags={}",
+                            id, has_title, has_cover, sc_len, tg_len
+                        );
+                    }
+
+                    // Push incremental update
+                    let result2 = helpers::make_msg_from_threads(all_found.clone());
+                    let _ = tx2.send((req_id, Ok(result2)));
+                    ctx3.request_repaint();
+                }
+            }
+        });
+    }
+
     /// Start async fetch for threads list based on current filters.
     pub(super) fn start_fetch(&mut self, ctx: &egui::Context) {
         // Allow restarting fetch even if one is in-flight; results are deduped by request id
@@ -78,83 +223,19 @@ impl super::NoLagApp {
         self.counter = self.counter.wrapping_add(1);
         let req_id = self.counter;
 
-        // Build targets and snapshot cache
-        let installs: Vec<(u64, std::path::PathBuf)> = helpers::collect_installs();
-        let downloading_ids: std::collections::HashSet<u64> =
-            self.downloads.keys().copied().collect();
-        let pending_ids: Vec<u64> = helpers::collect_pending_ids();
-        let targets: Vec<u64> = helpers::build_targets(&installs, &downloading_ids, &pending_ids);
+        let (installs, targets) = self.compute_library_targets();
         log::info!(
             "Library targets count: {} (installed: {}, downloading: {})",
             targets.len(),
             installs.len(),
-            downloading_ids.len()
+            self.downloads.len()
         );
 
         // Snapshot current results so we don't re-fetch if a card is already filled
         let existing_map =
             helpers::build_existing_map(self.last_result.as_ref());
 
-        let installs2 = installs.clone();
-        let targets2 = targets.clone();
-        let tx2 = self.tx.clone();
-        let ctx3 = ctx.clone();
-        let req_id2 = req_id;
-        let existing_map2 = existing_map;
-
-        super::rt().spawn(async move {
-            if targets2.is_empty() {
-                let empty = helpers::make_msg_from_threads(Vec::new());
-                let _ = tx2.send((req_id2, Ok(empty)));
-                ctx3.request_repaint();
-                return;
-            }
-
-            // Initial list from cache (if any) + placeholders
-            let install_map: std::collections::HashMap<u64, std::path::PathBuf> =
-                helpers::build_install_map(&installs2);
-
-            let mut all_found: Vec<crate::parser::F95Thread> =
-                helpers::fill_threads_from_targets(&targets2, &existing_map2, &install_map);
-
-            // Send initial snapshot
-            log::info!("Direct library initial: items={}", all_found.len());
-            let mut result = helpers::make_msg_from_threads(all_found.clone());
-            let _ = tx2.send((req_id2, Ok(result)));
-            ctx3.request_repaint();
-
-            // Enrich only cards with missing data, strictly from the thread page
-            let to_enrich: Vec<u64> = all_found
-                .iter()
-                .filter(|t| helpers::needs_enrich(t))
-                .map(|t| t.thread_id.get())
-                .collect();
-
-            for id in to_enrich {
-                log::info!("Direct enrich thread {}", id);
-                if let Some(mut meta) =
-                    crate::parser::game_info::thread_meta::fetch_thread_meta(id).await
-                {
-                    if let Some(th) = all_found.iter_mut().find(|t| t.thread_id.get() == id) {
-                        let (has_title, has_cover, sc_len, tg_len) =
-                            helpers::apply_meta(th, meta, &install_map);
-                        log::info!(
-                            "Direct meta fetched for {}: title={} cover={} screens={} tags={}",
-                            id,
-                            has_title,
-                            has_cover,
-                            sc_len,
-                            tg_len
-                        );
-                    }
-
-                    // Push incremental update
-                    let result2 = helpers::make_msg_from_threads(all_found.clone());
-                    let _ = tx2.send((req_id2, Ok(result2)));
-                    ctx3.request_repaint();
-                }
-            }
-        });
+        self.spawn_lib_pipeline_sequential_with_req(ctx, req_id, installs, targets, existing_map);
 
         // Do not scan listing pages at all in Library mode
         return;
@@ -169,147 +250,25 @@ impl super::NoLagApp {
         self.lib_error = None;
         self.lib_result = None;
 
-        let tx = self.lib_tx.clone();
-        let ctx2 = ctx.clone();
-
-        let installs: Vec<(u64, std::path::PathBuf)> = helpers::collect_installs();
-        let downloading_ids: std::collections::HashSet<u64> =
-            self.downloads.keys().copied().collect();
-        let pending_ids: Vec<u64> = helpers::collect_pending_ids();
-        let targets: Vec<u64> = helpers::build_targets(&installs, &downloading_ids, &pending_ids);
+        let (installs, targets) = self.compute_library_targets();
 
         // Snapshot current results so we don't re-fetch if a card is already filled
         let existing_map: std::collections::HashMap<u64, crate::parser::F95Thread> =
             helpers::build_existing_map(self.last_result.as_ref());
 
-        super::rt().spawn(async move {
-            if targets.is_empty() {
-                let empty = helpers::make_msg_from_threads(Vec::new());
-                let _ = tx.send(Ok(empty));
-                ctx2.request_repaint();
-                return;
-            }
-
-            // Initial list from cache (if any) + placeholders
-            let install_map: std::collections::HashMap<u64, std::path::PathBuf> =
-                helpers::build_install_map(&installs);
-
-            let mut all_found: Vec<crate::parser::F95Thread> =
-                helpers::fill_threads_from_targets(&targets, &existing_map, &install_map);
-
-            // Send initial snapshot
-            let mut result = helpers::make_msg_from_threads(all_found.clone());
-            let _ = tx.send(Ok(result.clone()));
-            ctx2.request_repaint();
-
-            // Enrich only cards with missing data, strictly from the thread page (concurrently)
-            let to_enrich: Vec<u64> = all_found
-                .iter()
-                .filter(|t| helpers::needs_enrich(t))
-                .map(|t| t.thread_id.get())
-                .collect();
-
-            let mut set = tokio::task::JoinSet::new();
-            for id in to_enrich {
-                set.spawn(async move {
-                    let meta = crate::parser::game_info::thread_meta::fetch_thread_meta(id).await;
-                    (id, meta)
-                });
-            }
-
-            while let Some(joined) = set.join_next().await {
-                if let Ok((id, Some(mut meta))) = joined {
-                    if let Some(th) = all_found.iter_mut().find(|t| t.thread_id.get() == id) {
-                        let (has_title, has_cover, sc_len, tg_len) =
-                            helpers::apply_meta(th, meta, &install_map);
-                        log::info!(
-                            "Prefetch meta for {}: title={} cover={} screens={} tags={}",
-                            id,
-                            has_title,
-                            has_cover,
-                            sc_len,
-                            tg_len
-                        );
-                    }
-
-                    // Push incremental update
-                    result = helpers::make_msg_from_threads(all_found.clone());
-                    let _ = tx.send(Ok(result.clone()));
-                    ctx2.request_repaint();
-                }
-            }
-        });
+        self.spawn_lib_pipeline_concurrent(ctx, installs, targets, existing_map);
     }
 
     /// Refresh background Library data snapshot, including current in-progress downloads.
     pub(super) fn refresh_prefetch_library(&mut self, ctx: &egui::Context) {
         // Non-destructive refresh: do not flip lib_started or clear current lib_result.
-        let tx = self.lib_tx.clone();
-        let ctx2 = ctx.clone();
-
-        let installs: Vec<(u64, std::path::PathBuf)> = helpers::collect_installs();
-        let downloading_ids: std::collections::HashSet<u64> =
-            self.downloads.keys().copied().collect();
-        let pending_ids: Vec<u64> = helpers::collect_pending_ids();
-        let targets: Vec<u64> = helpers::build_targets(&installs, &downloading_ids, &pending_ids);
+        let (installs, targets) = self.compute_library_targets();
 
         // Snapshot current results (prefer existing lib_result) so we don't re-fetch if a card is already filled
         let existing_map: std::collections::HashMap<u64, crate::parser::F95Thread> =
-            if self.lib_result.is_some() {
-                helpers::build_existing_map(self.lib_result.as_ref())
-            } else {
-                helpers::build_existing_map(self.last_result.as_ref())
-            };
+            self.build_existing_map_for_refresh();
 
-        super::rt().spawn(async move {
-            if targets.is_empty() {
-                let empty = helpers::make_msg_from_threads(Vec::new());
-                let _ = tx.send(Ok(empty));
-                ctx2.request_repaint();
-                return;
-            }
-
-            // Initial list from cache (if any) + placeholders
-            let install_map: std::collections::HashMap<u64, std::path::PathBuf> =
-                helpers::build_install_map(&installs);
-
-            let mut all_found: Vec<crate::parser::F95Thread> =
-                helpers::fill_threads_from_targets(&targets, &existing_map, &install_map);
-
-            // Send initial snapshot
-            let mut result = helpers::make_msg_from_threads(all_found.clone());
-            let _ = tx.send(Ok(result.clone()));
-            ctx2.request_repaint();
-
-            // Enrich only cards with missing data, strictly from the thread page (concurrently)
-            let to_enrich: Vec<u64> = all_found
-                .iter()
-                .filter(|t| helpers::needs_enrich(t))
-                .map(|t| t.thread_id.get())
-                .collect();
-
-            let mut set = tokio::task::JoinSet::new();
-            for id in to_enrich {
-                set.spawn(async move {
-                    let meta = crate::parser::game_info::thread_meta::fetch_thread_meta(id).await;
-                    (id, meta)
-                });
-            }
-
-            while let Some(joined) = set.join_next().await {
-                if let Ok((id, Some(mut meta))) = joined {
-                    if let Some(th) = all_found.iter_mut().find(|t| t.thread_id.get() == id) {
-                        let (_has_title, _has_cover, _sc_len, _tg_len) =
-                            helpers::apply_meta(th, meta, &install_map);
-                    }
-
-                    // Push incremental update
-                    result = helpers::make_msg_from_threads(all_found.clone());
-                    let _ = tx.send(Ok(result.clone()));
-                    ctx2.request_repaint();
-                }
-            }
-        });
+        self.spawn_lib_pipeline_concurrent(ctx, installs, targets, existing_map);
     }
 
     /// Schedule background cover downloads for newly arrived items.

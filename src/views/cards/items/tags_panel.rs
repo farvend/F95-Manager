@@ -44,23 +44,26 @@ pub fn draw_tags_panel(
                         // Layout as fixed-width chips (pills) in wrapped rows
                         let inner_w = ui.available_width();
                         let gap = 12.0;
-                        let min_chip_w = 64.0;
-                        let mut cols =
-                            ((inner_w + gap) / (min_chip_w + gap)).floor() as usize;
-                        if cols < 3 {
-                            cols = 3;
-                        }
-                        let chip_w = ((inner_w
-                            - (cols.saturating_sub(1) as f32) * gap)
-                            / cols as f32)
-                            .floor();
+                        // Dynamic sizing: compute width per tag from text length
+                        let pad_x = 12.0;
                         let chip_h = 28.0;
+                        let max_chip_w = inner_w;
 
                         ui.spacing_mut().item_spacing = egui::vec2(gap, gap);
                         ui.horizontal_wrapped(|ui| {
                             for id in &t.tags {
                                 let font = egui::FontId::proportional(13.0);
                                 let text_color = Color32::from_rgb(245, 245, 245);
+
+                                let text = TAGS.tags
+                                    .get(&id.to_string())
+                                    .cloned()
+                                    .unwrap_or_else(|| id.to_string());
+
+                                // Measure text and compute chip width dynamically with padding
+                                let galley = ui.painter().layout_no_wrap(text.clone(), font.clone(), text_color);
+                                let mut chip_w = galley.size().x + 2.0 * pad_x;
+                                chip_w = chip_w.clamp(32.0, max_chip_w);
 
                                 let (_wid, rect) = ui.allocate_space(Vec2::new(chip_w, chip_h));
                                 let p = ui.painter_at(rect);
@@ -72,11 +75,6 @@ pub fn draw_tags_panel(
                                     Color32::from_rgb(190, 70, 70)
                                 };
                                 let border = Color32::from_rgb(180, 80, 80);
-
-                                let text = TAGS.tags
-                                    .get(&id.to_string())
-                                    .cloned()
-                                    .unwrap_or_else(|| id.to_string());
 
                                 p.rect_filled(rect, Rounding::same(12.0), bg);
                                 p.rect_stroke(

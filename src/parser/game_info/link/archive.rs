@@ -238,6 +238,44 @@ fn archive_dest_dir(archive_path: &Path, dest_base: &Path) -> PathBuf {
     dest_base.join(stem)
 }
 
+fn is_memory_alloc_failure(s: &str) -> bool {
+    let lc = s.to_ascii_lowercase();
+    lc.contains("memory allocation")
+        || lc.contains("can not allocate memory")
+        || lc.contains("cannot allocate memory")
+        || (lc.contains("allocation of") && lc.contains("bytes failed"))
+}
+
+fn try_unrar(archive_path: &Path, dest_dir: &Path) -> Result<(), String> {
+    let mut last_err: Option<String> = None;
+    for bin in ["unrar", "unrar.exe", "WinRAR.exe"] {
+        match Command::new(bin)
+            .arg("x")
+            .arg("-y")
+            .arg("-o+")
+            .arg(archive_path.as_os_str())
+            .arg(dest_dir.as_os_str())
+            .output()
+        {
+            Ok(out) => {
+                if out.status.success() {
+                    return Ok(());
+                } else {
+                    let o = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+                    last_err = Some(format!("{bin} exit status: {} output: {}", out.status, o));
+                }
+            }
+            Err(e) => {
+                last_err = Some(format!("{bin} spawn error: {e}"));
+            }
+        }
+    }
+    Err(format!(
+        "UnRAR CLI not available or failed. Install WinRAR (UnRAR) and ensure it's in PATH. Details: {}",
+        last_err.unwrap_or_else(|| "unknown error".to_string())
+    ))
+}
+
 fn extract_with_7z(
     archive_path: &Path,
     dest_base: &Path,
@@ -245,21 +283,44 @@ fn extract_with_7z(
     let dest_dir = archive_dest_dir(archive_path, dest_base);
     std::fs::create_dir_all(&dest_dir).map_err(|e| format!("Create dest dir failed: {e}"))?;
 
-    // Try `7z` first, then `7z.exe`
+    let name_lower = archive_path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_ascii_lowercase())
+        .unwrap_or_default();
+
+    // Try `7z` first, then `7z.exe`, capturing output to detect specific failures
     let mut last_err: Option<String> = None;
+    let mut last_out: Option<String> = None;
     for bin in ["7z", "7z.exe"] {
         match Command::new(bin)
             .arg("x")
             .arg("-y")
             .arg(archive_path.as_os_str())
-            .arg(format!("-o{}", dest_dir.display()))
-            .status()
+            .arg(format!("-o\"{}\"", dest_dir.to_string_lossy()))
+            .output()
         {
-            Ok(status) => {
-                if status.success() {
+            Ok(out) => {
+                if out.status.success() {
                     return Ok((dest_dir.clone(), find_first_exe(&dest_dir)));
                 } else {
-                    last_err = Some(format!("{bin} exit status: {status}"));
+                    let o = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+                    last_out = Some(o.clone());
+                    last_err = Some(format!("{bin} exit status: {}", out.status));
+
+                    // Memory allocation failure on .rar: try UnRAR fallback if available
+                    if name_lower.ends_with(".rar") && is_memory_alloc_failure(&o) {
+                        match try_unrar(archive_path, &dest_dir) {
+                            Ok(()) => return Ok((dest_dir.clone(), find_first_exe(&dest_dir))),
+                            Err(unrar_err) => {
+                                return Err(format!(
+                                    "7-Zip failed due to memory allocation error, and UnRAR fallback also failed: {}. 7-Zip output: {}",
+                                    unrar_err,
+                                    last_out.unwrap_or_default()
+                                ));
+                            }
+                        }
+                    }
                 }
             }
             Err(e) => {
@@ -269,8 +330,9 @@ fn extract_with_7z(
     }
 
     Err(format!(
-        "7-Zip CLI not available or failed. Install 7-Zip and ensure `7z` is in PATH. Details: {}",
-        last_err.unwrap_or_else(|| "unknown error".to_string())
+        "7-Zip CLI not available or failed. Install 7-Zip and ensure `7z` is in PATH. Details: {}{}",
+        last_err.unwrap_or_else(|| "unknown error".to_string()),
+        last_out.as_ref().map(|s| format!("; output: {}", s)).unwrap_or_default()
     ))
 }
 

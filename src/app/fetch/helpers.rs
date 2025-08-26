@@ -149,16 +149,10 @@ pub fn apply_meta(
     let sc_len = meta.screens.len();
     let tg_len = meta.tag_ids.len();
 
-    // Title: replace folder-name fallback if needed
+    // Title: always prefer thread page title when available
     if let Some(tt) = meta.title.take() {
-        let looks_like_folder = install_map
-            .get(&id)
-            .and_then(|p| p.file_name().and_then(|s| s.to_str()))
-            .map(|n| n == th.title)
-            .unwrap_or(false);
-        if th.title.is_empty() || looks_like_folder {
-            th.title = tt;
-        }
+        dbg!(&th.title);
+        th.title = tt;
     }
     // Media/tags only if missing
     if let Some(c) = meta.cover.take() {
