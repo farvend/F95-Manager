@@ -61,7 +61,7 @@ pub fn create_download_task(page: F95Page) -> mpsc::Receiver<GameDownloadStatus>
         let links = match selected {
             Some(pd) if !pd.links().is_empty() => pd.links(),
             _ => {
-                let message = format!("No suitable platform downloads found. Available: {:?}", downloads.iter().map(|e| e.platform()));
+                let message = format!("No suitable platform downloads found. Available: {:?}", downloads.iter().map(|e| e.platform()).collect::<Vec<_>>());
                 let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(message)));
                 return;
             }
