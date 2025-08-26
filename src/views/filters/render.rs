@@ -26,10 +26,11 @@ pub fn draw_filters_panel(
     search_mode: &mut SearchMode,
     query: &mut String,
     library_only: &mut bool,
-) -> (bool, bool, bool) {
+) -> (bool, bool, bool, bool) {
     let mut changed_now: bool = false;
     let mut settings_clicked: bool = false;
     let mut logs_clicked: bool = false;
+    let mut about_clicked: bool = false;
     egui::SidePanel::right("filters_panel")
         .frame(
             egui::Frame::none()
@@ -195,6 +196,9 @@ pub fn draw_filters_panel(
                 if ui.button("Logs").clicked() {
                     logs_clicked = true;
                 }
+                if ui.button("About").clicked() {
+                    about_clicked = true;
+                }
                 if ui.button("Settings").clicked() {
                     settings_clicked = true;
                 }
@@ -206,5 +210,5 @@ pub fn draw_filters_panel(
             });
         });
 
-        (changed_now, settings_clicked, logs_clicked)
+        (changed_now, settings_clicked, logs_clicked, about_clicked)
     }

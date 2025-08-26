@@ -29,8 +29,9 @@ pub fn draw_tags_panel(
         .fixed_pos(egui::pos2(card_rect.left(), card_rect.bottom()))
         .show(ui.ctx(), |ui| {
             if is_open {
-                ui.set_min_width(card_rect.width());
-                ui.set_max_width(card_rect.width());
+                //ui.set_min_width(card_rect.width());
+                //ui.set_max_width(card_rect.width());
+                ui.set_width(card_rect.width());
 
                 let inner = egui::Frame::none()
                     .fill(fill)
@@ -38,17 +39,18 @@ pub fn draw_tags_panel(
                     .rounding(Rounding {
                         nw: 0.0,
                         ne: 0.0,
-                        sw: rounding.sw.max(12.0),
-                        se: rounding.se.max(12.0),
+                        sw: rounding.sw,
+                        se: rounding.se,
                     })
                     .inner_margin(egui::Margin::symmetric(8.0, 8.0))
                     .show(ui, |ui| {
                         // Layout as fixed-width chips (pills) in wrapped rows
-                        let inner_w = ui.available_width();
                         let gap = 5.;
                         // Dynamic sizin.: compute width per tag from text length
                         let pad_x = 5.;
                         let chip_h = 16.;
+                        ui.set_width(card_rect.width() - pad_x - gap * 2.);
+                        let inner_w = ui.available_width();
                         let max_chip_w = inner_w;
 
                         ui.spacing_mut().item_spacing = egui::vec2(gap, gap);

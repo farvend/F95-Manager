@@ -31,8 +31,7 @@ pub fn thread_card(
     let stroke = Stroke::new(1.0, Color32::from_rgb(64, 64, 64));
 
     // Hard limit the card width inside the row.
-    ui.set_min_width(width);
-    ui.set_max_width(width);
+    ui.set_width(width);
 
     let mut hovered_line: Option<usize> = None;
     let mut hovered_any = false;
@@ -150,7 +149,8 @@ pub fn thread_card(
     });
 
     // Floating tags drop-down below the card: absolute area so it doesn't push layout.
-    let card_rect = frame_out.response.rect;
+    let mut card_rect = frame_out.response.rect;
+    //card_rect.set_width(width);
     let (_is_open, area_hovered) =
         draw_tags_panel(ui, t, card_rect, hovered_any, fill, stroke, rounding);
     hovered_any |= area_hovered;

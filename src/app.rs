@@ -15,6 +15,7 @@ mod grid;
 pub mod settings;
 pub mod config;
 mod logs_ui;
+mod about_ui;
 mod errors_ui;
 
 // Вынесено: tokio runtime и вся логика получения данных
@@ -258,6 +259,7 @@ impl App for NoLagApp {
             logs_ui::draw_logs_viewport(ctx);
             errors_ui::draw_errors_button(ctx);
             errors_ui::draw_errors_viewport(ctx);
+            about_ui::draw_about_viewport(ctx);
             settings::draw_settings_viewport(ctx);
             return;
         }
@@ -293,7 +295,7 @@ impl App for NoLagApp {
 
         // Правая панель — фильтры
         let prev_query = self.query.clone();
-        let (apply, open_settings, open_logs) = draw_filters_panel(
+        let (apply, open_settings, open_logs, open_about) = draw_filters_panel(
             ctx,
             &mut self.sort,
             &mut self.date_limit,
@@ -336,6 +338,10 @@ impl App for NoLagApp {
         }
         if open_logs {
             logs_ui::open_logs();
+            ctx.request_repaint();
+        }
+        if open_about {
+            about_ui::open_about();
             ctx.request_repaint();
         }
         // Trigger new fetch when Library mode toggles
@@ -495,6 +501,9 @@ impl App for NoLagApp {
 
         // Logs window (separate OS viewport)
         logs_ui::draw_logs_viewport(ctx);
+
+        // About window (separate OS viewport)
+        about_ui::draw_about_viewport(ctx);
 
         // Settings window (separate OS viewport)
         settings::draw_settings_viewport(ctx);
