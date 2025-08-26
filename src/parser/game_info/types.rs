@@ -24,10 +24,11 @@ use bitflags::bitflags;
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct Platform: u8 {
-        const WINDOWS = 0b0001;
-        const LINUX   = 0b0010;
-        const MAC     = 0b0100;
-        const ANDROID = 0b1000;
+        const WINDOWS = 0b00001;
+        const LINUX   = 0b00010;
+        const MAC     = 0b00100;
+        const ANDROID = 0b01000;
+        const OTHER   = 0b10000;
     }
 }
 
@@ -47,13 +48,13 @@ impl From<&str> for Platform {
             let t = token.trim();
             if t.is_empty() { continue; }
 
-            if t.contains("win") || t == "pc" || t.contains("windows") {
+            if t.contains("win") || t == "pc" {
                 flags |= Platform::WINDOWS;
             }
             if t.contains("linux") {
                 flags |= Platform::LINUX;
             }
-            if t.contains("mac") || t.contains("osx") || t.contains("macos") {
+            if t.contains("mac") || t.contains("osx") {
                 flags |= Platform::MAC;
             }
             if t.contains("android") {
@@ -82,5 +83,16 @@ pub struct PlatformDownloads {
 impl PlatformDownloads {
     pub fn new(platform: Platform, links: Vec<DownloadLink>) -> Self {
         Self { platform, links }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::parser::game_info::Platform;
+
+    #[test]
+    fn platform_parsing() {
+        dbg!(Platform::from("Win/Linux"));
+        assert!(false)
     }
 }

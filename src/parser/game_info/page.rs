@@ -10,9 +10,9 @@ use super::cookies;
 lazy_static! {
     static ref RE_DOWNLOADS: Regex = Regex::new(r#"DOWNLOAD.*\n.*\n.*\n.*\n.*"#).unwrap();
     static ref RE_PLATFORM_LINKS: Regex =
-        Regex::new(r"(Win(?:dows)?|Mac(?:OS)?|Linux|Android|PC) *<.*href.*").unwrap();
+        Regex::new(r" *<.*href.*").unwrap();
     static ref RE_LINK: Regex = Regex::new(r#"https://[\w./]*"#).unwrap();
-    static ref RE_PLATFORM: Regex = Regex::new(r"[/\w]*").unwrap();
+    static ref RE_PLATFORM: Regex = Regex::new(r"<b>.*</b>*").unwrap();
 }
 
 pub struct F95Page(pub Url);
@@ -63,9 +63,9 @@ impl F95Page {
             let platform = RE_PLATFORM
                 .captures(platform_downloads)
                 .and_then(|e| e.get(0))
-                .map(|m| m.as_str())
-                .ok_or(GetLinksError::PlatformNameMissing)?;
-            let platform = Platform::from(platform);
+                .ok_or(GetLinksError::PlatformNameMissing)?
+                .as_str();
+            let platform = Platform::from(&platform[3..platform.len()-4]);
 
             let links = RE_LINK
                 .captures_iter(platform_downloads)
