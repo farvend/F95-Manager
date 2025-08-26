@@ -20,6 +20,7 @@ pub fn draw_cover(
     cover: Option<&egui::TextureHandle>,
     screens: Option<&[Option<egui::TextureHandle>]>,
     download_progress: Option<f32>,
+    download_error: Option<&str>,
 ) -> CardHover {
     let cover_h = inner_w * 9.0 / 16.0;
     let (cover_rect, _cover_resp) =
@@ -328,6 +329,51 @@ pub fn draw_cover(
         }
     }
 
+    // Error badge shown when download/unzip error occurs
+    if let Some(err) = download_error {
+        let font_id = egui::TextStyle::Small.resolve(ui.style()).clone();
+        let text_color = Color32::WHITE;
+        let label = "ERROR";
+        let text_w = ui.fonts(|f| {
+            f.layout_no_wrap(label.to_string(), font_id.clone(), text_color)
+                .rect
+                .width()
+        });
+        let badge_h = 18.0f32;
+        let pad_x = 6.0f32;
+        let w = text_w + pad_x * 2.0;
+        let pad = 8.0f32;
+        let err_rect = egui::Rect::from_min_max(
+            egui::pos2(cover_rect.max.x - pad - w, cover_rect.max.y - pad - badge_h),
+            egui::pos2(cover_rect.max.x - pad, cover_rect.max.y - pad),
+        );
+        ui.expand_to_include_rect(err_rect);
+        let _err_resp = ui
+            .interact(
+                err_rect,
+                ui.id().with(("dl_error_badge", thread.thread_id)),
+                Sense::hover(),
+            )
+            .on_hover_text(err)
+            .on_hover_cursor(eframe::egui::CursorIcon::PointingHand);
+        let painter = ui.painter_at(err_rect);
+        painter.rect_filled(err_rect, Rounding::same(4.0), Color32::from_rgb(170, 40, 40));
+        painter.rect_stroke(
+            err_rect,
+            Rounding::same(4.0),
+            Stroke::new(1.0, Color32::from_gray(40)),
+        );
+        ui.allocate_ui_at_rect(err_rect, |ui| {
+            ui.centered_and_justified(|ui| {
+                ui.add(
+                    egui::Label::new(RichText::new(label).color(text_color))
+                        .truncate(true)
+                        .wrap(false),
+                );
+            });
+        });
+    }
+
     // Thin download progress line at the very bottom of the cover image
     if let Some(dp) = download_progress {
         let dp = dp.clamp(0.0, 1.0);
@@ -337,7 +383,11 @@ pub fn draw_cover(
         let y1 = cover_rect.max.y;
         let y0 = y1 - thickness;
         let line_rect = egui::Rect::from_min_max(egui::pos2(x0, y0), egui::pos2(x1, y1));
-        let color = ui.visuals().selection.bg_fill;
+        let color = if download_error.is_some() {
+            Color32::from_rgb(180, 40, 40)
+        } else {
+            ui.visuals().selection.bg_fill
+        };
         ui.painter_at(cover_rect).rect_filled(line_rect, Rounding::same(0.0), color);
     }
 

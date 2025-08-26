@@ -25,6 +25,7 @@ pub fn thread_card(
     cover_tex: Option<&egui::TextureHandle>,
     screens: Option<&[Option<egui::TextureHandle>]>,
     download_progress: Option<f32>,
+    download_error: Option<&str>,
 ) -> CardHover {
     let rounding = Rounding::same(8.0);
     let fill = Color32::from_rgb(36, 36, 36);
@@ -65,7 +66,7 @@ pub fn thread_card(
             ui.set_width(inner_w);
 
             // Cover + markers (handles hover index and screenshot swap if available)
-            let cover_hover = draw_cover(ui, t, inner_w, cover_tex, screens, download_progress);
+            let cover_hover = draw_cover(ui, t, inner_w, cover_tex, screens, download_progress, download_error);
             hovered_any |= cover_hover.hovered;
             hovered_line = cover_hover.hovered_line;
             download_clicked |= cover_hover.download_clicked;

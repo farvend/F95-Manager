@@ -60,11 +60,15 @@ impl super::NoLagApp {
             ui.set_min_width(card_w);
             ui.set_max_width(card_w);
             let id = t.thread_id.get();
+            if self.library_only {
+                super::cache::ensure_cache_for_thread(id);
+            }
             let hover = {
                 let cover = self.covers.get(&id);
                 let screens_slice = self.screens.get(&id).map(|v| v.as_slice());
                 let download_progress = self.downloads.get(&id).map(|s| s.progress);
-                thread_card(ui, t, card_w, cover, screens_slice, download_progress)
+                let download_error = self.downloads.get(&id).and_then(|s| s.error.as_deref());
+                thread_card(ui, t, card_w, cover, screens_slice, download_progress, download_error)
             };
 
             // Prefetch all screenshots as soon as the cursor hovers the card
@@ -118,9 +122,17 @@ impl super::NoLagApp {
                 }
             }
             if hover.download_clicked {
-                if !self.downloads.contains_key(&id) {
+                // Allow restart if previous attempt failed
+                let should_start = match self.downloads.get(&id) {
+                    None => true,
+                    Some(st) => st.error.is_some(),
+                };
+                if should_start {
+                    // Drop previous errored state if present
+                    self.downloads.remove(&id);
                     // Persist pending download in settings so Library can show it across restarts
                     super::settings::record_pending_download(id);
+                    super::cache::spawn_cache_for_thread(id);
                     let rx = game_download::create_download_task(t.thread_id.get_page());
                     self.downloads.insert(id, super::downloads::DownloadState {
                         rx,
@@ -138,12 +150,6 @@ impl super::NoLagApp {
                 }
             }
 
-            // Download errors (if any)
-            if let Some(state) = self.downloads.get(&id) {
-                if let Some(err) = &state.error {
-                    ui.colored_label(eframe::egui::Color32::RED, format!("Error: {}", err));
-                }
-            }
         });
         if c + 1 < cols {
             ui.add_space(gap);
