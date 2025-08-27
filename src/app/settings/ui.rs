@@ -133,7 +133,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                         }
                     }
                 });
-                ui.add_space(8.0);
+                //ui.add_space(8.0);
                 ui.separator();
 
                 ui.label("Custom launch command (use {{path}} placeholder):");
@@ -144,15 +144,16 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     }
                 }
 
-                ui.add_space(8.0);
+                //ui.add_space(8.0);
                 ui.separator();
-                // Toggle: cache metadata/images on download click
-                ui.horizontal(|ui| {
-                    let mut cache_val = *CACHE_ON_DOWNLOAD_INPUT.read().unwrap();
-                    if ui.checkbox(&mut cache_val, "Cache metadata/images on download").on_hover_text("Saves thread meta to cache/<id>/meta.json and images (cover + screenshots) to cache/<id> when you click download.").changed() {
-                        *CACHE_ON_DOWNLOAD_INPUT.write().unwrap() = cache_val;
-                    }
-                });
+                // ui.separator();
+                // // Toggle: cache metadata/images on download click
+                // ui.horizontal(|ui| {
+                //     let mut cache_val = *CACHE_ON_DOWNLOAD_INPUT.read().unwrap();
+                //     if ui.checkbox(&mut cache_val, "Cache metadata/images on download").on_hover_text("Saves thread meta to cache/<id>/meta.json and images (cover + screenshots) to cache/<id> when you click download.").changed() {
+                //         *CACHE_ON_DOWNLOAD_INPUT.write().unwrap() = cache_val;
+                //     }
+                // });
                 ui.label("Warn on tags/prefixes:");
 
                 ui.label("Warn tags:");
