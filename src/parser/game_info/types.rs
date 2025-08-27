@@ -62,14 +62,6 @@ impl From<&str> for Platform {
             }
         }
 
-        if flags.is_empty() {
-            // Fallback: infer from the whole string
-            if lower.contains("win") { flags |= Platform::WINDOWS; }
-            if lower.contains("linux") { flags |= Platform::LINUX; }
-            if lower.contains("mac") || lower.contains("osx") || lower.contains("macos") { flags |= Platform::MAC; }
-            if lower.contains("android") { flags |= Platform::ANDROID; }
-        }
-
         flags
     }
 }
@@ -83,16 +75,5 @@ pub struct PlatformDownloads {
 impl PlatformDownloads {
     pub fn new(platform: Platform, links: Vec<DownloadLink>) -> Self {
         Self { platform, links }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::parser::game_info::Platform;
-
-    #[test]
-    fn platform_parsing() {
-        dbg!(Platform::from("Win/Linux"));
-        assert!(false)
     }
 }
