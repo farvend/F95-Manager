@@ -82,6 +82,71 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
+    - name: Get previous tag
+      if: steps.check_release.outputs.EXISTS == 'false'
+      id: prev_tag
+      run: |
+        # Получаем предыдущий тег
+        PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+        echo "PREV_TAG=$PREV_TAG" >> $GITHUB_OUTPUT
+        if [ -z "$PREV_TAG" ]; then
+          echo "No previous tag found, will include all commits"
+        else
+          echo "Previous tag: $PREV_TAG"
+        fi
+    
+    - name: Generate changelog
+      if: steps.check_release.outputs.EXISTS == 'false'
+      id: changelog
+      run: |
+        echo "Generating changelog..."
+        
+        # Создаём файл для changelog
+        echo "" > changelog.md
+        
+        # Если есть предыдущий тег, получаем коммиты после него
+        if [ -n "${{ steps.prev_tag.outputs.PREV_TAG }}" ]; then
+          echo "## 📋 Changes since ${{ steps.prev_tag.outputs.PREV_TAG }}" >> changelog.md
+          echo "" >> changelog.md
+          
+          # Получаем коммиты между тегами
+          git log ${{ steps.prev_tag.outputs.PREV_TAG }}..HEAD --pretty=format:"- %s ([%h](https://github.com/${{ github.repository }}/commit/%H)) by @%an" --no-merges >> changelog.md
+        else
+          echo "## 📋 All Changes" >> changelog.md
+          echo "" >> changelog.md
+          
+          # Получаем все коммиты
+          git log --pretty=format:"- %s ([%h](https://github.com/${{ github.repository }}/commit/%H)) by @%an" --no-merges >> changelog.md
+        fi
+        
+        echo "" >> changelog.md
+        echo "" >> changelog.md
+        
+        # Группируем коммиты по типам (если используете conventional commits)
+        echo "## 📊 Commit Statistics" >> changelog.md
+        echo "" >> changelog.md
+        
+        if [ -n "${{ steps.prev_tag.outputs.PREV_TAG }}" ]; then
+          COMMIT_COUNT=$(git rev-list --count ${{ steps.prev_tag.outputs.PREV_TAG }}..HEAD)
+          CONTRIBUTORS=$(git log ${{ steps.prev_tag.outputs.PREV_TAG }}..HEAD --pretty=format:"%an" | sort -u | wc -l)
+        else
+          COMMIT_COUNT=$(git rev-list --count HEAD)
+          CONTRIBUTORS=$(git log --pretty=format:"%an" | sort -u | wc -l)
+        fi
+        
+        echo "- Total commits: $COMMIT_COUNT" >> changelog.md
+        echo "- Contributors: $CONTRIBUTORS" >> changelog.md
+        echo "" >> changelog.md
+        
+        # Сохраняем changelog в output
+        echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+        cat changelog.md >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        
+        # Показываем в логах
+        echo "Generated changelog:"
+        cat changelog.md
+    
     - name: Download artifact
       if: steps.check_release.outputs.EXISTS == 'false'
       uses: actions/download-artifact@v4
@@ -116,19 +181,49 @@ jobs:
         body: |
           <!-- Отредактируйте это описание перед публикацией -->
           
-          ## 📝 Release Notes
+          ## 🎉 Release v${{ steps.cargo_version.outputs.VERSION }}
           
-          _Описание изменений будет добавлено перед публикацией..._
+          _Добавьте описание основных изменений здесь перед публикацией..._
+          
+          ---
+          
+          ${{ steps.changelog.outputs.CHANGELOG }}
           
           ---
           
           ## 📦 Downloads
           
-          - **Windows executable** - Pre-built binary for Windows
-          - **Source code** - Available in zip and tar.gz formats below
+          ### Windows
+          - **Windows executable** - Pre-built binary for Windows (x86_64)
+          
+          ### Source Code
+          - **Source code (zip)** - Complete source code in ZIP format
+          - **Source code (tar.gz)** - Complete source code in TAR.GZ format
+          
+          ---
+          
+          ## 📝 Installation
+          
+          ### Windows
+          1. Download the `.exe` file
+          2. Place it in your desired directory
+          3. Run from command line or double-click
+          
+          ### Build from source
+          ```bash
+          cargo build --release
+          ```
+          
+          ---
+          
+          ## 🔗 Links
+          
+          - [Documentation](https://github.com/${{ github.repository }}/blob/main/README.md)
+          - [Issues](https://github.com/${{ github.repository }}/issues)
+          - [Discussions](https://github.com/${{ github.repository }}/discussions)
         files: |
           release/*
-        generate_release_notes: false
+        generate_release_notes: false  # Используем свой changelog
         draft: true  # Всегда создаём как черновик
         prerelease: false
       env:
