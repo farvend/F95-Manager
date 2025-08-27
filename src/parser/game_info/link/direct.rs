@@ -11,7 +11,6 @@ use super::{gofile::resolve_gofile_file, info::DirectRequest};
 pub struct DirectDownloadLink {
     pub hosting: HostingSubset,
     pub path: Vec<String>,
-    pub url: Url,
 }
 
 impl DirectDownloadLink {
@@ -40,20 +39,29 @@ impl DirectDownloadLink {
                 Some(DirectRequest::Http(request))
             }
             HostingSubset::Mega => {
-                Some(DirectRequest::MegaPublicUrl(self.url.clone()))
+                dbg!(&self.path);
+                let mut path = self.path[1].clone();
+                path = path[1..].replace('!', "#");
+                let hosting = self.hosting.base().to_string() + &self.hosting.to_string();
+                let url = hosting + "/file/" + &path;
+
+                Some(DirectRequest::MegaPublicUrl(Url::from_str(&url).unwrap()))
             }
         }
     }
 
     // Visible to parent module (link) so it can construct DirectDownloadLink
     pub(super) fn new(value: Url) -> Option<DirectDownloadLink> {
+        dbg!(&value);
         let mut hosting = value.domain()?.split('.').next()?.to_string();
         hosting.get_mut(0..1).map(|e| e.make_ascii_uppercase());
         let hosting: HostingSubset = hosting.parse().ok()?;
-        let path = value
+        let mut path = value
             .path_segments()?
             .map(|e| e.to_owned())
             .collect::<Vec<String>>();
-        Some(DirectDownloadLink { hosting, path, url: value })
+        value.fragment().inspect(|e| path.push(e.to_string()));
+
+        Some(DirectDownloadLink { hosting, path })
     }
 }
