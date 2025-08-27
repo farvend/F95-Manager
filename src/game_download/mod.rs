@@ -68,15 +68,6 @@ pub fn create_download_task(page: F95Page) -> mpsc::Receiver<GameDownloadStatus>
         };
             
         for link in links {
-            // if let Some(mut download_recv) = link.download().await {
-            //     // Проксируем все сообщения из download_recv в наш tx
-            //     while let Some(status) = download_recv.recv().await {
-            //         if tx.send(status).is_err() {
-            //             return; // Получатель отключился
-            //         }
-            //     }
-            //     return 
-            // }
             match link.download().await {
                 Ok(mut download_recv) => {
                     while let Some(status) = download_recv.recv().await {
@@ -106,7 +97,7 @@ pub fn create_download_task(page: F95Page) -> mpsc::Receiver<GameDownloadStatus>
         }
         
         // Если ни одна ссылка не сработала
-        let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error("No working download links".into())));
+        let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error("No supported hostings found".into())));
     });
     
     rx
