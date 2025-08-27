@@ -8,7 +8,7 @@ use super::types::{Platform, PlatformDownloads};
 use super::cookies;
 
 lazy_static! {
-    static ref RE_DOWNLOADS: Regex = Regex::new(r#"DOWNLOAD.*\n.*\n.*\n.*\n.*"#).unwrap();
+    static ref RE_DOWNLOADS: Regex = Regex::new(r#"DOWNLOAD[.\w<>/ \n="-:]*</a> *< */? *\w+ */?>"#).unwrap();
     static ref RE_PLATFORM_LINKS: Regex =
         Regex::new(r" *<.*href.*").unwrap();
     static ref RE_LINK: Regex = Regex::new(r#"https://[\w./]*"#).unwrap();
