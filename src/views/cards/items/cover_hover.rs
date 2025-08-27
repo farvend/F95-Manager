@@ -340,7 +340,7 @@ pub fn draw_cover(
                 .width()
         });
         let badge_h = 18.0f32;
-        let pad_x = 6.0f32;
+        let pad_x = 12.0f32;
         let w = text_w + pad_x * 2.0;
         let pad = 8.0f32;
         let err_rect = egui::Rect::from_min_max(
@@ -348,14 +348,6 @@ pub fn draw_cover(
             egui::pos2(cover_rect.max.x - pad, cover_rect.max.y - pad),
         );
         ui.expand_to_include_rect(err_rect);
-        let _err_resp = ui
-            .interact(
-                err_rect,
-                ui.id().with(("dl_error_badge", thread.thread_id)),
-                Sense::hover(),
-            )
-            .on_hover_text(err)
-            .on_hover_cursor(eframe::egui::CursorIcon::PointingHand);
         let painter = ui.painter_at(err_rect);
         painter.rect_filled(err_rect, Rounding::same(4.0), Color32::from_rgb(170, 40, 40));
         painter.rect_stroke(
@@ -372,6 +364,51 @@ pub fn draw_cover(
                 );
             });
         });
+        // Create interactive hit-test area and cursor for hover
+        let err_resp = ui
+            .interact(
+                err_rect,
+                ui.id().with(("dl_error_badge", thread.thread_id)),
+                Sense::hover(),
+            )
+            .on_hover_cursor(eframe::egui::CursorIcon::PointingHand);
+        // Hover detection for error badge (both response and raw-rect check)
+        let over_err_now = ui
+            .input(|i| i.pointer.hover_pos())
+            .map_or(false, |p| err_rect.contains(p));
+        let popup_id: egui::Id = egui::Id::new(("dl_error_overlay", thread.thread_id));
+        let mut is_open = ui.memory(|m| m.data.get_temp::<bool>(popup_id)).unwrap_or(false);
+        if err_resp.hovered() || over_err_now {
+            is_open = true;
+        }
+        if is_open {
+            let popup_pos = egui::pos2(err_rect.min.x, err_rect.min.y - 6.0);
+            let inner = egui::Area::new(popup_id)
+                .order(egui::Order::Foreground)
+                .fixed_pos(popup_pos)
+                .show(ui.ctx(), |ui| {
+                    egui::Frame::default()
+                        .fill(Color32::from_rgb(28, 28, 28))
+                        .stroke(Stroke::new(1.0, Color32::from_gray(60)))
+                        .rounding(Rounding::same(6.0))
+                        .inner_margin(6.0)
+                        .show(ui, |ui| {
+                            ui.add(
+                                egui::Label::new(RichText::new(err).color(Color32::from_gray(220)))
+                                    .wrap(true),
+                            );
+                        });
+                });
+            // keep open while hovering badge or overlay; close otherwise
+            let pointer_pos = ui.input(|i| i.pointer.hover_pos());
+            let over_badge = pointer_pos.map_or(false, |p| err_rect.contains(p));
+            let overlay_rect = inner.response.rect;
+            let over_overlay = pointer_pos.map_or(false, |p| overlay_rect.contains(p));
+            if !(over_badge || over_overlay) {
+                is_open = false;
+            }
+        }
+        ui.memory_mut(|m| { m.data.insert_temp(popup_id, is_open); });
     }
 
     // Thin download progress line at the very bottom of the cover image
