@@ -19,8 +19,7 @@ pub fn draw_cover(
     inner_w: f32,
     cover: Option<&egui::TextureHandle>,
     screens: Option<&[Option<egui::TextureHandle>]>,
-    download_progress: Option<f32>,
-    download_error: Option<&str>,
+    progress: Option<crate::game_download::Progress>,
 ) -> CardHover {
     let cover_h = inner_w * 9.0 / 16.0;
     let (cover_rect, _cover_resp) =
@@ -329,6 +328,12 @@ pub fn draw_cover(
         }
     }
 
+    // Resolve progress error (if any) to show error badge
+    let download_error: Option<&str> = match &progress {
+        Some(crate::game_download::Progress::Error(s)) => Some(s.as_str()),
+        _ => None,
+    };
+
     // Error badge shown when download/unzip error occurs
     if let Some(err) = download_error {
         let font_id = egui::TextStyle::Small.resolve(ui.style()).clone();
@@ -412,21 +417,62 @@ pub fn draw_cover(
     }
 
     // Thin download progress line at the very bottom of the cover image
-    if let Some(dp) = download_progress {
-        let dp = dp.clamp(0.0, 1.0);
-        let thickness = 2.0;
-        let x0 = cover_rect.min.x;
-        let x1 = x0 + cover_rect.width() * dp;
-        let y1 = cover_rect.max.y;
-        let y0 = y1 - thickness;
-        let line_rect = egui::Rect::from_min_max(egui::pos2(x0, y0), egui::pos2(x1, y1));
-        let color = if download_error.is_some() {
-            Color32::from_rgb(180, 40, 40)
-        } else {
-            ui.visuals().selection.bg_fill
-        };
-        ui.painter_at(cover_rect).rect_filled(line_rect, Rounding::same(0.0), color);
+    match progress {
+        Some(crate::game_download::Progress::Pending(mut dp)) => {
+            dp = dp.clamp(0.0, 1.0);
+            let thickness = 2.0;
+            let x0 = cover_rect.min.x;
+            let x1 = x0 + cover_rect.width() * dp;
+            let y1 = cover_rect.max.y;
+            let y0 = y1 - thickness;
+            let line_rect = egui::Rect::from_min_max(egui::pos2(x0, y0), egui::pos2(x1, y1));
+            let color = if download_error.is_some() {
+                Color32::from_rgb(180, 40, 40)
+            } else {
+                ui.visuals().selection.bg_fill
+            };
+            ui.painter_at(cover_rect).rect_filled(line_rect, Rounding::same(0.0), color);
+        }
+        Some(crate::game_download::Progress::Unknown) => {
+            // Animated right-moving blue-to-transparent gradient with blue dominant
+            draw_unknown_progress_bar(ui, cover_rect);
+        }
+        _ => {}
     }
 
     CardHover { hovered, hovered_line, download_clicked }
+}
+
+fn draw_unknown_progress_bar(ui: &mut egui::Ui, cover_rect: egui::Rect) {
+    // Same color as normal progress; smooth pulse (fade in/out).
+    let thickness = 2.0;
+    let y1 = cover_rect.max.y;
+    let y0 = y1 - thickness;
+    let line_rect = egui::Rect::from_min_max(
+        egui::pos2(cover_rect.min.x, y0),
+        egui::pos2(cover_rect.max.x, y1),
+    );
+
+    // Ensure continuous animation
+    ui.ctx().request_repaint_after(std::time::Duration::from_millis(16));
+
+    let painter = ui.painter_at(cover_rect);
+
+    // Base color: same as for normal progress
+    let base = ui.visuals().selection.bg_fill;
+
+    // Pulse alpha between 30% .. 100% of the base alpha with 1 Hz
+    let t: f32 = ui.input(|i| i.time) as f32;
+    let freq_hz = 1.0f32;
+    let s = 0.5 + 0.5 * (t * std::f32::consts::TAU * freq_hz).sin(); // 0..1
+    let alpha_scale = s; // 0.0..1.0
+
+    // Compose color with same RGB and pulsating alpha
+    let r = base.r();
+    let g = base.g();
+    let b = base.b();
+    let a = ((base.a() as f32) * alpha_scale).round().clamp(0.0, 255.0) as u8;
+    let color = Color32::from_rgba_premultiplied(r, g, b, a);
+
+    painter.rect_filled(line_rect, Rounding::same(0.0), color);
 }

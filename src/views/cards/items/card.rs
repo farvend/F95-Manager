@@ -24,8 +24,7 @@ pub fn thread_card(
     width: f32,
     cover_tex: Option<&egui::TextureHandle>,
     screens: Option<&[Option<egui::TextureHandle>]>,
-    download_progress: Option<f32>,
-    download_error: Option<&str>,
+    progress: Option<crate::game_download::Progress>,
 ) -> CardHover {
     let rounding = Rounding::same(8.0);
     let fill = Color32::from_rgb(36, 36, 36);
@@ -66,7 +65,7 @@ pub fn thread_card(
             ui.set_width(inner_w);
 
             // Cover + markers (handles hover index and screenshot swap if available)
-            let cover_hover = draw_cover(ui, t, inner_w, cover_tex, screens, download_progress, download_error);
+            let cover_hover = draw_cover(ui, t, inner_w, cover_tex, screens, progress.clone());
             hovered_any |= cover_hover.hovered;
             hovered_line = cover_hover.hovered_line;
             download_clicked |= cover_hover.download_clicked;
@@ -114,7 +113,12 @@ pub fn thread_card(
         let is_hidden = is_thread_hidden(thread_id);
         let is_downloaded = downloaded_game_folder(thread_id).is_some();
         let is_pending = is_pending_download(thread_id);
-        let is_downloading = download_progress.is_some();
+        let is_downloading = matches!(
+            progress,
+            Some(crate::game_download::Progress::Pending(_))
+                | Some(crate::game_download::Progress::Paused)
+                | Some(crate::game_download::Progress::Unknown)
+        );
 
         // Hide (if not already hidden)
         if !is_hidden {
