@@ -260,14 +260,16 @@ impl DownloadLink {
             }
         };
 
+        let filename_fallback = resp.url().path().split('/').last();
+
         // Extract filename
-        let header = resp
+        let header= resp
             .headers()
             .get("content-disposition")
+            .map(|e| e.to_str().unwrap())
+            .or(filename_fallback)
             .ok_or(DownloadError::MissingHeader("content-disposition"))?;
         let filename = header
-            .to_str()
-            .map_err(|_| DownloadError::UnexpectedResponse)?
             .replace('"', "")
             .replace('\\', "")
             .replace('/', "")
@@ -279,6 +281,7 @@ impl DownloadLink {
             .replace('|', "")
             .split('=')
             .nth(1)
+            .or(filename_fallback)
             .ok_or(DownloadError::UnexpectedResponse)?
             .to_owned();
 
