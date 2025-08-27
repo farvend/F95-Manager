@@ -163,18 +163,79 @@ impl super::NoLagApp {
         gap: f32,
         card_w: f32,
     ) {
-        let mut i = 0usize;
-        while i < data.len() {
+        // Virtualized grid rendering: draw only the rows that intersect the visible viewport.
+        let total_items = data.len();
+        if total_items == 0 || cols == 0 {
+            return;
+        }
+        let cols = cols.max(1);
+        let total_rows = (total_items + cols - 1) / cols;
+
+        // Compute stable card height based on our fixed layout in thread_card().
+        // Layout breakdown:
+        // - Frame inner margins: 16 (8 top + 8 bottom)
+        // - Cover: (card_w - 16) * 9 / 16
+        // - Markers under cover: 12
+        // - Gap after cover: 20
+        // - Title line: Heading height
+        // - Gap after title: 4
+        // - Creator line: Small height
+        // - Gap after creator: 4
+        // - Meta row frame: Small height + 12 (inner vertical margins)
+        let heading_h = ui.text_style_height(&egui::TextStyle::Heading);
+        let small_h = ui.text_style_height(&egui::TextStyle::Small);
+        let inner_w = (card_w - 16.0).max(1.0);
+        let cover_h = inner_w * 9.0 / 16.0;
+        let markers_h = 12.0;
+        let card_h =
+            16.0 + cover_h + markers_h + 20.0 + heading_h + 4.0 + small_h + 4.0 + (small_h + 12.0);
+        let row_h = card_h + gap;
+
+        // Determine which rows are visible in the current clip rect
+        let start_y = ui.cursor().min.y;
+        let clip = ui.clip_rect();
+        let top_y = clip.top();
+        let bottom_y = clip.bottom();
+
+        let mut first_row = ((top_y - start_y) / row_h).floor() as isize;
+        let mut last_row = ((bottom_y - start_y) / row_h).ceil() as isize;
+
+        // Overscan a bit for smoothness
+        let overscan: isize = 2;
+        first_row = (first_row - overscan).max(0);
+        last_row = (last_row + overscan).min(total_rows as isize);
+
+        let start_row = first_row as usize;
+        let end_row = last_row as usize;
+
+        // Space for skipped rows above
+        let top_skip = (start_row as f32) * row_h;
+        if top_skip > 0.0 {
+            ui.add_space(top_skip);
+        }
+
+        // Render only visible rows
+        for r in start_row..end_row {
             ui.horizontal(|ui| {
                 ui.add_space(left_pad);
+                let base = r * cols;
                 for c in 0..cols {
-                    if let Some(t) = data.get(i + c) {
+                    if let Some(t) = data.get(base + c) {
                         self.on_card_ui(ui, ctx, t, card_w, gap, c, cols);
                     }
                 }
             });
+            // Keep spacing consistent even on the last row to preserve total height
             ui.add_space(gap);
-            i += cols;
+        }
+
+        // Trailing space for rows below the visible range
+        let rendered_rows = end_row.saturating_sub(start_row) as f32;
+        let total_h = (total_rows as f32) * row_h;
+        let used_h = top_skip + rendered_rows * row_h;
+        let bottom_skip = (total_h - used_h).max(0.0);
+        if bottom_skip > 0.0 {
+            ui.add_space(bottom_skip);
         }
     }
 }

@@ -76,14 +76,22 @@ pub fn thread_card(
             // Combined with markers area height from draw_cover this ensures consistent spacing.
             // Fixed gap after cover; independent of data and width.
             ui.add_space(20.0);
-            ui.label(RichText::new(&t.title).heading().color(Color32::from_rgb(230, 230, 230)));
+            ui.add(
+                egui::Label::new(RichText::new(&t.title).heading().color(Color32::from_rgb(230, 230, 230)))
+                    //.truncate(true)
+                    .wrap(true),
+            );
 
             // Creator under title (no background) to match main page layout
             ui.add_space(4.0);
-            ui.label(
-                RichText::new(format!("by {}", t.creator))
-                    .small()
-                    .color(Color32::from_rgb(180, 180, 180)),
+            ui.add(
+                egui::Label::new(
+                    RichText::new(format!("by {}", t.creator))
+                        .small()
+                        .color(Color32::from_rgb(180, 180, 180)),
+                )
+                .truncate(true)
+                .wrap(false),
             );
             ui.add_space(4.0);
 
