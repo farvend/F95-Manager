@@ -68,15 +68,40 @@ pub fn create_download_task(page: F95Page) -> mpsc::Receiver<GameDownloadStatus>
         };
             
         for link in links {
-            if let Some(mut download_recv) = link.download().await {
-                // Проксируем все сообщения из download_recv в наш tx
-                while let Some(status) = download_recv.recv().await {
-                    if tx.send(status).is_err() {
-                        return; // Получатель отключился
+            // if let Some(mut download_recv) = link.download().await {
+            //     // Проксируем все сообщения из download_recv в наш tx
+            //     while let Some(status) = download_recv.recv().await {
+            //         if tx.send(status).is_err() {
+            //             return; // Получатель отключился
+            //         }
+            //     }
+            //     return 
+            // }
+            match link.download().await {
+                Ok(mut download_recv) => {
+                    while let Some(status) = download_recv.recv().await {
+                        if tx.send(status).is_err() {
+                            return; // Получатель отключился
+                        }
                     }
-                }
-                return 
-                // return;
+                    return 
+                },
+                Err(err) => {
+                    log::warn!("Error downloading: {err:?}");
+
+                    // im lazyy
+                    // struct Result {
+                    //     should_return: bool,
+                    //     error: String
+                    // }
+                    // use crate::parser::game_info::link::DownloadError;
+                    // let result = match err {
+                    //     DownloadError::Captcha => {
+                    //         let error = ""
+                    //     },
+                    // }
+                    // let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(err)));
+                },
             }
         }
         
