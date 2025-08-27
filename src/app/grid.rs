@@ -66,9 +66,8 @@ impl super::NoLagApp {
             let hover = {
                 let cover = self.covers.get(&id);
                 let screens_slice = self.screens.get(&id).map(|v| v.as_slice());
-                let download_progress = self.downloads.get(&id).map(|s| s.progress);
-                let download_error = self.downloads.get(&id).and_then(|s| s.error.as_deref());
-                thread_card(ui, t, card_w, cover, screens_slice, download_progress, download_error)
+                let progress = self.downloads.get(&id).and_then(|s| s.progress.clone());
+                thread_card(ui, t, card_w, cover, screens_slice, progress)
             };
 
             // Prefetch all screenshots as soon as the cursor hovers the card
@@ -125,7 +124,7 @@ impl super::NoLagApp {
                 // Allow restart if previous attempt failed
                 let should_start = match self.downloads.get(&id) {
                     None => true,
-                    Some(st) => st.error.is_some(),
+                    Some(st) => matches!(st.progress, Some(crate::game_download::Progress::Error(_))),
                 };
                 if should_start {
                     // Drop previous errored state if present
@@ -136,9 +135,7 @@ impl super::NoLagApp {
                     let rx = game_download::create_download_task(t.thread_id.get_page());
                     self.downloads.insert(id, super::downloads::DownloadState {
                         rx,
-                        progress: 0.0,
-                        error: None,
-                        completed: false,
+                        progress: Some(crate::game_download::Progress::Unknown),
                     });
                     // Update background Library snapshot to include this downloading thread immediately
                     self.refresh_prefetch_library(ctx);
