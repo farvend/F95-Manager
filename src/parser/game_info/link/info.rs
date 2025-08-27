@@ -3,6 +3,12 @@ use reqwest::{
     Url,
 };
 
+#[derive(Debug)]
+pub enum DirectRequest {
+    Http(reqwest::Request),
+    MegaPublicUrl(Url),
+}
+
 #[derive(Debug, Clone)]
 pub struct DownloadLinkInfo {
     pub url: Url,

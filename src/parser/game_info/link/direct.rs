@@ -1,41 +1,46 @@
 use reqwest::{
-    header::{HeaderMap},
+    header::{HeaderMap, HeaderValue},
     Url,
 };
 use std::str::FromStr;
 
 use crate::parser::game_info::hosting::HostingSubset;
-use super::{gofile::resolve_gofile_file, info::DownloadLinkInfo};
+use super::{gofile::resolve_gofile_file, info::DirectRequest};
 
 #[derive(Debug, Clone)]
 pub struct DirectDownloadLink {
     pub hosting: HostingSubset,
     pub path: Vec<String>,
+    pub url: Url,
 }
 
 impl DirectDownloadLink {
-    pub async fn get(self) -> Option<DownloadLinkInfo> {
+    pub async fn get(self) -> Option<DirectRequest> {
         match self.hosting {
             HostingSubset::Pixeldrain => {
                 let id = self.path.last()?;
                 let path = format!("/api/file/{id}?download=");
                 let url = self.hosting.base().to_owned() + &self.hosting.to_string() + &path;
                 let url = Url::from_str(&url).ok()?;
-                let headers = HeaderMap::new();
-                Some(DownloadLinkInfo {
-                    url,
-                    method: reqwest::Method::GET,
-                    headers,
-                })
+                let headers: HeaderMap<HeaderValue> = HeaderMap::new();
+                let mut request = reqwest::Request::new(reqwest::Method::GET, url);
+                *request.headers_mut() = headers;
+                Some(DirectRequest::Http(request))
+                // Some(DownloadLinkInfo {
+                //     url,
+                //     method: reqwest::Method::GET,
+                //     headers,
+                // })
             }
             HostingSubset::Gofile => {
                 let id = self.path.last()?;
                 let (url, headers) = resolve_gofile_file(id).await?;
-                Some(DownloadLinkInfo {
-                    url,
-                    method: reqwest::Method::GET,
-                    headers,
-                })
+                let mut request = reqwest::Request::new(reqwest::Method::GET, url);
+                *request.headers_mut() = headers;
+                Some(DirectRequest::Http(request))
+            }
+            HostingSubset::Mega => {
+                Some(DirectRequest::MegaPublicUrl(self.url.clone()))
             }
         }
     }
@@ -49,6 +54,6 @@ impl DirectDownloadLink {
             .path_segments()?
             .map(|e| e.to_owned())
             .collect::<Vec<String>>();
-        Some(DirectDownloadLink { hosting, path })
+        Some(DirectDownloadLink { hosting, path, url: value })
     }
 }

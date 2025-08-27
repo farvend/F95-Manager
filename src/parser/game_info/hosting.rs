@@ -51,17 +51,17 @@ define_subset! {
     pub enum Hosting, HostingSubset {
         subset: {
             Pixeldrain,
-            Gofile
+            Gofile,
+            Mega,
         }
         general: {
-            Mega,
             Mediafire,
             Workupload,
             Uploadhaven,
             Racaty,
             Zippy,
             Nopy,
-            Mixdrop
+            Mixdrop,
         }
     }
 }
