@@ -423,7 +423,7 @@ impl App for NoLagApp {
                         };
 
                         // When Library mode is ON, show downloaded AND in-progress games; always ignore hidden ones
-                        let display_data: Vec<crate::parser::F95Thread> = if self.library_only {
+                        let mut display_data: Vec<crate::parser::F95Thread> = if self.library_only {
                             // Persisted completed downloads
                             let downloaded_ids: std::collections::HashSet<u64> = {
                                 let st = settings::APP_SETTINGS.read().unwrap();
@@ -458,6 +458,44 @@ impl App for NoLagApp {
                                 .filter(|t| !hidden.contains(&t.thread_id.get()))
                                 .collect()
                         };
+
+                        // Apply client-side filters and sorting in Library mode
+                        if self.library_only {
+                            // Text query (Title or Creator)
+                            let q = self.query.to_lowercase();
+                            let use_query = !q.trim().is_empty();
+
+                            display_data.retain(|t| {
+                                // Query
+                                if use_query {
+                                    let hay = t.title.to_lowercase();
+                                    if !hay.contains(&q) {
+                                        return false;
+                                    }
+                                }
+
+                                // Include tags with OR/AND logic
+                                if !self.include_tags.is_empty() {
+                                    let has = |id: &u32| t.tags.contains(id);
+                                    let ok = match self.include_logic {
+                                        TagLogic::And => self.include_tags.iter().all(has),
+                                        TagLogic::Or => self.include_tags.iter().any(has),
+                                    };
+                                    if !ok {
+                                        return false;
+                                    }
+                                }
+
+                                // Exclude tags
+                                if !self.exclude_tags.is_empty()
+                                    && self.exclude_tags.iter().any(|id| t.tags.contains(id))
+                                {
+                                    return false;
+                                }
+                                true
+                            });
+                        }
+
                         self.draw_threads_grid(ui, ctx, &display_data, cols, left_pad, gap, card_w);
 
                         // Bottom controls: pagination in normal mode, summary in Library mode
