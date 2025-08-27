@@ -188,7 +188,7 @@ impl DownloadLink {
                 let nodes = match mega_client.fetch_public_nodes(url.as_str()).await {
                     Ok(n) => n,
                     Err(e) => {
-                        log::error!("mega fetch_public_nodes error: {:?}", e);
+                        log::error!("mega fetch_public_nodes error: {:?}, tried to fetch: {url}", e);
                         return Err(DownloadError::UnexpectedResponse);
                     }
                 };
