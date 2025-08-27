@@ -3,11 +3,12 @@ use std::path::PathBuf;
 
 use crate::parser::{game_info::{F95Page, Platform, PlatformDownloads, ThreadId}, F95Thread};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Progress {
     Pending(f32),
     Paused,
-    Error(String)
+    Error(String),
+    Unknown
 }
 pub enum GameDownloadStatus {
     Downloading(Progress),
@@ -79,6 +80,8 @@ pub fn create_download_task(page: F95Page) -> mpsc::Receiver<GameDownloadStatus>
                 },
                 Err(err) => {
                     log::warn!("Error downloading: {err:?}");
+                    let err = format!("{err:?}");
+                    //let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(err)));
 
                     // im lazyy
                     // struct Result {
@@ -97,7 +100,7 @@ pub fn create_download_task(page: F95Page) -> mpsc::Receiver<GameDownloadStatus>
         }
         
         // Если ни одна ссылка не сработала
-        let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error("No supported hostings found".into())));
+        let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error("No supported hostings found. Check warning logs for more info".into())));
     });
     
     rx
