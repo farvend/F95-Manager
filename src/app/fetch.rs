@@ -240,9 +240,9 @@ impl super::NoLagApp {
             self.downloads.len()
         );
 
-        // Snapshot current results so we don't re-fetch if a card is already filled
+        // Snapshot current results (prefer existing lib_result) so we don't re-fetch if a card is already filled
         let existing_map =
-            helpers::build_existing_map(self.last_result.as_ref());
+            self.build_existing_map_for_refresh();
 
         self.spawn_lib_pipeline_sequential_with_req(ctx, req_id, installs, targets, existing_map);
 
@@ -379,6 +379,8 @@ impl super::NoLagApp {
             match msg {
                 CoverMsg::Ok { thread_id, w, h, rgba } => {
                     let thread_id = thread_id.get();
+                    // Opportunistic cache save (if enabled)
+                    super::cache::maybe_save_cover_png(thread_id, w, h, rgba.clone());
                     let image = egui::ColorImage::from_rgba_unmultiplied([w, h], &rgba);
                     let tex = ctx.load_texture(
                         format!("cover_{:?}", thread_id),
@@ -393,6 +395,8 @@ impl super::NoLagApp {
                     self.covers_loading.remove(&thread_id);
                 }
                 CoverMsg::ScreenOk { thread_id, idx, w, h, rgba } => {
+                    // Opportunistic cache save (if enabled)
+                    super::cache::maybe_save_screen_png(thread_id, idx, w, h, rgba.clone());
                     let image = egui::ColorImage::from_rgba_unmultiplied([w, h], &rgba);
                     let tex = ctx.load_texture(
                         format!("screen_{}_{}", thread_id, idx),

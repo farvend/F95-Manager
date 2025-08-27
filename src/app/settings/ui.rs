@@ -15,6 +15,7 @@ lazy_static! {
     pub static ref SETTINGS_OPEN: RwLock<bool> = RwLock::new(false);
     static ref TEMP_DIR_INPUT: RwLock<String> = RwLock::new(String::new());
     static ref EXTRACT_DIR_INPUT: RwLock<String> = RwLock::new(String::new());
+    static ref CACHE_DIR_INPUT: RwLock<String> = RwLock::new(String::new());
     static ref CUSTOM_LAUNCH_INPUT: RwLock<String> = RwLock::new(String::new());
     // Toggle: cache metadata/images on download click
     static ref CACHE_ON_DOWNLOAD_INPUT: RwLock<bool> = RwLock::new(false);
@@ -46,6 +47,10 @@ pub fn open_settings() {
     {
         let mut ext = EXTRACT_DIR_INPUT.write().unwrap();
         *ext = s.extract_dir.to_string_lossy().to_string();
+    }
+    {
+        let mut cd = CACHE_DIR_INPUT.write().unwrap();
+        *cd = s.cache_dir.to_string_lossy().to_string();
     }
     {
         let mut cl = CUSTOM_LAUNCH_INPUT.write().unwrap();
@@ -109,6 +114,22 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                         };
                         if let Some(dir) = rfd::FileDialog::new().set_directory(init).pick_folder() {
                             *EXTRACT_DIR_INPUT.write().unwrap() = dir.to_string_lossy().to_string();
+                        }
+                    }
+                });
+                // Cache folder
+                ui.horizontal(|ui| {
+                    ui.label("Cache folder:");
+                    let cache_val = CACHE_DIR_INPUT.read().unwrap().clone();
+                    let resp = ui.add(egui::Label::new(cache_val.clone()).sense(egui::Sense::click()));
+                    if resp.clicked() {
+                        let init = if !cache_val.is_empty() {
+                            std::path::PathBuf::from(cache_val.clone())
+                        } else {
+                            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+                        };
+                        if let Some(dir) = rfd::FileDialog::new().set_directory(init).pick_folder() {
+                            *CACHE_DIR_INPUT.write().unwrap() = dir.to_string_lossy().to_string();
                         }
                     }
                 });
@@ -218,6 +239,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                                 let warn_prefixes = WARN_PREFIXES_INPUT.read().unwrap().clone();
                                 let custom_launch = CUSTOM_LAUNCH_INPUT.read().unwrap().clone();
                                 let cache_on_download = *CACHE_ON_DOWNLOAD_INPUT.read().unwrap();
+                                let cache_dir_str = CACHE_DIR_INPUT.read().unwrap().clone();
                                 let mut st = APP_SETTINGS.write().unwrap();
                                 st.temp_dir = std::path::PathBuf::from(temp_val);
                                 st.extract_dir = new_extract_pb;
@@ -225,6 +247,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                                 st.warn_prefixes = warn_prefixes;
                                 st.custom_launch = custom_launch;
                                 st.cache_on_download = cache_on_download;
+                                st.cache_dir = std::path::PathBuf::from(cache_dir_str);
                             } // drop write lock before saving to avoid deadlock
                             save_settings_to_disk();
                             *SETTINGS_OPEN.write().unwrap() = false;
@@ -314,6 +337,8 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     let warn_prefixes = WARN_PREFIXES_INPUT.read().unwrap().clone();
                     let custom_launch = CUSTOM_LAUNCH_INPUT.read().unwrap().clone();
                     let cache_on_download = *CACHE_ON_DOWNLOAD_INPUT.read().unwrap();
+                    let cache_dir_str = CACHE_DIR_INPUT.read().unwrap().clone();
+                    let cache_dir = std::path::PathBuf::from(&cache_dir_str);
                     {
                         let mut st = APP_SETTINGS.write().unwrap();
                         st.temp_dir = std::path::PathBuf::from(new_temp);
@@ -322,6 +347,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                         st.warn_prefixes = warn_prefixes;
                         st.custom_launch = custom_launch;
                         st.cache_on_download = cache_on_download;
+                        st.cache_dir = cache_dir;
                         for (tid, nf, ne) in moved {
                             if let Some(entry) = st.downloaded_games.iter_mut().find(|e| e.thread_id == tid) {
                                 entry.folder = nf;

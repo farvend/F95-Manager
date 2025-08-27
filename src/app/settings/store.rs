@@ -5,6 +5,10 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::RwLock;
 
+fn default_cache_dir() -> PathBuf {
+    PathBuf::from("cache")
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DownloadedGame {
     pub thread_id: u64,
@@ -16,6 +20,8 @@ pub struct DownloadedGame {
 pub struct AppSettings {
     pub temp_dir: PathBuf,
     pub extract_dir: PathBuf,
+    #[serde(default = "default_cache_dir")]
+    pub cache_dir: PathBuf,
     #[serde(default)]
     pub downloaded_games: Vec<DownloadedGame>,
     #[serde(default)]
@@ -40,6 +46,7 @@ impl Default for AppSettings {
         Self {
             temp_dir: PathBuf::from("downloads"),
             extract_dir: PathBuf::from("games"),
+            cache_dir: PathBuf::from("cache"),
             downloaded_games: Vec::new(),
             pending_downloads: Vec::new(),
             hidden_threads: Vec::new(),

@@ -61,7 +61,7 @@ impl super::NoLagApp {
             ui.set_max_width(card_w);
             let id = t.thread_id.get();
             if self.library_only {
-                super::cache::ensure_cache_for_thread(id);
+                super::cache::ensure_cache_for_thread_from(t);
             }
             let hover = {
                 let cover = self.covers.get(&id);
@@ -132,7 +132,7 @@ impl super::NoLagApp {
                     self.downloads.remove(&id);
                     // Persist pending download in settings so Library can show it across restarts
                     super::settings::record_pending_download(id);
-                    super::cache::spawn_cache_for_thread(id);
+                    super::cache::spawn_cache_for_thread_from(t);
                     let rx = game_download::create_download_task(t.thread_id.get_page());
                     self.downloads.insert(id, super::downloads::DownloadState {
                         rx,
@@ -142,10 +142,7 @@ impl super::NoLagApp {
                     });
                     // Update background Library snapshot to include this downloading thread immediately
                     self.refresh_prefetch_library(ctx);
-                    // Ensure Library view includes this in-progress download immediately
-                    if self.library_only {
-                        self.start_fetch_library(ctx);
-                    }
+                    // Library view will update from prefetch immediately via lib_rx; no direct fetch needed here
                     ctx.request_repaint();
                 }
             }
