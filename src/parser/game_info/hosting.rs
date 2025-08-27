@@ -23,16 +23,12 @@ macro_rules! define_subset {
         }
 
         impl $name {
+            #[allow(unused)]
             pub fn as_subset(&self) -> Option<$subset_name> {
                 match self {
                     $( Self::$subset => Some($subset_name::$subset), )*
                     _ => None,
                 }
-            }
-
-            // Back-compat with previous API
-            pub fn Subset(&self) -> Option<$subset_name> {
-                self.as_subset()
             }
         }
 
@@ -53,6 +49,7 @@ define_subset! {
             Pixeldrain,
             Gofile,
             Mega,
+            Catbox
         }
         general: {
             Mediafire,
@@ -79,6 +76,7 @@ impl fmt::Display for Hosting {
             Hosting::Uploadhaven => "uploadhaven.com",
             Hosting::Workupload => "workupload.com",
             Hosting::Zippy => "zippyshare.com",
+            Hosting::Catbox => "files.catbox.moe",
         };
         write!(f, "{url}")
     }
