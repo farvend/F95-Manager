@@ -1,10 +1,10 @@
 use regex::Regex;
-use reqwest::Client;
+use reqwest::{Client, StatusCode};
 use lazy_static::lazy_static;
 
 use super::cookies;
 use crate::tags::TAGS;
-use std::fmt;
+use std::{fmt, time::Duration};
 
 #[derive(Debug, Clone)]
 pub struct ThreadMeta {
@@ -68,21 +68,31 @@ pub async fn fetch_thread_meta(thread_id: u64) -> Result<ThreadMeta, FetchThread
         .build()
         .map_err(|_| FetchThreadMetaError::BuildClient)?;
 
-    let text = client
+    let resp: reqwest::Response = client
         .get(&url)
         .header("Cookie", cookies())
         .send()
         .await
-        .map_err(FetchThreadMetaError::Request)?
+        .map_err(FetchThreadMetaError::Request)?;
+
+    if resp.status() == StatusCode::TOO_MANY_REQUESTS {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        return Box::pin(fetch_thread_meta(thread_id)).await
+    }
+
+    let text = resp
         .text()
         .await
         .map_err(FetchThreadMetaError::ReadText)?;
+
+    
 
     let full_title_html = RE_OG_TITLE
         .captures(&text)
         .and_then(|cap| cap.get(0))
         .map(|m| m.as_str().to_string())
-        .ok_or(FetchThreadMetaError::OgTitleMissing)?;
+        .ok_or(FetchThreadMetaError::OgTitleMissing)
+        .inspect_err(|e| {dbg!(&text);})?;
 
     let full_title = full_title_html
         .rsplit_once("</span>")
