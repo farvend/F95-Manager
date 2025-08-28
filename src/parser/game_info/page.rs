@@ -55,7 +55,6 @@ impl F95Page {
         let span_html = span_html
             .split_once("DOWNLOAD")
             .unwrap().1;
-        println!("ads");
         // let cap = RE_DOWNLOADS
         //     .captures(&text)
         //     .ok_or(GetLinksError::NoDownloadsBlock)?;
