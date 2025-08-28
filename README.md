@@ -1,4 +1,4 @@
-# F95 Standalone Client
+# F95 Manager
 
 Desktop client for F95zone - browse, download, and manage games from a native app.
 
