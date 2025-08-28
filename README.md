@@ -9,7 +9,7 @@ automated downloads with extraction, and a built-in library to organize your col
 ## Install
 
 Requirements:
-- Windows 10+ (other versions might work, untested).
+- Windows 10+ (other versions might work, not tested).
 
 1. Go to https://github.com/farvend/F95-Manager/releases/latest
 3. Download `F95_manager.exe`
