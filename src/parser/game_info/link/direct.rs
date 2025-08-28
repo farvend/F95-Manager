@@ -55,7 +55,6 @@ impl DirectDownloadLink {
 
     // Visible to parent module (link) so it can construct DirectDownloadLink
     pub(super) fn new(value: Url) -> Option<DirectDownloadLink> {
-        dbg!(&value);
         let hosting: HostingSubset = value.clone()
             .try_into()
             .ok()?;
