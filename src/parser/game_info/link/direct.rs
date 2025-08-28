@@ -43,7 +43,6 @@ impl DirectDownloadLink {
                 Some(DirectRequest::Http(request))
             }
             HostingSubset::Mega => {
-                dbg!(&self.path);
                 let mut path = self.path[1].clone();
                 path = path[1..].replace('!', "#");
                 let hosting = self.hosting.base().to_string() + &self.hosting.to_string();
