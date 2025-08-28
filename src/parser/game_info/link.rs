@@ -2,7 +2,7 @@ use reqwest::Url;
 use std::str::FromStr;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
-use crate::{game_download::{GameDownloadStatus, Progress}, parser::CLIENT};
+use crate::{game_download::{GameDownloadStatus, Progress}, parser::{game_info::HostingSubset, CLIENT}};
 use crate::app::settings::APP_SETTINGS;
 
 use super::cookies;
@@ -127,6 +127,22 @@ impl DownloadLink {
         match self {
             DownloadLink::Direct(link) => Ok(link),
             DownloadLink::Masked(link) => {
+                //check is hosting valid
+                {
+                    let url_str = link
+                        .path_segments()
+                        .unwrap()
+                        .nth(1)
+                        .unwrap();
+                    let url_str: String = "https://".to_string() + url_str;
+                    let url: Url = url_str.as_str()
+                        .try_into()
+                        .map_err(|_| DownloadError::UnexpectedResponse)?;
+                    let _: HostingSubset = url.try_into().map_err(|_| DownloadError::UnsupportedHosting)?;
+                }
+                
+
+
                 let ans = CLIENT
                     .post(link.clone())
                     .header(
