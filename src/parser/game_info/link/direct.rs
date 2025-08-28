@@ -4,7 +4,7 @@ use reqwest::{
 };
 use std::str::FromStr;
 
-use crate::parser::game_info::hosting::HostingSubset;
+use crate::parser::game_info::{hosting::HostingSubset, Hosting};
 use super::{gofile::resolve_gofile_file, info::DirectRequest};
 
 #[derive(Debug, Clone)]
@@ -57,20 +57,16 @@ impl DirectDownloadLink {
     // Visible to parent module (link) so it can construct DirectDownloadLink
     pub(super) fn new(value: Url) -> Option<DirectDownloadLink> {
         dbg!(&value);
-        let mut hosting = value.domain()?
-            .split('.')
-            .rev()
-            .nth(1)
-            .unwrap()
-            .to_string();
-        hosting.get_mut(0..1).map(|e| e.make_ascii_uppercase());
-        let hosting: HostingSubset = hosting.parse().ok()?;
-        let mut path = value
-            .path_segments()?
+        let hosting: HostingSubset = value.clone()
+            .try_into()
+            .ok()?;
+
+        let path_segments = value.path_segments()?;
+        let mut path = path_segments
             .map(|e| e.to_owned())
             .collect::<Vec<String>>();
         value.fragment().inspect(|e| path.push(e.to_string()));
-
+        
         Some(DirectDownloadLink { hosting, path })
     }
 }

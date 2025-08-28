@@ -1,6 +1,7 @@
 use std::fmt;
 
 use strum::EnumString;
+use reqwest::Url;
 
 // Macro to define an enum with a "subset" companion enum and conversions
 macro_rules! define_subset {
@@ -36,6 +37,15 @@ macro_rules! define_subset {
             fn from(subset: $subset_name) -> Self {
                 match subset {
                     $( $subset_name::$subset => $name::$subset, )*
+                }
+            }
+        }
+        impl TryFrom<$name> for $subset_name {
+            type Error = ();
+            fn try_from(value: $name) -> Result<Self, Self::Error> {
+                match value {
+                    $( $name::$subset => Ok($subset_name::$subset), )*
+                    _ => Err(()),
                 }
             }
         }
@@ -86,6 +96,52 @@ impl Hosting {
     pub fn base(&self) -> &'static str {
         "https://"
     }
+}
+
+#[derive(Debug)]
+pub enum HostingError {
+    NotDomain,
+    UnknownDomain
+}
+
+impl TryFrom<Url> for Hosting {
+    type Error = HostingError;
+    fn try_from(value: Url) -> Result<Self, HostingError> {
+        let sec = value
+            .domain().ok_or(HostingError::NotDomain)?
+            .split('.')
+            .rev()
+            .nth(1)
+            .unwrap()
+            .to_string();
+
+        let mut name = sec;
+        name.get_mut(0..1).map(|s| s.make_ascii_uppercase());
+        name.parse().map_err(|_| HostingError::UnknownDomain)
+    }
+}
+
+#[derive(Debug)]
+pub enum HostingSubsetError {
+    HostingError(HostingError),
+    UnsopportedHosting
+}
+
+impl TryFrom<Url> for HostingSubset {
+    type Error = HostingSubsetError;
+    fn try_from(value: Url) -> Result<Self, Self::Error> {
+        let hosting: Hosting = value
+            .try_into()
+            .map_err(|e| HostingSubsetError::HostingError(e))?;
+        hosting.
+            try_into()
+            .map_err(|_| HostingSubsetError::UnsopportedHosting)
+    }
+    
+    // fn from(value: Url) -> Self {
+    //     let hosting: Hosting = value.into();
+    //     hosting.as_subset().unwrap()
+    // }
 }
 
 impl HostingSubset {
