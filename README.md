@@ -1,4 +1,4 @@
-# F95 Standalone Client
+# F95 Manager
 
 Desktop client for F95zone — browse, search, download, and manage games from a native app.
 
@@ -33,7 +33,7 @@ Built with Rust + egui for speed and small filesize.
 ## Download & Run
 
 Requirements:
-- Windows 10+ (other versions might work, untested).
+- Windows 10+ (other versions might work, not tested).
 
 1. Get the latest release: https://github.com/farvend/F95-Manager/releases/latest  
 2. Download `F95_manager.exe` (or the latest `F95_manager-vX.Y.Z.exe`).
@@ -51,8 +51,6 @@ F95zone requires an authenticated session cookie. Two ways to provide it:
 
 1) Username/Password  (MAY NOT WORK!!! IF SO, USE SECOND METHOD)  
    - Enter Username and Password on the Login screen.  
-   - The app posts to `https://f95zone.to/login/login`, collects `Set-Cookie`, and saves a ready‑to‑use `Cookie` header string into `app_config.json`.  
-   - If you get “login failed … xf_session” — check your credentials.
 
 2) Paste a Cookie header string  
    - On the Login screen, paste the full `Cookie` header and press “Use cookies”.  
