@@ -109,14 +109,14 @@ jobs:
           echo "## 📋 Changes since ${{ steps.prev_tag.outputs.PREV_TAG }}" >> changelog.md
           echo "" >> changelog.md
           
-          # Получаем коммиты между тегами
-          git log ${{ steps.prev_tag.outputs.PREV_TAG }}..HEAD --pretty=format:"- %s ([%h](https://github.com/${{ github.repository }}/commit/%H)) by @%an" --no-merges >> changelog.md
+          # Получаем коммиты между тегами (только сообщения коммитов)
+          git log ${{ steps.prev_tag.outputs.PREV_TAG }}..HEAD --pretty=format:"- %s" --no-merges >> changelog.md
         else
           echo "## 📋 All Changes" >> changelog.md
           echo "" >> changelog.md
           
-          # Получаем все коммиты
-          git log --pretty=format:"- %s ([%h](https://github.com/${{ github.repository }}/commit/%H)) by @%an" --no-merges >> changelog.md
+          # Получаем все коммиты (только сообщения коммитов)
+          git log --pretty=format:"- %s" --no-merges >> changelog.md
         fi
         
         echo "" >> changelog.md
