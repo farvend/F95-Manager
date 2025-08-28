@@ -92,7 +92,7 @@ pub(super) fn draw_errors_viewport(ctx: &egui::Context) {
 
     let viewport_id = egui::ViewportId::from_hash_of("errors_window");
 
-    ctx.show_viewport_deferred(
+    ctx.show_viewport_immediate(
         viewport_id,
         egui::ViewportBuilder::default()
             .with_title("Errors")
