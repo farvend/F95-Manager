@@ -64,13 +64,13 @@ fn range_lines(start: usize, end: usize) -> Vec<String> {
 
 // Floating button in the bottom-right corner of the main window.
 // Appears only when there are errors collected.
-pub(super) fn draw_errors_button(ctx: &egui::Context) {
+pub(super) fn draw_errors_button(ctx: &egui::Context, bottom_offset: f32) {
     let n = len();
     if n == 0 {
         return;
     }
     egui::Area::new("errors_button_floating".into())
-        .anchor(egui::Align2::RIGHT_BOTTOM, egui::Vec2::new(-12.0, -12.0))
+        .anchor(egui::Align2::RIGHT_BOTTOM, egui::Vec2::new(-12.0, -12.0 - bottom_offset))
         .interactable(true)
         .show(ctx, |ui| {
             let btn = egui::Button::new(format!("Errors ({n})"))

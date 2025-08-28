@@ -1,6 +1,8 @@
+use std::backtrace;
+
 use eframe::egui;
 
-use crate::parser::game_info::ThreadId;
+use crate::parser::{game_info::ThreadId, F95Error};
 
 use super::rt;
 mod helpers;
@@ -214,6 +216,9 @@ impl super::NoLagApp {
 
         rt().spawn(async move {
             let res = crate::parser::fetch_list_page(page, &filters).await;
+            if let Err(err) = &res {
+                log::error!("Error getting latest updates: {err:?}");
+            }
 
             let _ = tx.send((req_id, res));
             ctx2.request_repaint();
@@ -231,6 +236,10 @@ impl super::NoLagApp {
         // bump fetch request id
         self.counter = self.counter.wrapping_add(1);
         let req_id = self.counter;
+
+        // mark this req_id as a Library sequential pipeline request
+        self.library_req_ids.clear();
+        self.library_req_ids.insert(req_id);
 
         let (installs, targets) = self.compute_library_targets();
         log::info!(
@@ -330,8 +339,17 @@ impl super::NoLagApp {
     pub(super) fn poll_incoming(&mut self, ctx: &egui::Context) {
         // Fetch results
         while let Ok((id, res)) = self.rx.try_recv() {
-            // Ignore stale results from previous requests
-            if id != self.counter {
+            let is_library_req = self.library_req_ids.contains(&id);
+            // Ignore stale results unless it's an active Library sequential request
+            if id != self.counter && !is_library_req {
+                continue;
+            }
+            // In Library view, ignore non-Library listing results
+            if self.library_only && !is_library_req {
+                continue;
+            }
+            // In Main view, ignore Library sequential results
+            if !self.library_only && is_library_req {
                 continue;
             }
             self.loading = false;

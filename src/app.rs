@@ -17,6 +17,7 @@ pub mod config;
 mod logs_ui;
 mod about_ui;
 mod errors_ui;
+mod update_ui;
 
 // Вынесено: tokio runtime и вся логика получения данных
 mod runtime;
@@ -69,6 +70,8 @@ pub struct NoLagApp {
     cover_tx: mpsc::Sender<CoverMsg>,
     cover_rx: mpsc::Receiver<CoverMsg>,
     downloads: HashMap<u64, DownloadState>,
+    // Track which request ids in rx belong to Library sequential pipeline
+    library_req_ids: HashSet<u64>,
     // Background Library prefetch state
     lib_started: bool,
     lib_result: Option<crate::parser::F95Msg>,
@@ -130,6 +133,7 @@ impl Default for NoLagApp {
             cover_tx,
             cover_rx,
             downloads: HashMap::new(),
+            library_req_ids: HashSet::new(),
             lib_started: false,
             lib_result: None,
             lib_error: None,
@@ -258,7 +262,8 @@ impl App for NoLagApp {
             });
             // Logs, Errors and Settings viewports remain accessible
             logs_ui::draw_logs_viewport(ctx);
-            errors_ui::draw_errors_button(ctx);
+            let bottom_offset = update_ui::draw_update_notice(ctx);
+            errors_ui::draw_errors_button(ctx, bottom_offset);
             errors_ui::draw_errors_viewport(ctx);
             about_ui::draw_about_viewport(ctx);
             settings::draw_settings_viewport(ctx);
@@ -275,7 +280,8 @@ impl App for NoLagApp {
         self.schedule_cover_downloads(ctx);
 
         // Первый автозапуск загрузки
-        if self.last_result.is_none() && !self.loading {
+        // Не перезапускать автоматически при наличии ошибки (например, 429), чтобы не было бесконечного цикла запросов
+        if self.last_result.is_none() && self.last_error.is_none() && !self.loading {
             if self.library_only {
                 // Если приложение стартует в режиме Library — сразу запускаем параллельную подзагрузку
                 self.start_prefetch_library(ctx);
@@ -534,8 +540,9 @@ impl App for NoLagApp {
                 });
         });
 
-        // Floating Errors button + Errors window
-        errors_ui::draw_errors_button(ctx);
+        // Floating Update + Errors overlay
+        let bottom_offset = update_ui::draw_update_notice(ctx);
+        errors_ui::draw_errors_button(ctx, bottom_offset);
         errors_ui::draw_errors_viewport(ctx);
 
         // Logs window (separate OS viewport)

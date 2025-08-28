@@ -431,13 +431,28 @@ pub async fn fetch_list_page(page: u32, filters: &F95Filters) -> Result<F95Msg, 
     // cache buster
     params.push(("_".into(), cache_buster.to_string()));
 
-    let resp: Root = client
+    // Perform request, and if server responds with 429 (Too Many Requests),
+    // wait 1 second before retrying once to avoid immediate hammering.
+    let mut raw_resp = client
         .get(BASE_URL)
         .header("Cookie", cookies())
         .query(&params)
-        .send().await?
-        .error_for_status()?
-        .json().await?;
+        .send()
+        .await?;
+
+    if raw_resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        log::warn!("fetch_list_page: received 429 Too Many Requests; delaying 1s before retry");
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        raw_resp = client
+            .get(BASE_URL)
+            .header("Cookie", cookies())
+            .query(&params)
+            .send()
+            .await?;
+    }
+
+    let raw_resp = raw_resp.error_for_status()?;
+    let resp: Root = raw_resp.json().await?;
 
     match resp.msg {
         Msg::Success(msg) if resp.status == "ok" => Ok(msg),
