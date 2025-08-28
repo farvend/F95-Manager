@@ -3,10 +3,12 @@ use std::sync::mpsc;
 use eframe::egui;
 
 use crate::game_download::GameDownloadStatus;
+use crate::parser::game_info::link::DownloadLink;
 
 pub(super) struct DownloadState {
     pub(super) rx: mpsc::Receiver<GameDownloadStatus>,
     pub(super) progress: Option<crate::game_download::Progress>,
+    pub(super) link_choices: Option<Vec<DownloadLink>>,
 }
 
 impl super::NoLagApp {
@@ -16,6 +18,12 @@ impl super::NoLagApp {
         for (id, state) in self.downloads.iter_mut() {
             while let Ok(status) = state.rx.try_recv() {
                 match status {
+                    GameDownloadStatus::SelectLinks(links) => {
+                        // Ask UI to let user select a link; keep progress unknown to show "awaiting" state
+                        state.link_choices = Some(links);
+                        state.progress = Some(crate::game_download::Progress::Unknown);
+                        ctx.request_repaint();
+                    }
                     GameDownloadStatus::Downloading(progress) => {
                         match progress {
                             crate::game_download::Progress::Pending(p) => {

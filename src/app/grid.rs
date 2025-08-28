@@ -67,7 +67,8 @@ impl super::NoLagApp {
                 let cover = self.covers.get(&id);
                 let screens_slice = self.screens.get(&id).map(|v| v.as_slice());
                 let progress = self.downloads.get(&id).and_then(|s| s.progress.clone());
-                thread_card(ui, t, card_w, cover, screens_slice, progress)
+                let link_choices = self.downloads.get(&id).and_then(|s| s.link_choices.as_ref().map(|v| v.as_slice()));
+                thread_card(ui, t, card_w, cover, screens_slice, progress, link_choices)
             };
 
             // Prefetch all screenshots as soon as the cursor hovers the card
@@ -120,6 +121,27 @@ impl super::NoLagApp {
                     }
                 }
             }
+            // If user selected a specific link from "SELECT LINK" overlay, start that download
+            if let Some(link) = hover.selected_link {
+                let rx_new = game_download::create_download_from_link(link);
+                // Update or insert download state for this thread without moving the same rx into multiple closures
+                if let Some(st) = self.downloads.get_mut(&id) {
+                    st.rx = rx_new;
+                    st.progress = Some(crate::game_download::Progress::Unknown);
+                    st.link_choices = None;
+                } else {
+                    self.downloads.insert(id, super::downloads::DownloadState {
+                        rx: rx_new,
+                        progress: Some(crate::game_download::Progress::Unknown),
+                        link_choices: None,
+                    });
+                }
+                super::settings::record_pending_download(id);
+                // Keep Library in sync immediately
+                self.refresh_prefetch_library(ctx);
+                ctx.request_repaint();
+            }
+
             if hover.download_clicked {
                 // Allow restart if previous attempt failed
                 let should_start = match self.downloads.get(&id) {
@@ -136,6 +158,7 @@ impl super::NoLagApp {
                     self.downloads.insert(id, super::downloads::DownloadState {
                         rx,
                         progress: Some(crate::game_download::Progress::Unknown),
+                        link_choices: None,
                     });
                     // Update background Library snapshot to include this downloading thread immediately
                     self.refresh_prefetch_library(ctx);

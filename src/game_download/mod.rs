@@ -2,6 +2,7 @@ use std::sync::mpsc;
 use std::path::PathBuf;
 
 use crate::parser::{game_info::{F95Page, Platform, PlatformDownloads, ThreadId}, F95Thread};
+use crate::parser::game_info::link::DownloadLink;
 
 #[derive(Debug, Clone)]
 pub enum Progress {
@@ -12,6 +13,8 @@ pub enum Progress {
 }
 pub enum GameDownloadStatus {
     Downloading(Progress),
+    // Signal UI to select a link (no platform parsed)
+    SelectLinks(Vec<DownloadLink>),
     Unzipping(Progress),
     Completed { dest_dir: PathBuf, exe_path: Option<PathBuf> },
 }
@@ -25,6 +28,21 @@ pub fn create_download_task(page: F95Page) -> mpsc::Receiver<GameDownloadStatus>
     rt.spawn(async move {
         let downloads = match page.get_download_links().await {
             Ok(b) => b,
+            Err(crate::parser::game_info::page::GetLinksError::PlatformNameMissing) => {
+                // Fallback: parse links without platform grouping and ask user to select
+                match page.get_download_links_flat().await {
+                    Ok(links) if !links.is_empty() => {
+                        let _ = tx.send(GameDownloadStatus::SelectLinks(links));
+                        return;
+                    }
+                    Ok(_) | Err(_) => {
+                        let msg = "Platform name missing and no links found".to_string();
+                        log::error!("err getting links: {msg}");
+                        let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(msg)));
+                        return;
+                    }
+                }
+            }
             Err(err) => {
                 let msg = match err {
                     crate::parser::game_info::page::GetLinksError::BuildClient => "Failed to build HTTP client".to_string(),
@@ -110,5 +128,27 @@ pub fn create_download_task(page: F95Page) -> mpsc::Receiver<GameDownloadStatus>
         let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(error_text)));
     });
     
+    rx
+}
+
+pub fn create_download_from_link(link: DownloadLink) -> mpsc::Receiver<GameDownloadStatus> {
+    let rt = crate::app::RUNTIME.get().unwrap();
+    let (tx, rx) = mpsc::channel();
+
+    rt.spawn(async move {
+        match link.download().await {
+            Ok(mut download_recv) => {
+                while let Some(status) = download_recv.recv().await {
+                    if tx.send(status).is_err() {
+                        return; // receiver dropped
+                    }
+                }
+            }
+            Err(err) => {
+                let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(format!("{err:?}"))));
+            }
+        }
+    });
+
     rx
 }

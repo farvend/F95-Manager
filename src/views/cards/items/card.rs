@@ -11,7 +11,8 @@ use super::meta_row::draw_meta_row;
 pub struct CardHover {
     pub hovered: bool,
     pub hovered_line: Option<usize>,
-    pub download_clicked: bool
+    pub download_clicked: bool,
+    pub selected_link: Option<crate::parser::game_info::link::DownloadLink>,
 }
 
 /// Fixed-width card resembling F95 tiles.
@@ -25,6 +26,7 @@ pub fn thread_card(
     cover_tex: Option<&egui::TextureHandle>,
     screens: Option<&[Option<egui::TextureHandle>]>,
     progress: Option<crate::game_download::Progress>,
+    link_choices: Option<&[crate::parser::game_info::link::DownloadLink]>,
 ) -> CardHover {
     let rounding = Rounding::same(8.0);
     let fill = Color32::from_rgb(36, 36, 36);
@@ -53,6 +55,8 @@ pub fn thread_card(
         rounding
     };
     let mut download_clicked = false;
+    // Will be set by draw_cover() if user picks a link from the overlay
+    let mut selected_link_local: Option<crate::parser::game_info::link::DownloadLink> = None;
 
     let frame_out = egui::Frame::none()
         .fill(fill)
@@ -65,10 +69,12 @@ pub fn thread_card(
             ui.set_width(inner_w);
 
             // Cover + markers (handles hover index and screenshot swap if available)
-            let cover_hover = draw_cover(ui, t, inner_w, cover_tex, screens, progress.clone());
+            let cover_hover = draw_cover(ui, t, inner_w, cover_tex, screens, progress.clone(), link_choices);
             hovered_any |= cover_hover.hovered;
             hovered_line = cover_hover.hovered_line;
             download_clicked |= cover_hover.download_clicked;
+            // capture selected link to return outside the closure
+            selected_link_local = cover_hover.selected_link;
 
             // Title (after cover and markers)
             // Use a fixed post-cover gap to avoid data-driven layout hacks.
@@ -171,6 +177,7 @@ pub fn thread_card(
     CardHover {
         hovered: hovered_any,
         hovered_line,
-        download_clicked
+        download_clicked,
+        selected_link: selected_link_local,
     }
 }
