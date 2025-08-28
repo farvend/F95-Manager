@@ -120,23 +120,6 @@ jobs:
         fi
         
         echo "" >> changelog.md
-        echo "" >> changelog.md
-        
-        # Группируем коммиты по типам (если используете conventional commits)
-        echo "## 📊 Commit Statistics" >> changelog.md
-        echo "" >> changelog.md
-        
-        if [ -n "${{ steps.prev_tag.outputs.PREV_TAG }}" ]; then
-          COMMIT_COUNT=$(git rev-list --count ${{ steps.prev_tag.outputs.PREV_TAG }}..HEAD)
-          CONTRIBUTORS=$(git log ${{ steps.prev_tag.outputs.PREV_TAG }}..HEAD --pretty=format:"%an" | sort -u | wc -l)
-        else
-          COMMIT_COUNT=$(git rev-list --count HEAD)
-          CONTRIBUTORS=$(git log --pretty=format:"%an" | sort -u | wc -l)
-        fi
-        
-        echo "- Total commits: $COMMIT_COUNT" >> changelog.md
-        echo "- Contributors: $CONTRIBUTORS" >> changelog.md
-        echo "" >> changelog.md
         
         # Сохраняем changelog в output
         echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
@@ -154,7 +137,7 @@ jobs:
         name: windows-executable
         path: ./artifacts
     
-    - name: Create source archives
+    - name: Prepare release files
       if: steps.check_release.outputs.EXISTS == 'false'
       run: |
         mkdir release
@@ -168,9 +151,6 @@ jobs:
           fi
         done
         cd ..
-        # Создаём архивы исходников
-        git archive --format=zip --output=release/source-v${{ steps.cargo_version.outputs.VERSION }}.zip HEAD
-        git archive --format=tar.gz --output=release/source-v${{ steps.cargo_version.outputs.VERSION }}.tar.gz HEAD
     
     - name: Create Draft Release
       if: steps.check_release.outputs.EXISTS == 'false'
@@ -196,10 +176,6 @@ jobs:
           ### Windows
           - **Windows executable** - Pre-built binary for Windows (x86_64)
           
-          ### Source Code
-          - **Source code (zip)** - Complete source code in ZIP format
-          - **Source code (tar.gz)** - Complete source code in TAR.GZ format
-          
           ---
           
           ## 📝 Installation
@@ -213,14 +189,6 @@ jobs:
           ```bash
           cargo build --release
           ```
-          
-          ---
-          
-          ## 🔗 Links
-          
-          - [Documentation](https://github.com/${{ github.repository }}/blob/main/README.md)
-          - [Issues](https://github.com/${{ github.repository }}/issues)
-          - [Discussions](https://github.com/${{ github.repository }}/discussions)
         files: |
           release/*
         generate_release_notes: false  # Используем свой changelog
