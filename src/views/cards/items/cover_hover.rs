@@ -1,4 +1,4 @@
-use eframe::egui::{self, Color32, RichText, Rounding, Stroke, Vec2, Sense};
+use eframe::egui::{self, Color32, Label, RichText, Rounding, Sense, Stroke, Vec2};
 
 use crate::{parser::F95Thread, views::cards::items::card::CardHover};
 use crate::parser::game_info::link::DownloadLink;
@@ -401,21 +401,37 @@ pub fn draw_cover(
                         .rounding(Rounding::same(6.0))
                         .inner_margin(6.0)
                         .show(ui, |ui| {
+                            ui.set_max_width(250.);
                             for link in links.iter() {
                                 let label = match link {
                                     crate::parser::game_info::link::DownloadLink::Direct(d) => {
-                                        let last = d.path.last().map(String::as_str).unwrap_or("");
-                                        format!("{} {}", d.hosting.to_string(), last)
+                                        let last = d.path
+                                            .iter()
+                                            .intersperse(&"/".to_string())
+                                            .cloned()
+                                            .collect::<String>();
+                                        format!("{}/{}", d.hosting.to_string(), last)
                                     }
                                     crate::parser::game_info::link::DownloadLink::Masked(u) => {
-                                        format!("Masked: {}", u.domain().unwrap_or("link"))
+                                        format!("{}{}", u.domain().unwrap(), u.path())
                                     }
                                 };
                                 ui.horizontal(|ui| {
-                                    ui.label(RichText::new(label).color(Color32::from_gray(220)));
-                                    if ui.button("Download").clicked() {
+                                    if ui.add(
+                                        Label::new(
+                                            RichText::new(label)
+                                        ).truncate(true)
+                                        .selectable(true)
+                                        .sense(Sense::click())
+                                        .selectable(false)
+                                    ).on_hover_cursor(egui::CursorIcon::PointingHand)
+                                    .clicked() {
                                         selected_link = Some(link.clone());
                                     }
+                                    //ui.label(RichText::new(label).color(Color32::from_gray(220)));
+                                    // if ui.button("Download").clicked() {
+                                    //     selected_link = Some(link.clone());
+                                    // }
                                 });
                             }
                         });

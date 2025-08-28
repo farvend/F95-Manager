@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // скрыть консоль только в release
 #![feature(macro_metavar_expr_concat)]
+#![feature(iter_intersperse)]
 // Точка входа оставлена минимальной: только конфиг окна и запуск приложения.
 // Вся логика вынесена в модуль app (src/app.rs), чтобы убрать глубокую вложенность и "лес" табов.
 
