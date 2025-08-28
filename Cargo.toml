@@ -26,6 +26,7 @@ rfd = "0.14"
 sevenz-rust = { version = "0.6.1", features = ["bzip2", "zstd", "aes", "cbc"] }
 mega = "0.8.0"
 futures = "0.3"
+scraper = "0.24.0"
 
 [profile.release]
 opt-level = "z"
