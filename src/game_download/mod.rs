@@ -35,7 +35,7 @@ pub fn create_download_task(page: F95Page) -> mpsc::Receiver<GameDownloadStatus>
                     crate::parser::game_info::page::GetLinksError::PlatformNameMissing => "Platform name missing".to_string(),
                     crate::parser::game_info::page::GetLinksError::NoPlatformLinks => "No platform links found".to_string(),
                 };
-                log::warn!("err getting links: {msg}");
+                log::error!("err getting links: {msg}");
                 let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(msg)));
                 return;
             }
@@ -67,7 +67,8 @@ pub fn create_download_task(page: F95Page) -> mpsc::Receiver<GameDownloadStatus>
                 return;
             }
         };
-            
+        
+        let mut errors = vec![];
         for link in links {
             match link.download().await {
                 Ok(mut download_recv) => {
@@ -79,8 +80,9 @@ pub fn create_download_task(page: F95Page) -> mpsc::Receiver<GameDownloadStatus>
                     return 
                 },
                 Err(err) => {
-                    log::warn!("Error downloading: {err:?}");
+                    log::error!("Error downloading: {err:?}");
                     let err = format!("{err:?}");
+                    errors.push(err);
                     //let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(err)));
 
                     // im lazyy
@@ -100,7 +102,12 @@ pub fn create_download_task(page: F95Page) -> mpsc::Receiver<GameDownloadStatus>
         }
         
         // Если ни одна ссылка не сработала
-        let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error("No supported hostings found. Check warning logs for more info".into())));
+        let error_text = if errors.len() == 0 {
+            "For some reason no download links was found".to_string()
+        } else {
+            format!("Errors trying download from hostings: {errors:?}")
+        };
+        let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(error_text)));
     });
     
     rx
