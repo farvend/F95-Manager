@@ -22,8 +22,6 @@ F95zone requires an authenticated session cookie. Two ways to provide it:
 
 1) Username/Password  (MAY NOT WORK!!! IF SO, USE SECOND METHOD)
    - Enter Username and Password on the Login screen.  
-   - The app posts to `https://f95zone.to/login/login`, collects `Set-Cookie`, and saves a ready‑to‑use `Cookie` header string into `app_config.json`.  
-   - If you get “login failed … xf_session” — check your credentials.
 
 2) Paste a Cookie header string  
    - On the Login screen, paste the full `Cookie` header and press “Use cookies”.  
