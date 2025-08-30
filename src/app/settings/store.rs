@@ -217,11 +217,56 @@ pub fn downloaded_game_exe(thread_id: u64) -> Option<PathBuf> {
 
 // Remove downloaded game files and its record from settings
 pub fn delete_downloaded_game(thread_id: u64) {
-    // Try delete from disk
+    // Try delete from disk, but only if the path is inside the configured extract_dir.
     if let Some(folder) = downloaded_game_folder(thread_id) {
-        match std::fs::remove_dir_all(&folder) {
-            Ok(_) => log::info!("Deleted game folder: {}", folder.to_string_lossy()),
-            Err(e) => log::error!("Failed to delete game folder {}: {}", folder.to_string_lossy(), e),
+        let extract_dir = { APP_SETTINGS.read().unwrap().extract_dir.clone() };
+
+        // Resolve canonical extract_dir first
+        match std::fs::canonicalize(&extract_dir) {
+            Ok(extract_root) => {
+                // Resolve the target folder to a canonical path if it exists.
+                // Fallback: if canonicalizing the stored path fails, try resolving it relative to extract_root.
+                let target_canon = std::fs::canonicalize(&folder).or_else(|_| {
+                    let candidate = if folder.is_absolute() {
+                        folder.clone()
+                    } else {
+                        extract_root.join(&folder)
+                    };
+                    std::fs::canonicalize(&candidate)
+                });
+
+                if let Ok(target) = target_canon {
+                    // Prevent deleting the extract_dir itself and ensure target is strictly within extract_dir.
+                    if target != extract_root && target.strip_prefix(&extract_root).is_ok() {
+                        match std::fs::remove_dir_all(&target) {
+                            Ok(_) => log::info!("Deleted game folder: {}", target.to_string_lossy()),
+                            Err(e) => log::error!(
+                                "Failed to delete game folder {}: {}",
+                                target.to_string_lossy(),
+                                e
+                            ),
+                        }
+                    } else {
+                        log::warn!(
+                            "Refusing to delete outside extract_dir. folder={}, extract_dir={}",
+                            folder.to_string_lossy(),
+                            extract_root.to_string_lossy()
+                        );
+                    }
+                } else {
+                    log::warn!(
+                        "Game folder not found or cannot resolve for deletion: {}",
+                        folder.to_string_lossy()
+                    );
+                }
+            }
+            Err(e) => {
+                log::warn!(
+                    "Cannot resolve extract_dir ({}). Skipping deletion: {}",
+                    extract_dir.to_string_lossy(),
+                    e
+                );
+            }
         }
     }
     // Remove entry from settings

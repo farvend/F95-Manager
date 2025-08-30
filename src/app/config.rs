@@ -97,10 +97,9 @@ pub async fn login_and_store(login: String, password: String) -> Result<(), Stri
         .map_err(|e| format!("login request error: {e}"))?;
 
     let status = resp.status();
-    let headers = dbg!(resp.headers());
-
 
     // Collect cookie pairs from Set-Cookie headers
+    let headers = resp.headers();
     let mut cookie_map = std::collections::HashMap::<String, String>::new();
     for val in headers.get_all(reqwest::header::SET_COOKIE).iter() {
         let Ok(s) = val.to_str() else { continue };

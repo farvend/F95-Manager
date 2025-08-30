@@ -77,28 +77,24 @@ fn run_executable(path: &Path) {
         }
     }
 
-    // Try CMD start first (ShellExecute-like) — closest to manual run in cmd
+    // Launch directly without invoking a shell to avoid cmd injection
     {
-        let mut cmd = std::process::Command::new("cmd");
+        let mut direct = std::process::Command::new(&abs_exe);
         if let Some(d) = &dir {
-            cmd.current_dir(d);
+            direct.current_dir(d);
         }
-        cmd.arg("/C").arg("start").arg("");
-        if let Some(d) = &dir {
-            cmd.arg("/D").arg(d);
-        }
-        cmd.arg(&abs_exe);
-        if let Some(d) = &dir {
-            log::info!("CMD start /D: {}", d.to_string_lossy());
-        }
-        log::info!("CMD start exe: {}", abs_exe.to_string_lossy());
-        match cmd.spawn() {
+        direct.creation_flags(DETACHED_PROCESS | CREATE_NEW_CONSOLE);
+        match direct.spawn() {
             Ok(_) => {
-                log::info!("Launched game (cmd/start): {}", abs_exe.to_string_lossy());
+                log::info!("Launched game (direct): {}", abs_exe.to_string_lossy());
                 return;
             }
             Err(e) => {
-                log::warn!("cmd/start failed for {}: {}", abs_exe.to_string_lossy(), e);
+                log::warn!(
+                    "Direct launch failed for {}: {}",
+                    abs_exe.to_string_lossy(),
+                    e
+                );
             }
         }
     }
@@ -130,29 +126,9 @@ fn run_executable(path: &Path) {
         }
     }
 
-    // Fallback: direct spawn with explicit console creation and detached flags
-    let mut direct = std::process::Command::new(&abs_exe);
+    // Final fallback: reveal folder for manual start
     if let Some(d) = &dir {
-        direct.current_dir(d);
-    }
-    direct.creation_flags(DETACHED_PROCESS | CREATE_NEW_CONSOLE);
-    match direct.spawn() {
-        Ok(_) => {
-            log::info!(
-                "Launched game (direct fallback): {}",
-                abs_exe.to_string_lossy()
-            );
-        }
-        Err(e) => {
-            log::error!(
-                "Failed to launch executable {}: {}",
-                abs_exe.to_string_lossy(),
-                e
-            );
-            if let Some(d) = &dir {
-                reveal_in_file_manager(d);
-            }
-        }
+        reveal_in_file_manager(d);
     }
 }
 

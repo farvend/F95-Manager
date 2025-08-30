@@ -2,13 +2,9 @@ use std::{
     collections::HashSet,
     fs,
     fs::File as StdFile,
+    io::{Read, Write},
     path::{Path, PathBuf},
-    process::Command,
-    sync::mpsc as std_mpsc,
 };
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
-use threadpool::ThreadPool;
 use tokio::sync::mpsc::UnboundedSender;
 use zip::ZipArchive;
 use sevenz_rust;
@@ -16,6 +12,41 @@ use sevenz_rust;
 use crate::game_download::{GameDownloadStatus, Progress};
 
 fn sanitize_relative_path(name: &str, strip_prefix: Option<&str>) -> Option<PathBuf> {
+    // Nested helpers are kept local to avoid polluting the module namespace.
+    fn is_windows_reserved(stem_upper: &str) -> bool {
+        matches!(
+            stem_upper,
+            "CON" | "PRN" | "AUX" | "NUL" |
+            "COM1" | "COM2" | "COM3" | "COM4" | "COM5" | "COM6" | "COM7" | "COM8" | "COM9" |
+            "LPT1" | "LPT2" | "LPT3" | "LPT4" | "LPT5" | "LPT6" | "LPT7" | "LPT8" | "LPT9"
+        )
+    }
+    fn sanitize_component_str(s: &str) -> Option<String> {
+        // Trim trailing spaces/dots which are invalid on Windows
+        let mut out = s.to_string();
+        while out.ends_with(' ') || out.ends_with('.') {
+            out.pop();
+        }
+        if out.is_empty() {
+            return None;
+        }
+        // Split into stem/ext to check reserved names against stem
+        let (stem, ext) = match out.rsplit_once('.') {
+            Some((st, ex)) if !st.is_empty() => (st.to_string(), Some(ex.to_string())),
+            _ => (out.clone(), None),
+        };
+        let mut stem_fixed = stem.clone();
+        if is_windows_reserved(&stem.to_ascii_uppercase()) {
+            stem_fixed.push('_');
+        }
+        let mut name = stem_fixed;
+        if let Some(ex) = ext {
+            name.push('.');
+            name.push_str(&ex);
+        }
+        Some(name)
+    }
+
     let mut s = name.replace('\\', "/");
     if let Some(prefix) = strip_prefix {
         if s.starts_with(prefix) {
@@ -32,7 +63,14 @@ fn sanitize_relative_path(name: &str, strip_prefix: Option<&str>) -> Option<Path
     for comp in Path::new(&s).components() {
         use std::path::Component::*;
         match comp {
-            Normal(os) => out.push(os),
+            Normal(os) => {
+                let piece = os.to_string_lossy();
+                if let Some(clean) = sanitize_component_str(&piece) {
+                    out.push(clean);
+                } else {
+                    return None;
+                }
+            }
             CurDir => {}
             RootDir | Prefix(_) | ParentDir => return None,
         }
@@ -76,7 +114,7 @@ fn find_first_exe(dir: &Path) -> Option<PathBuf> {
     rec(dir)
 }
 
-fn unzip_with_threadpool(
+fn unzip_streaming(
     zip_path: &Path,
     dest_base: &Path,
     sd: &UnboundedSender<GameDownloadStatus>,
@@ -94,7 +132,7 @@ fn unzip_with_threadpool(
     let file = StdFile::open(zip_path).map_err(|e| format!("Open zip failed: {e}"))?;
     let mut archive = ZipArchive::new(file).map_err(|e| format!("Read zip failed: {e}"))?;
 
-    // Detect single top-level folder
+    // Detect single top-level folder and whether there are root files
     let mut top_levels: HashSet<String> = HashSet::new();
     let mut root_files = false;
     for i in 0..archive.len() {
@@ -122,17 +160,29 @@ fn unzip_with_threadpool(
         None
     };
 
-    // Destination: <extract_base>/<zip_stem>
-    let dest_dir = dest_base.join(
-        zip_path
-            .file_stem()
+    // Destination: use archive_dest_dir(...) and ensure uniqueness to avoid mixing previous runs
+    let base_dest = archive_dest_dir(zip_path, dest_base);
+    let mut dest_dir = base_dest.clone();
+    if dest_dir.exists() {
+        let orig_name = dest_dir
+            .file_name()
             .and_then(|s| s.to_str())
-            .unwrap_or("extracted"),
-    );
+            .unwrap_or("extracted")
+            .to_string();
+        let mut idx = 2usize;
+        loop {
+            let candidate = dest_dir.with_file_name(format!("{orig_name}-{idx}"));
+            if !candidate.exists() {
+                dest_dir = candidate;
+                break;
+            }
+            idx += 1;
+        }
+    }
     fs::create_dir_all(&dest_dir).map_err(|e| format!("Create dest dir failed: {e}"))?;
 
-    // Count files to extract (exclude dirs)
-    let mut total_files = 0usize;
+    // Count total bytes to extract (exclude dirs, after sanitize)
+    let mut total_bytes: u64 = 0;
     for i in 0..archive.len() {
         let f = archive
             .by_index(i)
@@ -142,16 +192,15 @@ fn unzip_with_threadpool(
         }
         if let Some(rel) = sanitize_relative_path(f.name(), strip_prefix.as_deref()) {
             if !rel.as_os_str().is_empty() {
-                total_files += 1;
+                total_bytes = total_bytes.saturating_add(f.size());
             }
         }
     }
 
-    let threads = std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(4);
-    let pool = ThreadPool::new(threads);
-    let (tx, rx) = std_mpsc::channel::<Result<(), String>>();
+    // Extract sequentially with streaming I/O
+    let mut extracted_bytes: u64 = 0;
+    // Track case-insensitive created file paths to avoid collisions on Windows
+    let mut used_rel_lower: HashSet<String> = HashSet::new();
 
     for i in 0..archive.len() {
         let mut f = archive
@@ -164,7 +213,7 @@ fn unzip_with_threadpool(
             Some(p) => p,
             None => continue,
         };
-        let out_path = dest_dir.join(rel);
+        let mut out_path = dest_dir.join(&rel);
 
         if is_dir {
             if let Err(e) = fs::create_dir_all(&out_path) {
@@ -173,47 +222,71 @@ fn unzip_with_threadpool(
             continue;
         }
 
-        // Read entry data (must be sequential with ZipArchive)
-        let mut buf = Vec::with_capacity(f.size() as usize);
-        if let Err(e) = std::io::Read::read_to_end(&mut f, &mut buf) {
-            return Err(format!("Read entry {} failed: {}", name, e));
+        // Ensure parent directories exist
+        if let Some(parent) = out_path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("Create parent {} failed: {}", parent.display(), e))?;
         }
 
-        let tx2 = tx.clone();
-        pool.execute(move || {
-            let res = (|| -> Result<(), String> {
-                if let Some(parent) = out_path.parent() {
-                    std::fs::create_dir_all(parent)
-                        .map_err(|e| format!("Create parent {} failed: {}", parent.display(), e))?;
+        // Avoid case-insensitive collisions
+        let mut rel_key = rel.to_string_lossy().to_ascii_lowercase();
+        if used_rel_lower.contains(&rel_key) {
+            // Append (2), (3)... before extension
+            let file_name = rel
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("file");
+            let (stem, ext_opt) = match file_name.rsplit_once('.') {
+                Some((st, ex)) if !st.is_empty() => (st.to_string(), Some(ex.to_string())),
+                _ => (file_name.to_string(), None),
+            };
+            let mut n = 2usize;
+            loop {
+                let mut new_name = format!("{stem} ({n})");
+                if let Some(ex) = &ext_opt {
+                    new_name.push('.');
+                    new_name.push_str(ex);
                 }
-                std::fs::write(&out_path, &buf)
-                    .map_err(|e| format!("Write {} failed: {}", out_path.display(), e))?;
-                Ok(())
-            })();
-            let _ = tx2.send(res);
-        });
-    }
+                let candidate_rel = rel.with_file_name(new_name);
+                let candidate_key = candidate_rel.to_string_lossy().to_ascii_lowercase();
+                if !used_rel_lower.contains(&candidate_key) {
+                    out_path = dest_dir.join(&candidate_rel);
+                    rel_key = candidate_key;
+                    break;
+                }
+                n += 1;
+            }
+        }
+        used_rel_lower.insert(rel_key);
 
-    drop(tx);
+        // Stream data from ZipFile to disk with a fixed-size buffer
+        let mut out_file = StdFile::create(&out_path)
+            .map_err(|e| format!("Create {} failed: {}", out_path.display(), e))?;
 
-    let mut done = 0usize;
-    while let Ok(res) = rx.recv() {
-        // Update progress
-        done += 1;
-        let progress = if total_files == 0 {
-            1.0
-        } else {
-            (done as f32) / (total_files as f32)
-        };
-        let _ = sd.send(GameDownloadStatus::Unzipping(Progress::Pending(progress)));
-
-        if let Err(msg) = res {
-            // Surface the first error
-            return Err(msg);
+        let mut buf = [0u8; 64 * 1024];
+        loop {
+            match Read::read(&mut f, &mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    out_file
+                        .write_all(&buf[..n])
+                        .map_err(|e| format!("Write {} failed: {}", out_path.display(), e))?;
+                    extracted_bytes = extracted_bytes.saturating_add(n as u64);
+                    let progress = if total_bytes == 0 {
+                        1.0
+                    } else {
+                        (extracted_bytes as f32) / (total_bytes as f32)
+                    };
+                    let _ = sd.send(GameDownloadStatus::Unzipping(Progress::Pending(progress)));
+                }
+                Err(e) => return Err(format!("Read entry {} failed: {}", name, e)),
+            }
         }
     }
 
-    pool.join();
+    // Ensure final 100% notification
+    let _ = sd.send(GameDownloadStatus::Unzipping(Progress::Pending(1.0)));
+
     Ok((dest_dir.clone(), find_first_exe(&dest_dir)))
 }
 
@@ -245,11 +318,37 @@ fn extract_with_sevenz(
     archive_path: &Path,
     dest_base: &Path,
 ) -> Result<(PathBuf, Option<PathBuf>), String> {
-    let dest_dir = archive_dest_dir(archive_path, dest_base);
+    // Use archive_dest_dir and ensure unique directory to avoid mixing contents
+    let base_dest = archive_dest_dir(archive_path, dest_base);
+    let mut dest_dir = base_dest.clone();
+    if dest_dir.exists() {
+        let orig_name = dest_dir
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("extracted")
+            .to_string();
+        let mut idx = 2usize;
+        loop {
+            let candidate = dest_dir.with_file_name(format!("{orig_name}-{idx}"));
+            if !candidate.exists() {
+                dest_dir = candidate;
+                break;
+            }
+            idx += 1;
+        }
+    }
+
     std::fs::create_dir_all(&dest_dir).map_err(|e| format!("Create dest dir failed: {e}"))?;
     match sevenz_rust::decompress_file(archive_path, &dest_dir) {
         Ok(()) => Ok((dest_dir.clone(), find_first_exe(&dest_dir))),
-        Err(e) => Err(format!("7z decompress (pure Rust) failed: {e}")),
+        Err(e) => {
+            let msg = e.to_string();
+            if is_memory_alloc_failure(&msg) {
+                Err(format!("7z decompress failed due to insufficient memory: {msg}"))
+            } else {
+                Err(format!("7z decompress (pure Rust) failed: {msg}"))
+            }
+        }
     }
 }
 
@@ -259,104 +358,6 @@ fn is_memory_alloc_failure(s: &str) -> bool {
         || lc.contains("can not allocate memory")
         || lc.contains("cannot allocate memory")
         || (lc.contains("allocation of") && lc.contains("bytes failed"))
-}
-
-fn try_unrar(archive_path: &Path, dest_dir: &Path) -> Result<(), String> {
-    let mut last_err: Option<String> = None;
-    for bin in ["unrar", "unrar.exe", "WinRAR.exe"] {
-        let mut cmd = Command::new(bin);
-        cmd.arg("x")
-            .arg("-y")
-            .arg("-o+")
-            .arg(archive_path.as_os_str())
-            .arg(dest_dir.as_os_str());
-        #[cfg(windows)]
-        {
-            cmd.creation_flags(0x08000000);
-        }
-        match cmd.output()
-        {
-            Ok(out) => {
-                if out.status.success() {
-                    return Ok(());
-                } else {
-                    let o = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
-                    last_err = Some(format!("{bin} exit status: {} output: {}", out.status, o));
-                }
-            }
-            Err(e) => {
-                last_err = Some(format!("{bin} spawn error: {e}"));
-            }
-        }
-    }
-    Err(format!(
-        "UnRAR CLI not available or failed. Install WinRAR (UnRAR) and ensure it's in PATH. Details: {}",
-        last_err.unwrap_or_else(|| "unknown error".to_string())
-    ))
-}
-
-fn extract_with_7z(
-    archive_path: &Path,
-    dest_base: &Path,
-) -> Result<(PathBuf, Option<PathBuf>), String> {
-    let dest_dir = archive_dest_dir(archive_path, dest_base);
-    std::fs::create_dir_all(&dest_dir).map_err(|e| format!("Create dest dir failed: {e}"))?;
-
-    let name_lower = archive_path
-        .file_name()
-        .and_then(|s| s.to_str())
-        .map(|s| s.to_ascii_lowercase())
-        .unwrap_or_default();
-
-    // Try `7z` first, then `7z.exe`, capturing output to detect specific failures
-    let mut last_err: Option<String> = None;
-    let mut last_out: Option<String> = None;
-    for bin in ["7z", "7z.exe"] {
-        let mut cmd = Command::new(bin);
-        cmd.arg("x")
-            .arg("-y")
-            .arg(archive_path.as_os_str())
-            .arg(format!("-o\"{}\"", dest_dir.to_string_lossy()));
-        #[cfg(windows)]
-        {
-            cmd.creation_flags(0x08000000);
-        }
-        match cmd.output()
-        {
-            Ok(out) => {
-                if out.status.success() {
-                    return Ok((dest_dir.clone(), find_first_exe(&dest_dir)));
-                } else {
-                    let o = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
-                    last_out = Some(o.clone());
-                    last_err = Some(format!("{bin} exit status: {}", out.status));
-
-                    // Memory allocation failure on .rar: try UnRAR fallback if available
-                    if name_lower.ends_with(".rar") && is_memory_alloc_failure(&o) {
-                        match try_unrar(archive_path, &dest_dir) {
-                            Ok(()) => return Ok((dest_dir.clone(), find_first_exe(&dest_dir))),
-                            Err(unrar_err) => {
-                                return Err(format!(
-                                    "7-Zip failed due to memory allocation error, and UnRAR fallback also failed: {}. 7-Zip output: {}",
-                                    unrar_err,
-                                    last_out.unwrap_or_default()
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                last_err = Some(format!("{bin} spawn error: {e}"));
-            }
-        }
-    }
-
-    Err(format!(
-        "7-Zip CLI not available or failed. Install 7-Zip and ensure `7z` is in PATH. Details: {}{}",
-        last_err.unwrap_or_else(|| "unknown error".to_string()),
-        last_out.as_ref().map(|s| format!("; output: {}", s)).unwrap_or_default()
-    ))
 }
 
 pub fn extract_archive(
@@ -371,23 +372,13 @@ pub fn extract_archive(
         .ok_or_else(|| "Archive has no file name".to_string())?;
 
     // Supported formats:
-    // - .zip (native unzip)
-    // - .7z, .rar
-    // - .tar, .tar.gz, .tgz, .tar.bz2, .tbz2, .tar.xz, .txz
-    // - .gz, .bz2, .xz (single-file archives)
+    // - .zip (native streaming unzip)
+    // - .7z (pure Rust via sevenz_rust)
     if name_lower.ends_with(".zip") {
-        return unzip_with_threadpool(archive_path, dest_base, sd);
+        return unzip_streaming(archive_path, dest_base, sd);
     }
     if name_lower.ends_with(".7z") {
         return extract_with_sevenz(archive_path, dest_base);
-    }
-
-    const SUPPORTED_7Z: [&str; 12] = [
-        ".7z", ".rar", ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz", ".gz",
-        ".bz2", ".xz",
-    ];
-    if SUPPORTED_7Z.iter().any(|suf| name_lower.ends_with(suf)) {
-        return extract_with_7z(archive_path, dest_base);
     }
 
     Err(format!("Unsupported archive format: {}", name_lower))

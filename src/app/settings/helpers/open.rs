@@ -4,11 +4,8 @@
 pub fn open_in_browser(url: &str) {
     #[cfg(target_os = "windows")]
     {
-        // Use `start` via cmd to open default browser
-        if let Err(e) = std::process::Command::new("cmd")
-            .args(&["/C", "start", "", url])
-            .spawn()
-        {
+        // Use explorer to open default browser without invoking a shell to avoid cmd injection
+        if let Err(e) = std::process::Command::new("explorer").arg(url).spawn() {
             log::error!("Failed to open browser for {}: {}", url, e);
         }
     }
