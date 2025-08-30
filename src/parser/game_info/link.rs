@@ -90,15 +90,27 @@ pub enum DownloadLink {
 }
 impl DownloadLink {
     pub fn new(value: Url) -> Option<DownloadLink> {
-        if let Some(mut path) = value.path_segments() {
-            if path.next() == Some("masked") {
-                Some(Self::Masked(value))
+        if let Some(mut segs) = value.path_segments() {
+            if segs.next() == Some("masked") {
+                // Validate masked target hosting is supported (e.g. skip workupload, mediafire, etc. if not in subset)
+                if let Some(host) = segs.next() {
+                    let host_url_str = format!("https://{host}");
+                    if let Ok(host_url) = Url::from_str(&host_url_str) {
+                        if HostingSubset::try_from(host_url).is_ok() {
+                            return Some(Self::Masked(value));
+                        } else {
+                            return None;
+                        }
+                    } else {
+                        return None;
+                    }
+                }
+                return None;
             } else {
-                Some(Self::Direct(DirectDownloadLink::new(value)?))
+                return Some(Self::Direct(DirectDownloadLink::new(value)?));
             }
-        } else {
-            Some(Self::Direct(DirectDownloadLink::new(value)?))
         }
+        Some(Self::Direct(DirectDownloadLink::new(value)?))
     }
 }
 
