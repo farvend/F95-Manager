@@ -105,16 +105,29 @@ impl Default for NoLagApp {
                 .unwrap_or(true)
         };
         let screen = if need_auth { Screen::AuthLogin } else { Screen::Main };
+        // Prefill startup filters from settings at startup
+        let (startup_tags, startup_exclude_tags, startup_prefixes, startup_exclude_prefixes) = {
+            let st = crate::app::settings::APP_SETTINGS.read().unwrap();
+            let mut inc = st.startup_tags.clone();
+            let mut exc = st.startup_exclude_tags.clone();
+            let mut pref = st.startup_prefixes.clone();
+            let mut nopref = st.startup_exclude_prefixes.clone();
+            if inc.len() > 10 { inc.truncate(10); }
+            if exc.len() > 10 { exc.truncate(10); }
+            if pref.len() > 10 { pref.truncate(10); }
+            if nopref.len() > 10 { nopref.truncate(10); }
+            (inc, exc, pref, nopref)
+        };
         Self {
             counter: 0,
             page: 1,
             sort: Sorting::default(),
             date_limit: DateLimit::default(),
             include_logic: TagLogic::default(),
-            include_tags: Vec::new(),
-            exclude_tags: Vec::new(),
-            include_prefixes: Vec::new(),
-            exclude_prefixes: Vec::new(),
+            include_tags: startup_tags,
+            exclude_tags: startup_exclude_tags,
+            include_prefixes: startup_prefixes,
+            exclude_prefixes: startup_exclude_prefixes,
             exclude_mode: Vec::new(),
             search_mode: SearchMode::default(),
             query: String::new(),

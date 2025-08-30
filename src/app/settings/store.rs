@@ -28,6 +28,18 @@ pub struct AppSettings {
     pub pending_downloads: Vec<u64>,
     #[serde(default)]
     pub hidden_threads: Vec<u64>,
+    // Tags to auto-include in filters at startup
+    #[serde(default)]
+    pub startup_tags: Vec<u32>,
+    // Tags to auto-exclude at startup
+    #[serde(default)]
+    pub startup_exclude_tags: Vec<u32>,
+    // Prefixes to include at startup
+    #[serde(default)]
+    pub startup_prefixes: Vec<u32>,
+    // Prefixes to exclude at startup
+    #[serde(default)]
+    pub startup_exclude_prefixes: Vec<u32>,
     // IDs of tags/prefixes that should trigger a warning badge on cards
     #[serde(default)]
     pub warn_tags: Vec<u32>,
@@ -50,6 +62,10 @@ impl Default for AppSettings {
             downloaded_games: Vec::new(),
             pending_downloads: Vec::new(),
             hidden_threads: Vec::new(),
+            startup_tags: Vec::new(),
+            startup_exclude_tags: Vec::new(),
+            startup_prefixes: Vec::new(),
+            startup_exclude_prefixes: Vec::new(),
             warn_tags: Vec::new(),
             warn_prefixes: Vec::new(),
             custom_launch: String::new(),

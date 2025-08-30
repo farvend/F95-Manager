@@ -27,6 +27,12 @@ lazy_static! {
     // Warnings configuration (staged values for Save/Cancel)
     static ref WARN_TAGS_INPUT: RwLock<Vec<u32>> = RwLock::new(Vec::new());
     static ref WARN_PREFIXES_INPUT: RwLock<Vec<u32>> = RwLock::new(Vec::new());
+    // Startup tags (staged values)
+    static ref STARTUP_TAGS_INPUT: RwLock<Vec<u32>> = RwLock::new(Vec::new());
+    // Startup excludes/prefixes (staged values)
+    static ref STARTUP_EXCLUDE_TAGS_INPUT: RwLock<Vec<u32>> = RwLock::new(Vec::new());
+    static ref STARTUP_PREFIXES_INPUT: RwLock<Vec<u32>> = RwLock::new(Vec::new());
+    static ref STARTUP_EXCLUDE_PREFIXES_INPUT: RwLock<Vec<u32>> = RwLock::new(Vec::new());
     // Migration background task state
     static ref MOVE_RUNNING: RwLock<bool> = RwLock::new(false);
     static ref MOVE_RESULT: RwLock<Option<Vec<(u64, PathBuf, Option<PathBuf>)>>> = RwLock::new(None);
@@ -67,6 +73,22 @@ pub fn open_settings() {
     {
         let mut v = WARN_PREFIXES_INPUT.write().unwrap();
         *v = s.warn_prefixes.clone();
+    }
+    {
+        let mut v = STARTUP_TAGS_INPUT.write().unwrap();
+        *v = s.startup_tags.clone();
+    }
+    {
+        let mut v = STARTUP_EXCLUDE_TAGS_INPUT.write().unwrap();
+        *v = s.startup_exclude_tags.clone();
+    }
+    {
+        let mut v = STARTUP_PREFIXES_INPUT.write().unwrap();
+        *v = s.startup_prefixes.clone();
+    }
+    {
+        let mut v = STARTUP_EXCLUDE_PREFIXES_INPUT.write().unwrap();
+        *v = s.startup_exclude_prefixes.clone();
     }
     *SETTINGS_OPEN.write().unwrap() = true;
 }
@@ -154,6 +176,130 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                 //         *CACHE_ON_DOWNLOAD_INPUT.write().unwrap() = cache_val;
                 //     }
                 // });
+                ui.label("Startup tags (added on app start):");
+                if let Some(id) = tags_picker(ui, "settings_startup_tags", "Select a startup tag...") {
+                    let mut list = STARTUP_TAGS_INPUT.write().unwrap();
+                    if list.len() < 10 && !list.contains(&id) {
+                        list.push(id);
+                    }
+                }
+                ui.horizontal_wrapped(|ui| {
+                    let mut to_remove: Option<usize> = None;
+                    let list_clone = { STARTUP_TAGS_INPUT.read().unwrap().clone() };
+                    for (i, id) in list_clone.iter().enumerate() {
+                        let name = crate::tags::TAGS
+                            .tags
+                            .get(&id.to_string())
+                            .cloned()
+                            .unwrap_or_else(|| id.to_string());
+                        if ui.button(format!("{} ×", name)).clicked() {
+                            to_remove = Some(i);
+                        }
+                    }
+                    if let Some(i) = to_remove {
+                        let mut list = STARTUP_TAGS_INPUT.write().unwrap();
+                        if i < list.len() {
+                            list.remove(i);
+                        }
+                    }
+                });
+
+                ui.add_space(6.0);
+                ui.label("Startup exclude tags (excluded on app start):");
+                if let Some(id) = tags_picker(ui, "settings_startup_exclude_tags", "Select a tag to exclude at startup...") {
+                    let mut list = STARTUP_EXCLUDE_TAGS_INPUT.write().unwrap();
+                    if list.len() < 10 && !list.contains(&id) {
+                        list.push(id);
+                    }
+                }
+                ui.horizontal_wrapped(|ui| {
+                    let mut to_remove: Option<usize> = None;
+                    let list_clone = { STARTUP_EXCLUDE_TAGS_INPUT.read().unwrap().clone() };
+                    for (i, id) in list_clone.iter().enumerate() {
+                        let name = crate::tags::TAGS
+                            .tags
+                            .get(&id.to_string())
+                            .cloned()
+                            .unwrap_or_else(|| id.to_string());
+                        if ui.button(format!("{} ×", name)).clicked() {
+                            to_remove = Some(i);
+                        }
+                    }
+                    if let Some(i) = to_remove {
+                        let mut list = STARTUP_EXCLUDE_TAGS_INPUT.write().unwrap();
+                        if i < list.len() {
+                            list.remove(i);
+                        }
+                    }
+                });
+
+                ui.add_space(6.0);
+                ui.label("Startup prefixes (included on app start):");
+                if let Some(id) = prefixes_picker(ui, "settings_startup_prefixes", "Select a prefix to include at startup...") {
+                    let mut list = STARTUP_PREFIXES_INPUT.write().unwrap();
+                    if list.len() < 10 && !list.contains(&id) {
+                        list.push(id);
+                    }
+                }
+                ui.horizontal_wrapped(|ui| {
+                    let mut to_remove: Option<usize> = None;
+                    let list_clone = { STARTUP_PREFIXES_INPUT.read().unwrap().clone() };
+                    for (i, id) in list_clone.iter().enumerate() {
+                        // Find prefix name by id
+                        let mut name: Option<String> = None;
+                        for group in &crate::tags::TAGS.prefixes.games {
+                            if let Some(p) = group.prefixes.iter().find(|p| p.id as u32 == *id) {
+                                name = Some(p.name.clone());
+                                break;
+                            }
+                        }
+                        let label = name.unwrap_or_else(|| id.to_string());
+                        if ui.button(format!("{} ×", label)).clicked() {
+                            to_remove = Some(i);
+                        }
+                    }
+                    if let Some(i) = to_remove {
+                        let mut list = STARTUP_PREFIXES_INPUT.write().unwrap();
+                        if i < list.len() {
+                            list.remove(i);
+                        }
+                    }
+                });
+
+                ui.add_space(6.0);
+                ui.label("Startup exclude prefixes (excluded on app start):");
+                if let Some(id) = prefixes_picker(ui, "settings_startup_exclude_prefixes", "Select a prefix to exclude at startup...") {
+                    let mut list = STARTUP_EXCLUDE_PREFIXES_INPUT.write().unwrap();
+                    if list.len() < 10 && !list.contains(&id) {
+                        list.push(id);
+                    }
+                }
+                ui.horizontal_wrapped(|ui| {
+                    let mut to_remove: Option<usize> = None;
+                    let list_clone = { STARTUP_EXCLUDE_PREFIXES_INPUT.read().unwrap().clone() };
+                    for (i, id) in list_clone.iter().enumerate() {
+                        // Find prefix name by id
+                        let mut name: Option<String> = None;
+                        for group in &crate::tags::TAGS.prefixes.games {
+                            if let Some(p) = group.prefixes.iter().find(|p| p.id as u32 == *id) {
+                                name = Some(p.name.clone());
+                                break;
+                            }
+                        }
+                        let label = name.unwrap_or_else(|| id.to_string());
+                        if ui.button(format!("{} ×", label)).clicked() {
+                            to_remove = Some(i);
+                        }
+                    }
+                    if let Some(i) = to_remove {
+                        let mut list = STARTUP_EXCLUDE_PREFIXES_INPUT.write().unwrap();
+                        if i < list.len() {
+                            list.remove(i);
+                        }
+                    }
+                });
+
+                ui.add_space(6.0);
                 ui.label("Warn on tags/prefixes:");
 
                 ui.label("Warn tags:");
@@ -241,11 +387,19 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                                 let custom_launch = CUSTOM_LAUNCH_INPUT.read().unwrap().clone();
                                 let cache_on_download = *CACHE_ON_DOWNLOAD_INPUT.read().unwrap();
                                 let cache_dir_str = CACHE_DIR_INPUT.read().unwrap().clone();
+                                let startup_tags = STARTUP_TAGS_INPUT.read().unwrap().clone();
+                                let startup_exclude_tags = STARTUP_EXCLUDE_TAGS_INPUT.read().unwrap().clone();
+                                let startup_prefixes = STARTUP_PREFIXES_INPUT.read().unwrap().clone();
+                                let startup_exclude_prefixes = STARTUP_EXCLUDE_PREFIXES_INPUT.read().unwrap().clone();
                                 let mut st = APP_SETTINGS.write().unwrap();
                                 st.temp_dir = std::path::PathBuf::from(temp_val);
                                 st.extract_dir = new_extract_pb;
                                 st.warn_tags = warn_tags;
                                 st.warn_prefixes = warn_prefixes;
+                                st.startup_tags = startup_tags;
+                                st.startup_exclude_tags = startup_exclude_tags;
+                                st.startup_prefixes = startup_prefixes;
+                                st.startup_exclude_prefixes = startup_exclude_prefixes;
                                 st.custom_launch = custom_launch;
                                 st.cache_on_download = cache_on_download;
                                 st.cache_dir = std::path::PathBuf::from(cache_dir_str);
@@ -340,12 +494,20 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     let cache_on_download = *CACHE_ON_DOWNLOAD_INPUT.read().unwrap();
                     let cache_dir_str = CACHE_DIR_INPUT.read().unwrap().clone();
                     let cache_dir = std::path::PathBuf::from(&cache_dir_str);
+                    let startup_tags = STARTUP_TAGS_INPUT.read().unwrap().clone();
+                    let startup_exclude_tags = STARTUP_EXCLUDE_TAGS_INPUT.read().unwrap().clone();
+                    let startup_prefixes = STARTUP_PREFIXES_INPUT.read().unwrap().clone();
+                    let startup_exclude_prefixes = STARTUP_EXCLUDE_PREFIXES_INPUT.read().unwrap().clone();
                     {
                         let mut st = APP_SETTINGS.write().unwrap();
                         st.temp_dir = std::path::PathBuf::from(new_temp);
                         st.extract_dir = new_extract.clone();
                         st.warn_tags = warn_tags;
                         st.warn_prefixes = warn_prefixes;
+                        st.startup_tags = startup_tags;
+                        st.startup_exclude_tags = startup_exclude_tags;
+                        st.startup_prefixes = startup_prefixes;
+                        st.startup_exclude_prefixes = startup_exclude_prefixes;
                         st.custom_launch = custom_launch;
                         st.cache_on_download = cache_on_download;
                         st.cache_dir = cache_dir;
