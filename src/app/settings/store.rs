@@ -51,6 +51,9 @@ pub struct AppSettings {
     // Cache metadata/images on download click (default: false)
     #[serde(default)]
     pub cache_on_download: bool,
+    // UI language (None = auto/system)
+    #[serde(default)]
+    pub language: Option<String>,
 }
 
 impl Default for AppSettings {
@@ -70,6 +73,7 @@ impl Default for AppSettings {
             warn_prefixes: Vec::new(),
             custom_launch: String::new(),
             cache_on_download: false,
+            language: None,
         }
     }
 }

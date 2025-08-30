@@ -12,6 +12,7 @@ mod views;
 mod app;
 mod tags;
 mod logger;
+mod localization;
 pub mod game_download;
 
 //#[tokio::main(flavor = "multi_thread", worker_threads = 10)]
@@ -21,6 +22,9 @@ fn main() -> eframe::Result<()> {
     app::settings::load_settings_from_disk();
     // Load lightweight app_config (for cookies/auth gating)
     app::config::load_config_from_disk();
+    // Initialize localization based on settings or system locale
+    let preferred_lang = { app::settings::APP_SETTINGS.read().unwrap().language.clone() };
+    let _ = localization::initialize_localization(preferred_lang.as_deref());
 
     // Настройки для минимальной задержки:
     // - renderer: Wgpu (быстрее и даёт контроль над present mode)
@@ -42,7 +46,7 @@ fn main() -> eframe::Result<()> {
     };
 
     eframe::run_native(
-        "F95 standalone client",
+        localization::translate("app-window-title").as_str(),
         native_options,
         Box::new(|_cc| Box::new(app::NoLagApp::default())),
     )

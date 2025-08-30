@@ -106,15 +106,15 @@ impl App for NoLagApp {
                     Screen::AuthLogin => {
                         ui.add_space(24.0);
                         ui.vertical_centered(|ui| {
-                            ui.heading("Login");
+                            ui.heading(crate::localization::translate("auth-login-title"));
                         });
                         ui.add_space(8.0);
                         ui.horizontal(|ui| {
-                            ui.label("Username:");
+                            ui.label(crate::localization::translate("auth-username"));
                             ui.text_edit_singleline(&mut self.auth.login_username);
                         });
                         ui.horizontal(|ui| {
-                            ui.label("Password:");
+                            ui.label(crate::localization::translate("auth-password"));
                             let te = egui::TextEdit::singleline(&mut self.auth.login_password).password(true);
                             ui.add(te);
                         });
@@ -122,15 +122,15 @@ impl App for NoLagApp {
                             ui.colored_label(egui::Color32::RED, err);
                         }
                         ui.add_space(8.0);
-                        let login_clicked = ui.add_enabled(!self.auth.login_in_progress, egui::Button::new("Login")).clicked();
+                        let login_clicked = ui.add_enabled(!self.auth.login_in_progress, egui::Button::new(crate::localization::translate("auth-login-button"))).clicked();
                         if self.auth.login_in_progress {
                             ui.add_space(4.0);
                             ui.add(egui::Spinner::new());
-                            ui.label("Authorizing...");
+                            ui.label(crate::localization::translate("auth-authorizing"));
                         }
                         if login_clicked {
                             if self.auth.login_username.trim().is_empty() || self.auth.login_password.is_empty() {
-                                self.auth.login_error = Some("Please enter username and password".to_string());
+                                self.auth.login_error = Some(crate::localization::translate("auth-please-enter-credentials"));
                             } else {
                                 self.auth.login_error = None;
                                 self.auth.login_in_progress = true;
@@ -149,15 +149,15 @@ impl App for NoLagApp {
                         ui.add_space(12.0);
                         ui.separator();
                         ui.add_space(8.0);
-                        ui.label("Or paste cookies (Cookie header):");
+                        ui.label(crate::localization::translate("auth-or-paste-cookies"));
                         let te2 = egui::TextEdit::multiline(&mut self.auth.login_cookies_input).desired_rows(3);
                         ui.add(te2);
                         ui.add_space(4.0);
-                        let use_clicked = ui.add_enabled(!self.auth.login_in_progress, egui::Button::new("Use cookies")).clicked();
+                        let use_clicked = ui.add_enabled(!self.auth.login_in_progress, egui::Button::new(crate::localization::translate("auth-use-cookies"))).clicked();
                         if use_clicked {
                             let c = self.auth.login_cookies_input.trim();
                             if c.is_empty() {
-                                self.auth.login_error = Some("Please paste cookies".to_string());
+                                self.auth.login_error = Some(crate::localization::translate("auth-please-paste-cookies"));
                             } else {
                                 {
                                     let mut cfg = crate::app::config::APP_CONFIG.write().unwrap();
@@ -176,7 +176,7 @@ impl App for NoLagApp {
                             }
                         }
                         ui.add_space(8.0);
-                        ui.label(RichText::new("This information is needed to get download links from games' pages").small());
+                        ui.label(RichText::new(crate::localization::translate("auth-info-needed")).small());
                     }
                     Screen::Main => {}
                 }
@@ -328,13 +328,13 @@ impl App for NoLagApp {
 
                     if let Some(err) = &self.net.last_error {
                         ui.vertical_centered(|ui| {
-                            ui.colored_label(egui::Color32::RED, format!("Error: {}", err));
+                            ui.colored_label(egui::Color32::RED, crate::localization::translate_with("error-prefix", &[("err", err.clone())]));
                         });
                     } else if self.net.loading && self.net.last_result.is_none() {
                         ui.add_space(24.0);
                         ui.vertical_centered(|ui| {
                             ui.add(egui::Spinner::new());
-                            ui.label("Loading...");
+                            ui.label(crate::localization::translate("loading"));
                         });
                     } else if self.net.last_result.is_some() {
                         // Clone data so we don't hold an immutable borrow of `self` across a call
@@ -436,7 +436,7 @@ impl App for NoLagApp {
                                         .filter(|g| settings::game_folder_exists(&g.folder))
                                         .count()
                                 };
-                                ui.label(format!("Library: {} / {} found", display_data.len(), installed_count));
+                                ui.label(crate::localization::translate_with("library-summary", &[("shown", display_data.len().to_string()), ("installed", installed_count.to_string())]));
                             } else {
                                 let (cur, total) = {
                                     let msg = self.net.last_result.as_ref().unwrap();
@@ -448,7 +448,7 @@ impl App for NoLagApp {
                                         self.page = cur.saturating_sub(1);
                                         self.start_fetch(ctx);
                                     }
-                                    ui.label(format!("Page {} / {}", cur, total));
+                                    ui.label(crate::localization::translate_with("pagination-page", &[("cur", cur.to_string()), ("total", total.to_string())]));
                                     let next_enabled = cur < total;
                                     if ui.add_enabled(next_enabled, egui::Button::new("▶")).clicked() {
                                         self.page = cur + 1;

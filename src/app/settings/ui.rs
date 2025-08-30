@@ -19,6 +19,8 @@ lazy_static! {
     static ref CUSTOM_LAUNCH_INPUT: RwLock<String> = RwLock::new(String::new());
     // Toggle: cache metadata/images on download click
     static ref CACHE_ON_DOWNLOAD_INPUT: RwLock<bool> = RwLock::new(false);
+    // UI language selection ("auto" | "en" | "ru")
+    static ref LANGUAGE_INPUT: RwLock<String> = RwLock::new(String::from("auto"));
     // State for extract-dir change confirmation and migration
     static ref MOVE_CONFIRM_OPEN: RwLock<bool> = RwLock::new(false);
     static ref PENDING_TEMP_DIR: RwLock<String> = RwLock::new(String::new());
@@ -90,6 +92,10 @@ pub fn open_settings() {
         let mut v = STARTUP_EXCLUDE_PREFIXES_INPUT.write().unwrap();
         *v = s.startup_exclude_prefixes.clone();
     }
+    {
+        let mut l = LANGUAGE_INPUT.write().unwrap();
+        *l = s.language.clone().unwrap_or_else(|| "auto".to_string());
+    }
     *SETTINGS_OPEN.write().unwrap() = true;
 }
 
@@ -101,14 +107,14 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
     ctx.show_viewport_immediate(
         viewport_id,
         egui::ViewportBuilder::default()
-            .with_title("Settings")
+            .with_title(crate::localization::translate("settings-window-title"))
             .with_inner_size([640.0, 420.0])
             .with_resizable(true),
         move |ctx, _class| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 // Temp folder
                 ui.horizontal(|ui| {
-                    ui.label("Temp folder:");
+                    ui.label(crate::localization::translate("settings-temp-folder"));
                     let temp_val = TEMP_DIR_INPUT.read().unwrap().clone();
                     let resp = ui.add(egui::Label::new(temp_val.clone()).sense(egui::Sense::click()));
                     if resp.clicked() {
@@ -124,7 +130,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                 });
                 // Extract-to folder
                 ui.horizontal(|ui| {
-                    ui.label("Extract-to folder:");
+                    ui.label(crate::localization::translate("settings-extract-folder"));
                     let extract_val = EXTRACT_DIR_INPUT.read().unwrap().clone();
                     let resp =
                         ui.add(egui::Label::new(extract_val.clone()).sense(egui::Sense::click()));
@@ -141,7 +147,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                 });
                 // Cache folder
                 ui.horizontal(|ui| {
-                    ui.label("Cache folder:");
+                    ui.label(crate::localization::translate("settings-cache-folder"));
                     let cache_val = CACHE_DIR_INPUT.read().unwrap().clone();
                     let resp = ui.add(egui::Label::new(cache_val.clone()).sense(egui::Sense::click()));
                     if resp.clicked() {
@@ -158,7 +164,33 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                 //ui.add_space(8.0);
                 ui.separator();
 
-                ui.label("Custom launch command (use {{path}} placeholder):");
+                // Language selection
+                {
+                    let mut lang_val = LANGUAGE_INPUT.read().unwrap().clone();
+                    let selected_text = match lang_val.as_str() {
+                        "en" => crate::localization::translate("settings-language-en"),
+                        "ru" => crate::localization::translate("settings-language-ru"),
+                        _ => crate::localization::translate("settings-language-auto"),
+                    };
+                    ui.horizontal(|ui| {
+                        ui.label(crate::localization::translate("settings-language"));
+                        egui::ComboBox::from_id_source("settings_language_combo")
+                            .selected_text(selected_text)
+                            .show_ui(ui, |ui| {
+                                let lbl_auto = crate::localization::translate("settings-language-auto");
+                                let lbl_en = crate::localization::translate("settings-language-en");
+                                let lbl_ru = crate::localization::translate("settings-language-ru");
+                                ui.selectable_value(&mut lang_val, "auto".to_string(), lbl_auto);
+                                ui.selectable_value(&mut lang_val, "en".to_string(), lbl_en);
+                                ui.selectable_value(&mut lang_val, "ru".to_string(), lbl_ru);
+                            });
+                    });
+                    if lang_val != *LANGUAGE_INPUT.read().unwrap() {
+                        *LANGUAGE_INPUT.write().unwrap() = lang_val;
+                    }
+                }
+
+                ui.label(crate::localization::translate("settings-custom-launch"));
                 {
                     let mut custom_val = CUSTOM_LAUNCH_INPUT.read().unwrap().clone();
                     if ui.add(egui::TextEdit::singleline(&mut custom_val).hint_text("\"C:\\\\Start.exe\" /box:TestBox {{path}}")).changed() {
@@ -364,7 +396,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                 });
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("Save").clicked() {
+                    if ui.button(crate::localization::translate("settings-save")).clicked() {
                         let temp_val = TEMP_DIR_INPUT.read().unwrap().clone();
                         let extract_val = EXTRACT_DIR_INPUT.read().unwrap().clone();
                         // Check if extract-dir changed and if there are installed games
@@ -403,7 +435,22 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                                 st.custom_launch = custom_launch;
                                 st.cache_on_download = cache_on_download;
                                 st.cache_dir = std::path::PathBuf::from(cache_dir_str);
+                                // Store language selection
+                                st.language = match LANGUAGE_INPUT.read().unwrap().as_str() {
+                                    "en" => Some("en".to_string()),
+                                    "ru" => Some("ru".to_string()),
+                                    _ => None,
+                                };
                             } // drop write lock before saving to avoid deadlock
+                            // Apply language immediately
+                            {
+                                let lang_opt = APP_SETTINGS.read().unwrap().language.clone();
+                                if let Some(lang) = lang_opt {
+                                    let _ = crate::localization::set_current_language(&lang);
+                                } else {
+                                    let _ = crate::localization::set_language_auto();
+                                }
+                            }
                             save_settings_to_disk();
                             *SETTINGS_OPEN.write().unwrap() = false;
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -511,6 +558,12 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                         st.custom_launch = custom_launch;
                         st.cache_on_download = cache_on_download;
                         st.cache_dir = cache_dir;
+                        // Store language selection (post-migration path)
+                        st.language = match LANGUAGE_INPUT.read().unwrap().as_str() {
+                            "en" => Some("en".to_string()),
+                            "ru" => Some("ru".to_string()),
+                            _ => None,
+                        };
                         for (tid, nf, ne) in moved {
                             if let Some(entry) = st.downloaded_games.iter_mut().find(|e| e.thread_id == tid) {
                                 entry.folder = nf;
@@ -518,6 +571,15 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                                     entry.exe_path = Some(nep);
                                 }
                             }
+                        }
+                    }
+                    // Apply language immediately
+                    {
+                        let lang_opt = APP_SETTINGS.read().unwrap().language.clone();
+                        if let Some(lang) = lang_opt {
+                            let _ = crate::localization::set_current_language(&lang);
+                        } else {
+                            let _ = crate::localization::set_language_auto();
                         }
                     }
                     save_settings_to_disk();

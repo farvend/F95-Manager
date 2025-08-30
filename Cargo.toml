@@ -27,6 +27,13 @@ sevenz-rust = { version = "0.6.1", features = ["bzip2", "zstd", "aes", "cbc"] }
 mega = "0.8.0"
 futures = "0.3"
 scraper = "0.24.0"
+fluent-bundle = "0.15"
+fluent-syntax = "0.11"
+unic-langid = "0.9"
+sys-locale = "0.3"
+thiserror = "1.0"
+intl-memoizer = "0.5"
+once_cell = "1.19"
 
 [profile.release]
 opt-level = "z"
