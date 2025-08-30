@@ -1,10 +1,9 @@
 // Логика приложения вынесена из main.rs, чтобы убрать глубокую вложенность в конце main.
-// Здесь находится состояние NoLagApp и отрисовка UI. Получение данных и runtime вынесены в подмодули.
+// Рефакторинг: крупные группы полей вынесены в отдельные структуры в app/state.rs.
 
 use eframe::egui::RichText;
 use eframe::{egui, App};
-use std::collections::{HashMap, HashSet};
-use std::sync::mpsc;
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use crate::types::*;
@@ -24,77 +23,33 @@ mod runtime;
 mod fetch;
 mod downloads;
 mod cache;
+mod state;
+
 pub use runtime::rt;
 pub use runtime::RUNTIME;
 pub use fetch::CoverMsg;
 use downloads::DownloadState;
+use state::{AuthState, FiltersState, ImagesState, NetState, Screen};
 
 const DOWNLOAD_WEIGHT: f32 = 0.75;
 const UNZIP_WEIGHT: f32 = 1.0 - DOWNLOAD_WEIGHT;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Screen {
-    AuthLogin,
-    Main,
-}
-
-
 pub struct NoLagApp {
-    counter: u64,
+    // Пагинация
     page: u32,
-    sort: Sorting,
-    date_limit: DateLimit,
-    include_logic: TagLogic,
-    include_tags: Vec<u32>,
-    exclude_tags: Vec<u32>,
-    include_prefixes: Vec<u32>,
-    exclude_prefixes: Vec<u32>,
-    exclude_mode: Vec<u32>,
-    search_mode: SearchMode,
-    query: String,
-    library_only: bool,
-    last_library_only: bool,
-    search_due_at: Option<Instant>,
-    // Async fetch wiring
-    loading: bool,
-    tx: mpsc::Sender<(u64, Result<crate::parser::F95Msg, crate::parser::F95Error>)>,
-    rx: mpsc::Receiver<(u64, Result<crate::parser::F95Msg, crate::parser::F95Error>)>,
-    last_result: Option<crate::parser::F95Msg>,
-    last_error: Option<String>,
-    // Covers loading and cache
-    covers: HashMap<u64, egui::TextureHandle>,
-    covers_loading: HashSet<u64>,
-    // Screenshots loading and cache
-    screens: HashMap<u64, Vec<Option<egui::TextureHandle>>>,
-    screens_loading: HashSet<(u64, usize)>,
-    cover_tx: mpsc::Sender<CoverMsg>,
-    cover_rx: mpsc::Receiver<CoverMsg>,
+
+    // Новый, сгруппированный стейт
+    filters: FiltersState,
+    net: NetState,
+    images: ImagesState,
+    auth: AuthState,
+
+    // Загрузки оставлены здесь (выполняют побочные эффекты в UI/Library)
     downloads: HashMap<u64, DownloadState>,
-    // Track which request ids in rx belong to Library sequential pipeline
-    library_req_ids: HashSet<u64>,
-    // Background Library prefetch state
-    lib_started: bool,
-    lib_result: Option<crate::parser::F95Msg>,
-    lib_error: Option<String>,
-    lib_tx: mpsc::Sender<Result<crate::parser::F95Msg, crate::parser::F95Error>>,
-    lib_rx: mpsc::Receiver<Result<crate::parser::F95Msg, crate::parser::F95Error>>,
-    // Authorization/login UI state
-    screen: Screen,
-    login_username: String,
-    login_password: String,
-    login_cookies_input: String,
-    login_error: Option<String>,
-    login_in_progress: bool,
-    auth_tx: mpsc::Sender<Result<(), String>>,
-    auth_rx: mpsc::Receiver<Result<(), String>>,
 }
 
 impl Default for NoLagApp {
     fn default() -> Self {
-        let (tx, rx) = mpsc::channel();
-        let (cover_tx, cover_rx) = mpsc::channel();
-        let (lib_tx, lib_rx) = mpsc::channel();
-        let (auth_tx, auth_rx) = mpsc::channel();
         // Ensure app_config.json is loaded before deciding which screen to show
         crate::app::config::load_config_from_disk();
         let need_auth = {
@@ -105,61 +60,14 @@ impl Default for NoLagApp {
                 .unwrap_or(true)
         };
         let screen = if need_auth { Screen::AuthLogin } else { Screen::Main };
-        // Prefill startup filters from settings at startup
-        let (startup_tags, startup_exclude_tags, startup_prefixes, startup_exclude_prefixes) = {
-            let st = crate::app::settings::APP_SETTINGS.read().unwrap();
-            let mut inc = st.startup_tags.clone();
-            let mut exc = st.startup_exclude_tags.clone();
-            let mut pref = st.startup_prefixes.clone();
-            let mut nopref = st.startup_exclude_prefixes.clone();
-            if inc.len() > 10 { inc.truncate(10); }
-            if exc.len() > 10 { exc.truncate(10); }
-            if pref.len() > 10 { pref.truncate(10); }
-            if nopref.len() > 10 { nopref.truncate(10); }
-            (inc, exc, pref, nopref)
-        };
+
         Self {
-            counter: 0,
             page: 1,
-            sort: Sorting::default(),
-            date_limit: DateLimit::default(),
-            include_logic: TagLogic::default(),
-            include_tags: startup_tags,
-            exclude_tags: startup_exclude_tags,
-            include_prefixes: startup_prefixes,
-            exclude_prefixes: startup_exclude_prefixes,
-            exclude_mode: Vec::new(),
-            search_mode: SearchMode::default(),
-            query: String::new(),
-            library_only: false,
-            last_library_only: false,
-            search_due_at: None,
-            loading: false,
-            tx,
-            rx,
-            last_result: None,
-            last_error: None,
-            covers: HashMap::new(),
-            covers_loading: HashSet::new(),
-            screens: HashMap::new(),
-            screens_loading: HashSet::new(),
-            cover_tx,
-            cover_rx,
+            filters: FiltersState::default(),
+            net: NetState::new(),
+            images: ImagesState::new(),
+            auth: AuthState::new(screen),
             downloads: HashMap::new(),
-            library_req_ids: HashSet::new(),
-            lib_started: false,
-            lib_result: None,
-            lib_error: None,
-            lib_tx,
-            lib_rx,
-            screen,
-            login_username: String::new(),
-            login_password: String::new(),
-            login_cookies_input: String::new(),
-            login_error: None,
-            login_in_progress: false,
-            auth_tx,
-            auth_rx,
         }
     }
 }
@@ -172,29 +80,29 @@ impl App for NoLagApp {
         }
 
         // Handle async login results
-        while let Ok(res) = self.auth_rx.try_recv() {
-            self.login_in_progress = false;
+        while let Ok(res) = self.auth.auth_rx.try_recv() {
+            self.auth.login_in_progress = false;
             match res {
                 Ok(()) => {
-                    self.login_error = None;
-                    self.screen = Screen::Main;
+                    self.auth.login_error = None;
+                    self.auth.screen = Screen::Main;
                     // Trigger initial fetch now that main UI is enabled
                     self.page = 1;
-                    self.search_due_at = None;
-                    self.loading = false;
+                    self.filters.search_due_at = None;
+                    self.net.loading = false;
                     self.start_fetch(ctx);
                 }
                 Err(e) => {
-                    self.login_error = Some(e);
+                    self.auth.login_error = Some(e);
                 }
             }
             ctx.request_repaint();
         }
 
         // Authorization gating: if there is no app_config cookies, show auth flow and skip main UI
-        if self.screen != Screen::Main {
+        if self.auth.screen != Screen::Main {
             egui::CentralPanel::default().show(ctx, |ui| {
-                match self.screen {
+                match self.auth.screen {
                     Screen::AuthLogin => {
                         ui.add_space(24.0);
                         ui.vertical_centered(|ui| {
@@ -203,32 +111,32 @@ impl App for NoLagApp {
                         ui.add_space(8.0);
                         ui.horizontal(|ui| {
                             ui.label("Username:");
-                            ui.text_edit_singleline(&mut self.login_username);
+                            ui.text_edit_singleline(&mut self.auth.login_username);
                         });
                         ui.horizontal(|ui| {
                             ui.label("Password:");
-                            let te = egui::TextEdit::singleline(&mut self.login_password).password(true);
+                            let te = egui::TextEdit::singleline(&mut self.auth.login_password).password(true);
                             ui.add(te);
                         });
-                        if let Some(err) = &self.login_error {
+                        if let Some(err) = &self.auth.login_error {
                             ui.colored_label(egui::Color32::RED, err);
                         }
                         ui.add_space(8.0);
-                        let login_clicked = ui.add_enabled(!self.login_in_progress, egui::Button::new("Login")).clicked();
-                        if self.login_in_progress {
+                        let login_clicked = ui.add_enabled(!self.auth.login_in_progress, egui::Button::new("Login")).clicked();
+                        if self.auth.login_in_progress {
                             ui.add_space(4.0);
                             ui.add(egui::Spinner::new());
                             ui.label("Authorizing...");
                         }
                         if login_clicked {
-                            if self.login_username.trim().is_empty() || self.login_password.is_empty() {
-                                self.login_error = Some("Please enter username and password".to_string());
+                            if self.auth.login_username.trim().is_empty() || self.auth.login_password.is_empty() {
+                                self.auth.login_error = Some("Please enter username and password".to_string());
                             } else {
-                                self.login_error = None;
-                                self.login_in_progress = true;
-                                let u = self.login_username.clone();
-                                let p = self.login_password.clone();
-                                let tx = self.auth_tx.clone();
+                                self.auth.login_error = None;
+                                self.auth.login_in_progress = true;
+                                let u = self.auth.login_username.clone();
+                                let p = self.auth.login_password.clone();
+                                let tx = self.auth.auth_tx.clone();
                                 let ctx2 = ctx.clone();
                                 crate::app::rt().spawn(async move {
                                     let res = crate::app::config::login_and_store(u, p).await;
@@ -242,28 +150,28 @@ impl App for NoLagApp {
                         ui.separator();
                         ui.add_space(8.0);
                         ui.label("Or paste cookies (Cookie header):");
-                        let te2 = egui::TextEdit::multiline(&mut self.login_cookies_input).desired_rows(3);
+                        let te2 = egui::TextEdit::multiline(&mut self.auth.login_cookies_input).desired_rows(3);
                         ui.add(te2);
                         ui.add_space(4.0);
-                        let use_clicked = ui.add_enabled(!self.login_in_progress, egui::Button::new("Use cookies")).clicked();
+                        let use_clicked = ui.add_enabled(!self.auth.login_in_progress, egui::Button::new("Use cookies")).clicked();
                         if use_clicked {
-                            let c = self.login_cookies_input.trim();
+                            let c = self.auth.login_cookies_input.trim();
                             if c.is_empty() {
-                                self.login_error = Some("Please paste cookies".to_string());
+                                self.auth.login_error = Some("Please paste cookies".to_string());
                             } else {
                                 {
                                     let mut cfg = crate::app::config::APP_CONFIG.write().unwrap();
                                     cfg.cookies = Some(c.to_string());
-                                    if !self.login_username.trim().is_empty() {
-                                        cfg.username = Some(self.login_username.clone());
+                                    if !self.auth.login_username.trim().is_empty() {
+                                        cfg.username = Some(self.auth.login_username.clone());
                                     }
                                 }
                                 crate::app::config::save_config_to_disk();
-                                self.login_error = None;
-                                self.screen = Screen::Main;
+                                self.auth.login_error = None;
+                                self.auth.screen = Screen::Main;
                                 self.page = 1;
-                                self.search_due_at = None;
-                                self.loading = false;
+                                self.filters.search_due_at = None;
+                                self.net.loading = false;
                                 self.start_fetch(ctx);
                             }
                         }
@@ -294,60 +202,60 @@ impl App for NoLagApp {
 
         // Первый автозапуск загрузки
         // Не перезапускать автоматически при наличии ошибки (например, 429), чтобы не было бесконечного цикла запросов
-        if self.last_result.is_none() && self.last_error.is_none() && !self.loading {
-            if self.library_only {
+        if self.net.last_result.is_none() && self.net.last_error.is_none() && !self.net.loading {
+            if self.filters.library_only {
                 // Если приложение стартует в режиме Library — сразу запускаем параллельную подзагрузку
                 self.start_prefetch_library(ctx);
             } else {
                 // Стартуем обычный список
                 self.start_fetch(ctx);
                 // И параллельно сразу же подгружаем библиотеку в фоне
-                if !self.lib_started {
+                if !self.net.lib_started {
                     self.start_prefetch_library(ctx);
                 }
             }
         } else {
             // Гарантируем, что фоновая подзагрузка библиотеки запущена один раз
-            if !self.lib_started {
+            if !self.net.lib_started {
                 self.start_prefetch_library(ctx);
             }
         }
 
         // Правая панель — фильтры
-        let prev_query = self.query.clone();
+        let prev_query = self.filters.query.clone();
         let (apply, open_settings, open_logs, open_about) = draw_filters_panel(
             ctx,
-            &mut self.sort,
-            &mut self.date_limit,
-            &mut self.include_logic,
-            &mut self.include_tags,
-            &mut self.exclude_mode,
-            &mut self.exclude_tags,
-            &mut self.include_prefixes,
-            &mut self.exclude_prefixes,
-            &mut self.search_mode,
-            &mut self.query,
-            &mut self.library_only,
+            &mut self.filters.sort,
+            &mut self.filters.date_limit,
+            &mut self.filters.include_logic,
+            &mut self.filters.include_tags,
+            &mut self.filters.exclude_mode,
+            &mut self.filters.exclude_tags,
+            &mut self.filters.include_prefixes,
+            &mut self.filters.exclude_prefixes,
+            &mut self.filters.search_mode,
+            &mut self.filters.query,
+            &mut self.filters.library_only,
         );
         if apply {
             // Немедленно перезапустить поиск при изменении фильтров (кроме текста)
             self.page = 1;
-            self.search_due_at = None;
-            if self.library_only {
+            self.filters.search_due_at = None;
+            if self.filters.library_only {
                 self.start_fetch_library(ctx);
             } else {
                 self.start_fetch(ctx);
             }
         }
         // Debounce text query changes: run search 0.3s after last edit
-        let query_changed = self.query != prev_query;
+        let query_changed = self.filters.query != prev_query;
         if query_changed {
             if apply {
                 // Filters changed this frame and already triggered immediate fetch; skip debounce
-                self.search_due_at = None;
+                self.filters.search_due_at = None;
             } else {
                 self.page = 1;
-                self.search_due_at = Some(Instant::now() + Duration::from_millis(300));
+                self.filters.search_due_at = Some(Instant::now() + Duration::from_millis(300));
                 // Wake up after the debounce interval to fire the search
                 ctx.request_repaint_after(Duration::from_millis(300));
             }
@@ -365,25 +273,25 @@ impl App for NoLagApp {
             ctx.request_repaint();
         }
         // Trigger new fetch when Library mode toggles
-        if self.last_library_only != self.library_only {
-            self.last_library_only = self.library_only;
-            if self.library_only {
+        if self.filters.last_library_only != self.filters.library_only {
+            self.filters.last_library_only = self.filters.library_only;
+            if self.filters.library_only {
                 // Если фоновые данные уже есть — мгновенно показываем их
-                if let Some(msg) = &self.lib_result {
-                    self.last_result = Some(msg.clone());
-                    self.last_error = None;
-                    self.loading = false;
+                if let Some(msg) = &self.net.lib_result {
+                    self.net.last_result = Some(msg.clone());
+                    self.net.last_error = None;
+                    self.net.loading = false;
                     // Immediately schedule cover downloads for the freshly shown Library data
                     self.schedule_cover_downloads(ctx);
                     ctx.request_repaint();
                 } else {
                     // Обеспечим запуск фоновой загрузки и покажем спиннер
-                    if !self.lib_started {
+                    if !self.net.lib_started {
                         self.start_prefetch_library(ctx);
                     }
-                    self.last_result = None;
-                    self.last_error = None;
-                    self.loading = true;
+                    self.net.last_result = None;
+                    self.net.last_error = None;
+                    self.net.loading = true;
                 }
             } else {
                 self.start_fetch(ctx);
@@ -391,10 +299,10 @@ impl App for NoLagApp {
         }
 
         // Run debounced query fetch if deadline passed
-        if let Some(due) = self.search_due_at {
+        if let Some(due) = self.filters.search_due_at {
             if Instant::now() >= due {
-                self.search_due_at = None;
-                if self.library_only {
+                self.filters.search_due_at = None;
+                if self.filters.library_only {
                     self.start_fetch_library(ctx);
                 } else {
                     self.start_fetch(ctx);
@@ -418,21 +326,21 @@ impl App for NoLagApp {
                     let row_w = (cols as f32) * card_w + ((cols - 1) as f32) * gap;
                     let left_pad = ((avail_w - row_w) / 2.0).max(0.0);
 
-                    if let Some(err) = &self.last_error {
+                    if let Some(err) = &self.net.last_error {
                         ui.vertical_centered(|ui| {
                             ui.colored_label(egui::Color32::RED, format!("Error: {}", err));
                         });
-                    } else if self.loading && self.last_result.is_none() {
+                    } else if self.net.loading && self.net.last_result.is_none() {
                         ui.add_space(24.0);
                         ui.vertical_centered(|ui| {
                             ui.add(egui::Spinner::new());
                             ui.label("Loading...");
                         });
-                    } else if self.last_result.is_some() {
+                    } else if self.net.last_result.is_some() {
                         // Clone data so we don't hold an immutable borrow of `self` across a call
                         // that needs `&mut self` (draw_threads_grid).
                         let data_cloned = {
-                            let msg = self.last_result.as_ref().unwrap();
+                            let msg = self.net.last_result.as_ref().unwrap();
                             msg.data.clone()
                         };
                         // Build a set of hidden thread_ids and filter them out from rendering
@@ -442,7 +350,7 @@ impl App for NoLagApp {
                         };
 
                         // When Library mode is ON, show downloaded AND in-progress games; always ignore hidden ones
-                        let mut display_data: Vec<crate::parser::F95Thread> = if self.library_only {
+                        let mut display_data: Vec<crate::parser::F95Thread> = if self.filters.library_only {
                             // Persisted completed downloads
                             let downloaded_ids: std::collections::HashSet<u64> = {
                                 let st = settings::APP_SETTINGS.read().unwrap();
@@ -479,9 +387,9 @@ impl App for NoLagApp {
                         };
 
                         // Apply client-side filters and sorting in Library mode
-                        if self.library_only {
+                        if self.filters.library_only {
                             // Text query (Title or Creator)
-                            let q = self.query.to_lowercase();
+                            let q = self.filters.query.to_lowercase();
                             let use_query = !q.trim().is_empty();
 
                             display_data.retain(|t| {
@@ -494,11 +402,11 @@ impl App for NoLagApp {
                                 }
 
                                 // Include tags with OR/AND logic
-                                if !self.include_tags.is_empty() {
+                                if !self.filters.include_tags.is_empty() {
                                     let has = |id: &u32| t.tags.contains(id);
-                                    let ok = match self.include_logic {
-                                        TagLogic::And => self.include_tags.iter().all(has),
-                                        TagLogic::Or => self.include_tags.iter().any(has),
+                                    let ok = match self.filters.include_logic {
+                                        TagLogic::And => self.filters.include_tags.iter().all(has),
+                                        TagLogic::Or => self.filters.include_tags.iter().any(has),
                                     };
                                     if !ok {
                                         return false;
@@ -506,8 +414,8 @@ impl App for NoLagApp {
                                 }
 
                                 // Exclude tags
-                                if !self.exclude_tags.is_empty()
-                                    && self.exclude_tags.iter().any(|id| t.tags.contains(id))
+                                if !self.filters.exclude_tags.is_empty()
+                                    && self.filters.exclude_tags.iter().any(|id| t.tags.contains(id))
                                 {
                                     return false;
                                 }
@@ -520,7 +428,7 @@ impl App for NoLagApp {
                         // Bottom controls: pagination in normal mode, summary in Library mode
                         ui.add_space(8.0);
                         ui.vertical_centered(|ui| {
-                            if self.library_only {
+                            if self.filters.library_only {
                                 let installed_count = {
                                     let st = settings::APP_SETTINGS.read().unwrap();
                                     st.downloaded_games
@@ -531,7 +439,7 @@ impl App for NoLagApp {
                                 ui.label(format!("Library: {} / {} found", display_data.len(), installed_count));
                             } else {
                                 let (cur, total) = {
-                                    let msg = self.last_result.as_ref().unwrap();
+                                    let msg = self.net.last_result.as_ref().unwrap();
                                     (msg.pagination.page, msg.pagination.total)
                                 };
                                 ui.horizontal(|ui| {

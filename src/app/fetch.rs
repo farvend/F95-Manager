@@ -45,10 +45,10 @@ impl super::NoLagApp {
     fn build_existing_map_for_refresh(
         &self,
     ) -> std::collections::HashMap<u64, crate::parser::F95Thread> {
-        if self.lib_result.is_some() {
-            helpers::build_existing_map(self.lib_result.as_ref())
+        if self.net.lib_result.is_some() {
+            helpers::build_existing_map(self.net.lib_result.as_ref())
         } else {
-            helpers::build_existing_map(self.last_result.as_ref())
+            helpers::build_existing_map(self.net.last_result.as_ref())
         }
     }
 
@@ -59,7 +59,7 @@ impl super::NoLagApp {
         targets: Vec<u64>,
         existing_map: std::collections::HashMap<u64, crate::parser::F95Thread>,
     ) {
-        let tx = self.lib_tx.clone();
+        let tx = self.net.lib_tx.clone();
         let ctx2 = ctx.clone();
         super::rt().spawn(async move {
             if targets.is_empty() {
@@ -131,7 +131,7 @@ impl super::NoLagApp {
         targets: Vec<u64>,
         existing_map: std::collections::HashMap<u64, crate::parser::F95Thread>,
     ) {
-        let tx2 = self.tx.clone();
+        let tx2 = self.net.tx.clone();
         let ctx3 = ctx.clone();
         super::rt().spawn(async move {
             if targets.is_empty() {
@@ -189,30 +189,30 @@ impl super::NoLagApp {
     /// Start async fetch for threads list based on current filters.
     pub(super) fn start_fetch(&mut self, ctx: &egui::Context) {
         // Allow restarting fetch even if one is in-flight; results are deduped by request id
-        self.loading = true;
+        self.net.loading = true;
         // Reset last state so UI shows loading spinner and clears previous error
-        self.last_error = None;
-        self.last_result = None;
+        self.net.last_error = None;
+        self.net.last_result = None;
         ctx.request_repaint();
 
         // bump fetch request id
-        self.counter = self.counter.wrapping_add(1);
-        let req_id = self.counter;
+        self.net.counter = self.net.counter.wrapping_add(1);
+        let req_id = self.net.counter;
 
-        let tx = self.tx.clone();
+        let tx = self.net.tx.clone();
         let ctx2 = ctx.clone();
         let page = self.page;
 
         // Build filters with full set mapped from UI state
         let filters = crate::parser::F95Filters::default()
             .with_category("games")
-            .with_search_query(self.query.clone())
-            .with_sort(self.sort.clone())
-            .with_include_tags(self.include_tags.clone())
-            .with_exclude_tags(self.exclude_tags.clone())
-            .with_prefixes(self.include_prefixes.clone())
-            .with_noprefixes(self.exclude_prefixes.clone())
-            .with_date_limit(self.date_limit);
+            .with_search_query(self.filters.query.clone())
+            .with_sort(self.filters.sort.clone())
+            .with_include_tags(self.filters.include_tags.clone())
+            .with_exclude_tags(self.filters.exclude_tags.clone())
+            .with_prefixes(self.filters.include_prefixes.clone())
+            .with_noprefixes(self.filters.exclude_prefixes.clone())
+            .with_date_limit(self.filters.date_limit);
 
         rt().spawn(async move {
             let res = crate::parser::fetch_list_page(page, &filters).await;
@@ -228,18 +228,18 @@ impl super::NoLagApp {
     /// Start async fetch of all pages to build the Library view from installed games on disk.
     pub(super) fn start_fetch_library(&mut self, ctx: &egui::Context) {
         log::info!("Library fetch start");
-        self.loading = true;
-        self.last_error = None;
-        self.last_result = None;
+        self.net.loading = true;
+        self.net.last_error = None;
+        self.net.last_result = None;
         ctx.request_repaint();
 
         // bump fetch request id
-        self.counter = self.counter.wrapping_add(1);
-        let req_id = self.counter;
+        self.net.counter = self.net.counter.wrapping_add(1);
+        let req_id = self.net.counter;
 
         // mark this req_id as a Library sequential pipeline request
-        self.library_req_ids.clear();
-        self.library_req_ids.insert(req_id);
+        self.net.library_req_ids.clear();
+        self.net.library_req_ids.insert(req_id);
 
         let (installs, targets) = self.compute_library_targets();
         log::info!(
@@ -261,18 +261,18 @@ impl super::NoLagApp {
 
     /// Start background prefetch of Library data right after app start.
     pub(super) fn start_prefetch_library(&mut self, ctx: &egui::Context) {
-        if self.lib_started {
+        if self.net.lib_started {
             return;
         }
-        self.lib_started = true;
-        self.lib_error = None;
-        self.lib_result = None;
+        self.net.lib_started = true;
+        self.net.lib_error = None;
+        self.net.lib_result = None;
 
         let (installs, targets) = self.compute_library_targets();
 
         // Snapshot current results so we don't re-fetch if a card is already filled
         let existing_map: std::collections::HashMap<u64, crate::parser::F95Thread> =
-            helpers::build_existing_map(self.last_result.as_ref());
+            helpers::build_existing_map(self.net.last_result.as_ref());
 
         self.spawn_lib_pipeline_concurrent(ctx, installs, targets, existing_map);
     }
@@ -291,27 +291,27 @@ impl super::NoLagApp {
 
     /// Schedule background cover downloads for newly arrived items.
     pub(super) fn schedule_cover_downloads(&mut self, ctx: &egui::Context) {
-        if let Some(msg) = &self.last_result {
+        if let Some(msg) = &self.net.last_result {
             for t in &msg.data {
                 let thread_id = t.thread_id.clone();
                 let id = t.thread_id.get();
-                if self.covers.contains_key(&id)
-                    || self.covers_loading.contains(&id)
+                if self.images.covers.contains_key(&id)
+                    || self.images.covers_loading.contains(&id)
                     || t.cover.is_empty()
                 {
                     continue;
                 }
-                self.covers_loading.insert(id);
+                self.images.covers_loading.insert(id);
                 // Prefer cover; if missing, fallback to first screenshot so the main tile isn't blank.
                 let url_raw = if let Some(u) = helpers::get_cover_or_first_screen_url(t) {
                     u
                 } else {
                     // nothing to show
-                    self.covers_loading.remove(&id);
+                    self.images.covers_loading.remove(&id);
                     continue;
                 };
                 let url = crate::parser::normalize_url(&url_raw);
-                let tx = self.cover_tx.clone();
+                let tx = self.images.cover_tx.clone();
                 let ctx2 = ctx.clone();
                 log::info!("cover schedule: id={} url={}", id, url);
                 rt().spawn(async move {
@@ -338,54 +338,54 @@ impl super::NoLagApp {
     /// Poll incoming async messages and update state accordingly.
     pub(super) fn poll_incoming(&mut self, ctx: &egui::Context) {
         // Fetch results
-        while let Ok((id, res)) = self.rx.try_recv() {
-            let is_library_req = self.library_req_ids.contains(&id);
+        while let Ok((id, res)) = self.net.rx.try_recv() {
+            let is_library_req = self.net.library_req_ids.contains(&id);
             // Ignore stale results unless it's an active Library sequential request
-            if id != self.counter && !is_library_req {
+            if id != self.net.counter && !is_library_req {
                 continue;
             }
             // In Library view, ignore non-Library listing results
-            if self.library_only && !is_library_req {
+            if self.filters.library_only && !is_library_req {
                 continue;
             }
             // In Main view, ignore Library sequential results
-            if !self.library_only && is_library_req {
+            if !self.filters.library_only && is_library_req {
                 continue;
             }
-            self.loading = false;
+            self.net.loading = false;
             match res {
                 Ok(msg) => {
-                    self.last_error = None;
-                    self.last_result = Some(msg);
+                    self.net.last_error = None;
+                    self.net.last_result = Some(msg);
                     self.schedule_cover_downloads(ctx);
                 }
                 Err(e) => {
-                    self.last_result = None;
-                    self.last_error = Some(e.to_string());
+                    self.net.last_result = None;
+                    self.net.last_error = Some(e.to_string());
                 }
             }
         }
 
         // Handle prefetched Library results
-        while let Ok(res) = self.lib_rx.try_recv() {
+        while let Ok(res) = self.net.lib_rx.try_recv() {
             match res {
                 Ok(msg) => {
-                    self.lib_error = None;
-                    self.lib_result = Some(msg.clone());
+                    self.net.lib_error = None;
+                    self.net.lib_result = Some(msg.clone());
                     // If user is in Library view and waiting for data, show immediately
-                    if self.library_only {
-                        self.last_result = Some(msg);
-                        self.last_error = None;
-                        self.loading = false;
+                    if self.filters.library_only {
+                        self.net.last_result = Some(msg);
+                        self.net.last_error = None;
+                        self.net.loading = false;
                         self.schedule_cover_downloads(ctx);
                     }
                 }
                 Err(e) => {
-                    self.lib_result = None;
-                    self.lib_error = Some(e.to_string());
-                    if self.library_only {
-                        self.last_error = Some(e.to_string());
-                        self.loading = false;
+                    self.net.lib_result = None;
+                    self.net.lib_error = Some(e.to_string());
+                    if self.filters.library_only {
+                        self.net.last_error = Some(e.to_string());
+                        self.net.loading = false;
                     }
                 }
             }
@@ -393,7 +393,7 @@ impl super::NoLagApp {
         }
 
         // Images (covers/screens)
-        while let Ok(msg) = self.cover_rx.try_recv() {
+        while let Ok(msg) = self.images.cover_rx.try_recv() {
             match msg {
                 CoverMsg::Ok { thread_id, w, h, rgba } => {
                     let thread_id = thread_id.get();
@@ -405,12 +405,12 @@ impl super::NoLagApp {
                         image,
                         egui::TextureOptions::default(),
                     );
-                    self.covers.insert(thread_id, tex);
-                    self.covers_loading.remove(&thread_id);
+                    self.images.covers.insert(thread_id, tex);
+                    self.images.covers_loading.remove(&thread_id);
                     log::info!("cover ok: id={} size={}x{}", thread_id, w, h);
                 }
                 CoverMsg::Err { thread_id } => {
-                    self.covers_loading.remove(&thread_id);
+                    self.images.covers_loading.remove(&thread_id);
                 }
                 CoverMsg::ScreenOk { thread_id, idx, w, h, rgba } => {
                     // Opportunistic cache save (if enabled)
@@ -421,15 +421,15 @@ impl super::NoLagApp {
                         image,
                         egui::TextureOptions::default(),
                     );
-                    let entry = self.screens.entry(thread_id).or_insert_with(|| Vec::new());
+                    let entry = self.images.screens.entry(thread_id).or_insert_with(|| Vec::new());
                     if entry.len() < idx + 1 {
                         entry.resize_with(idx + 1, || None);
                     }
                     entry[idx] = Some(tex);
-                    self.screens_loading.remove(&(thread_id, idx));
+                    self.images.screens_loading.remove(&(thread_id, idx));
                 }
                 CoverMsg::ScreenErr { thread_id, idx } => {
-                    self.screens_loading.remove(&(thread_id, idx));
+                    self.images.screens_loading.remove(&(thread_id, idx));
                 }
             }
         }

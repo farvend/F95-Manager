@@ -12,7 +12,7 @@ impl super::NoLagApp {
         idx: usize,
         url: String,
     ) {
-        let tx = self.cover_tx.clone();
+        let tx = self.images.cover_tx.clone();
         let ctx2 = ctx.clone();
         let url_cloned = url.clone();
         super::rt().spawn(async move {
@@ -60,12 +60,12 @@ impl super::NoLagApp {
             ui.set_min_width(card_w);
             ui.set_max_width(card_w);
             let id = t.thread_id.get();
-            if self.library_only {
+            if self.filters.library_only {
                 super::cache::ensure_cache_for_thread_from(t);
             }
             let hover = {
-                let cover = self.covers.get(&id);
-                let screens_slice = self.screens.get(&id).map(|v| v.as_slice());
+                let cover = self.images.covers.get(&id);
+                let screens_slice = self.images.screens.get(&id).map(|v| v.as_slice());
                 let progress = self.downloads.get(&id).and_then(|s| s.progress.clone());
                 let link_choices = self.downloads.get(&id).and_then(|s| s.link_choices.as_ref().map(|v| v.as_slice()));
                 thread_card(ui, t, card_w, cover, screens_slice, progress, link_choices)
@@ -77,7 +77,7 @@ impl super::NoLagApp {
                 let mut to_download: Vec<(usize, String)> = Vec::new();
                 {
                     let entry = self
-                        .screens
+                        .images.screens
                         .entry(id)
                         .or_insert_with(|| vec![None; t.screens.len()]);
                     if entry.len() < t.screens.len() {
@@ -90,8 +90,8 @@ impl super::NoLagApp {
                     }
                 }
                 for (idx, url) in to_download {
-                    if !self.screens_loading.contains(&(id, idx)) {
-                        self.screens_loading.insert((id, idx));
+                    if !self.images.screens_loading.contains(&(id, idx)) {
+                        self.images.screens_loading.insert((id, idx));
                         self.spawn_screen_download(ctx, id, idx, url);
                     }
                 }
@@ -103,7 +103,7 @@ impl super::NoLagApp {
                 let mut maybe_url: Option<String> = None;
                 {
                     let entry = self
-                        .screens
+                        .images.screens
                         .entry(id)
                         .or_insert_with(|| vec![None; t.screens.len()]);
                     if idx < entry.len() && entry[idx].is_none() {
@@ -115,8 +115,8 @@ impl super::NoLagApp {
                     }
                 }
                 if let Some(url) = maybe_url {
-                    if !self.screens_loading.contains(&(id, idx)) {
-                        self.screens_loading.insert((id, idx));
+                    if !self.images.screens_loading.contains(&(id, idx)) {
+                        self.images.screens_loading.insert((id, idx));
                         self.spawn_screen_download(ctx, id, idx, url);
                     }
                 }
