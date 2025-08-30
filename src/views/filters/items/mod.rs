@@ -1,7 +1,6 @@
 // Facade module for filter UI building blocks.
 // Re-exports existing ui_items so render.rs can import them under views::filters::items.
 pub mod segmented_panel;
-pub mod mode_menu;
 pub mod mode_switch;
 pub mod discrete_slider;
 pub mod search_with_mode;

@@ -116,31 +116,6 @@ fn display_level(level: LevelFilter) -> &'static str {
     }
 }
 
-// Public helpers for the UI:
-
-pub fn get_entries() -> Vec<LogEntry> {
-    if let Ok(buf) = LOGS.lock() {
-        buf.iter().cloned().collect()
-    } else {
-        vec![]
-    }
-}
-
-pub fn get_entries_range(start: usize, end: usize) -> Vec<LogEntry> {
-    if let Ok(buf) = LOGS.lock() {
-        let len = buf.len();
-        let s = start.min(len);
-        let e = end.min(len);
-        buf.iter()
-            .skip(s)
-            .take(e.saturating_sub(s))
-            .cloned()
-            .collect()
-    } else {
-        vec![]
-    }
-}
-
 pub fn for_each_range<F: FnMut(&LogEntry)>(start: usize, end: usize, mut f: F) {
     if let Ok(buf) = LOGS.lock() {
         let len = buf.len();
@@ -185,18 +160,4 @@ pub fn clear() {
 /// Returns true if new logs arrived since the last call.
 pub fn take_new_flag() -> bool {
     NEW_LOGS.swap(false, Ordering::Relaxed)
-}
-
-/// Convenience function to allow manual appending to the log buffer from places
-/// where log macros are not used.
-pub fn append_manual(level: Level, target: &str, msg: impl Into<String>) {
-    let s = msg.into();
-    if *MIRROR_STDERR {
-        eprintln!("[{:>5}] {}: {}", level, target, s);
-    }
-    push_entry(LogEntry {
-        level,
-        target: target.to_string(),
-        msg: s,
-    });
 }

@@ -1,5 +1,5 @@
 use eframe::egui::{
-    pos2, Area, Color32, Frame, Id, Order, Rounding, Sense, Stroke, Ui, Vec2, TextEdit, ScrollArea,
+    pos2, Color32, Id, Rounding, Sense, Stroke, Ui, Vec2, TextEdit, ScrollArea,
 };
 
 use crate::tags::TAGS;
@@ -142,75 +142,72 @@ pub fn tags_picker(ui: &mut Ui, key: &str, placeholder: &str) -> Option<u32> {
         let popup_pos = pos2(container_rect.left(), container_rect.bottom() + 4.0);
         let popup_width = container_rect.width();
 
-        let inner = Area::new(popup_id)
-            .order(Order::Foreground)
-            .fixed_pos(popup_pos)
-            .show(ui.ctx(), |ui| {
-                Frame::default()
-                    .fill(Color32::from_rgb(28, 28, 28))
-                    .stroke(Stroke::new(1.0, border_color))
-                    .rounding(Rounding::same(6.0))
+        let inner = crate::views::ui_helpers::show_popup_area(
+            ui,
+            popup_id,
+            popup_pos,
+            popup_width,
+            border_color,
+            rounding,
+            |ui| {
+                let ql = q.to_lowercase();
+
+                // Build and sort items by name
+                let mut items: Vec<(u32, &str)> = TAGS
+                    .tags
+                    .iter()
+                    .filter_map(|(k, v)| {
+                        if !ql.is_empty() && !v.to_lowercase().contains(&ql) {
+                            return None;
+                        }
+                        match k.parse::<u32>() {
+                            Ok(id) => Some((id, v.as_str())),
+                            Err(_) => None,
+                        }
+                    })
+                    .collect();
+                items.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()));
+
+                ScrollArea::vertical()
+                    .max_height(240.0)
                     .show(ui, |ui| {
-                        ui.set_min_width(popup_width);
+                        ui.set_width(popup_width - 8.0);
+                        for (id, name) in items {
+                            let row_height = ui.spacing().interact_size.y * 1.2;
+                            let (row_rect, row_resp) = ui.allocate_exact_size(
+                                Vec2::new(ui.available_width(), row_height),
+                                Sense::click(),
+                            );
+                            let row_p = ui.painter();
 
-                        let ql = q.to_lowercase();
+                            if row_resp.hovered() {
+                                row_p.rect(
+                                    row_rect.shrink2(Vec2::new(2.0, 2.0)),
+                                    Rounding::same(4.0),
+                                    hover_bg,
+                                    Stroke::NONE,
+                                );
+                            }
 
-                        // Build and sort items by name
-                        let mut items: Vec<(u32, &str)> = TAGS
-                            .tags
-                            .iter()
-                            .filter_map(|(k, v)| {
-                                if !ql.is_empty() && !v.to_lowercase().contains(&ql) {
-                                    return None;
-                                }
-                                match k.parse::<u32>() {
-                                    Ok(id) => Some((id, v.as_str())),
-                                    Err(_) => None,
-                                }
-                            })
-                            .collect();
-                        items.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()));
+                            row_p.text(
+                                pos2(row_rect.left() + 8.0, row_rect.center().y),
+                                eframe::egui::Align2::LEFT_CENTER,
+                                name,
+                                eframe::egui::FontId::proportional(14.0),
+                                Color32::from_gray(210),
+                            );
 
-                        ScrollArea::vertical()
-                            .max_height(240.0)
-                            .show(ui, |ui| {
-                                ui.set_width(popup_width - 8.0);
-                                for (id, name) in items {
-                                    let row_height = ui.spacing().interact_size.y * 1.2;
-                                    let (row_rect, row_resp) = ui.allocate_exact_size(
-                                        Vec2::new(ui.available_width(), row_height),
-                                        Sense::click(),
-                                    );
-                                    let row_p = ui.painter();
-
-                                    if row_resp.hovered() {
-                                        row_p.rect(
-                                            row_rect.shrink2(Vec2::new(2.0, 2.0)),
-                                            Rounding::same(4.0),
-                                            hover_bg,
-                                            Stroke::NONE,
-                                        );
-                                    }
-
-                                    row_p.text(
-                                        pos2(row_rect.left() + 8.0, row_rect.center().y),
-                                        eframe::egui::Align2::LEFT_CENTER,
-                                        name,
-                                        eframe::egui::FontId::proportional(14.0),
-                                        Color32::from_gray(210),
-                                    );
-
-                                    let row_resp = row_resp.on_hover_cursor(eframe::egui::CursorIcon::PointingHand);
-                                    if row_resp.clicked() {
-                                        pick = Some(id);
-                                        ui.memory_mut(|m| {
-                                            m.data.insert_temp(popup_id, false);
-                                        });
-                                    }
-                                }
-                            });
+                            let row_resp = row_resp.on_hover_cursor(eframe::egui::CursorIcon::PointingHand);
+                            if row_resp.clicked() {
+                                pick = Some(id);
+                                ui.memory_mut(|m| {
+                                    m.data.insert_temp(popup_id, false);
+                                });
+                            }
+                        }
                     });
-            });
+            }
+        );
 
         // Close when clicking anywhere outside the input container and the popup
         let popup_rect = inner.response.rect;

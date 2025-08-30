@@ -47,7 +47,7 @@ fn draw_badge_with_overlay(
         });
     });
 
-    let resp = ui
+    let _resp = ui
         .interact(
             rect,
             ui.id().with((id_ns, "badge", thread_id)),
@@ -55,41 +55,14 @@ fn draw_badge_with_overlay(
         )
         .on_hover_cursor(eframe::egui::CursorIcon::PointingHand);
 
-    let over_now = ui
-        .input(|i| i.pointer.hover_pos())
-        .map_or(false, |p| rect.contains(p));
-
-    let popup_id: egui::Id = egui::Id::new((id_ns, "overlay", thread_id));
-    let mut is_open = ui
-        .memory(|m| m.data.get_temp::<bool>(popup_id))
-        .unwrap_or(false);
-    if resp.hovered() || over_now {
-        is_open = true;
-    }
-    if is_open {
-        let popup_pos = egui::pos2(rect.min.x, rect.min.y - 6.0);
-        let inner = egui::Area::new(popup_id)
-            .order(egui::Order::Foreground)
-            .fixed_pos(popup_pos)
-            .show(ui.ctx(), |ui| {
-                egui::Frame::default()
-                    .fill(Color32::from_rgb(28, 28, 28))
-                    .stroke(Stroke::new(1.0, Color32::from_gray(60)))
-                    .rounding(Rounding::same(6.0))
-                    .inner_margin(6.0)
-                    .show(ui, |ui| overlay_ui(ui));
-            });
-        let pointer_pos = ui.input(|i| i.pointer.hover_pos());
-        let over_badge = pointer_pos.map_or(false, |p| rect.contains(p));
-        let overlay_rect = inner.response.rect;
-        let over_overlay = pointer_pos.map_or(false, |p| overlay_rect.contains(p));
-        if !(over_badge || over_overlay) {
-            is_open = false;
-        }
-    }
-    ui.memory_mut(|m| {
-        m.data.insert_temp(popup_id, is_open);
-    });
+    crate::views::ui_helpers::show_sticky_overlay(
+        ui,
+        rect,
+        (id_ns, thread_id),
+        6.0,
+        6.0,
+        overlay_ui,
+    );
 }
 
 /// Hover info for the cover area (image + markers).
@@ -247,7 +220,7 @@ pub fn draw_cover(
         let size = egui::vec2(badge_h, badge_h);
         let warn_rect = egui::Rect::from_min_size(egui::pos2(next_x, y0), size);
         ui.expand_to_include_rect(warn_rect);
-        let warn_resp = ui
+        let _warn_resp = ui
             .interact(
                 warn_rect,
                 ui.id().with(("warn_badge", thread.thread_id)),
@@ -280,53 +253,28 @@ pub fn draw_cover(
                 lines.push(format!(" • {}", n));
             }
         }
-        // Persist open while hovering square or the plaque itself
-        let popup_id: egui::Id = egui::Id::new(("warn_overlay", thread.thread_id));
-        let mut is_open = ui.memory(|m| m.data.get_temp::<bool>(popup_id)).unwrap_or(false);
-        // Also open when pointer is over the square (more reliable than Response::hovered in some layouts)
-        let pointer_pos_now = ui.input(|i| i.pointer.hover_pos());
-        let over_square_now = pointer_pos_now.map_or(false, |p| warn_rect.contains(p));
-        if warn_resp.hovered() || over_square_now {
-            is_open = true;
-        }
-        if is_open {
-            let popup_pos = egui::pos2(warn_rect.min.x, warn_rect.min.y - 6.0);
-            let inner = egui::Area::new(popup_id)
-                .order(egui::Order::Foreground)
-                .fixed_pos(popup_pos)
-                .show(ui.ctx(), |ui| {
-                    egui::Frame::default()
-                        .fill(Color32::from_rgb(28, 28, 28))
-                        .stroke(Stroke::new(1.0, Color32::from_gray(60)))
-                        .rounding(Rounding::same(6.0))
-                        .inner_margin(4.)
-                        .show(ui, |ui| {
-                            //ui.set_min_width(220.0);
-                            for (i, line) in lines.iter().enumerate() {
-                                if line.is_empty() {
-                                    ui.add_space(4.0);
-                                } else {
-                                    let mut text = RichText::new(line.clone()).color(Color32::from_gray(220));
-                                    if line == "Tags:" || line == "Prefixes:" {
-                                        text = text.strong();
-                                    }
-                                    ui.label(text);
-                                }
-                                if i + 1 < lines.len() { /* keep compact */ }
-                            }
-                        });
-                });
-            let pointer_pos = ui.input(|i| i.pointer.hover_pos());
-            let over_square = pointer_pos.map_or(false, |p| warn_rect.contains(p));
-            let overlay_rect = inner.response.rect;
-            let over_overlay = pointer_pos.map_or(false, |p| overlay_rect.contains(p));
-            if !(over_square || over_overlay) {
-                is_open = false;
-            }
-        }
-        ui.memory_mut(|m| {
-            m.data.insert_temp(popup_id, is_open);
-        });
+        crate::views::ui_helpers::show_sticky_overlay(
+            ui,
+            warn_rect,
+            ("warn_overlay", thread.thread_id.get()),
+            6.0,
+            4.0,
+            |ui| {
+                //ui.set_min_width(220.0);
+                for (i, line) in lines.iter().enumerate() {
+                    if line.is_empty() {
+                        ui.add_space(4.0);
+                    } else {
+                        let mut text = RichText::new(line.clone()).color(Color32::from_gray(220));
+                        if line == "Tags:" || line == "Prefixes:" {
+                            text = text.strong();
+                        }
+                        ui.label(text);
+                    }
+                    if i + 1 < lines.len() { /* keep compact */ }
+                }
+            },
+        );
     }
 
     // Markers (small horizontal dashes) under the image: show only on hover.

@@ -229,7 +229,25 @@ let _permit = CACHE_CONCURRENCY.acquire().await.unwrap();
             }
         }
 
-        // Skip cover download here; UI cover fetch will opportunistically persist it via maybe_save_cover_png().
+        // Save cover if missing
+        let cover_path = cache_dir.join("cover.png");
+        if tokio::fs::metadata(&cover_path).await.is_err() && !cover_url.is_empty() {
+            let url = crate::parser::normalize_url(&cover_url);
+            match crate::parser::fetch_image_f95(&url).await {
+                Ok((w, h, rgba)) => {
+                    if let Err(e) = write_png_file(&cover_path, w, h, rgba).await {
+                        log::warn!(
+                            "cache-quick-from: save cover {} failed: {}",
+                            cover_path.to_string_lossy(),
+                            e
+                        );
+                    }
+                }
+                Err(e) => {
+                    log::warn!("cache-quick-from: fetch cover failed: id={} err={}", id, e);
+                }
+            }
+        }
     });
 }
 
@@ -283,7 +301,25 @@ let _permit = CACHE_CONCURRENCY.acquire().await.unwrap();
             }
         }
 
-        // Skip cover download here; UI cover fetch will opportunistically persist it via maybe_save_cover_png().
+        // Save cover if missing
+        let cover_path = cache_dir.join("cover.png");
+        if tokio::fs::metadata(&cover_path).await.is_err() {
+            let cover_url = crate::parser::normalize_url(&meta.cover);
+            match crate::parser::fetch_image_f95(&cover_url).await {
+                Ok((w, h, rgba)) => {
+                    if let Err(e) = write_png_file(&cover_path, w, h, rgba).await {
+                        log::warn!(
+                            "cache-quick: save cover {} failed: {}",
+                            cover_path.to_string_lossy(),
+                            e
+                        );
+                    }
+                }
+                Err(e) => {
+                    log::warn!("cache-quick: fetch cover failed: id={} err={}", thread_id, e);
+                }
+            }
+        }
     });
 }
 
@@ -416,168 +452,6 @@ let _permit = CACHE_CONCURRENCY.acquire().await.unwrap();
                         log::warn!(
                             "cache-from: fetch screen failed: id={} idx={} err={}",
                             id,
-                            jidx,
-                            e
-                        );
-                    }
-                }
-            }
-        }
-    });
-}
-
-pub fn spawn_cache_for_thread(thread_id: u64) {
-    // Check setting; default is false
-    let enabled = { APP_SETTINGS.read().unwrap().cache_on_download };
-    if !enabled {
-        return;
-    }
-
-    // Spawn async task on the runtime
-    crate::app::rt().spawn(async move {
-        // Limit global cache tasks concurrency
-let _permit = CACHE_CONCURRENCY.acquire().await.unwrap();
-        // Create cache/<thread_id> folder under configured base
-        let cache_dir: PathBuf = cache_dir_for(thread_id);
-        if let Err(e) = tokio::fs::create_dir_all(&cache_dir).await {
-            log::warn!(
-                "cache: failed to create dir {}: {}",
-                cache_dir.to_string_lossy(),
-                e
-            );
-            return;
-        }
-
-        // Fetch thread metadata from thread page
-        let meta = match crate::parser::game_info::thread_meta::fetch_thread_meta(thread_id).await {
-            Ok(m) => m,
-            Err(e) => {
-                log::warn!("cache: fetch_thread_meta({}): {}", thread_id, e);
-                return;
-            }
-        };
-
-        // Persist metadata JSON
-        let meta_json_path = cache_dir.join("meta.json");
-        let cached = CachedThreadMeta {
-            thread_id,
-            title: meta.title.clone(),
-            creator: meta.creator.clone(),
-            version: meta.version.clone(),
-            cover_url: meta.cover.clone(),
-            screens: meta.screens.clone(),
-            tag_ids: meta.tag_ids.clone(),
-        };
-        match serde_json::to_string_pretty(&cached) {
-            Ok(s) => {
-                if let Err(e) = tokio::fs::write(&meta_json_path, s).await {
-                    log::warn!(
-                        "cache: write meta.json failed {}: {}",
-                        meta_json_path.to_string_lossy(),
-                        e
-                    );
-                }
-            }
-            Err(e) => {
-                log::warn!("cache: serialize meta.json failed: {}", e);
-            }
-        }
-
-
-        // Save cover as cover.png
-        let cover_url = crate::parser::normalize_url(&meta.cover);
-        match crate::parser::fetch_image_f95(&cover_url).await {
-            Ok((w, h, rgba)) => {
-                let cover_path = cache_dir.join("cover.png");
-                if let Err(e) = write_png_file(&cover_path, w, h, rgba).await {
-                    log::warn!(
-                        "cache: save cover {} failed: {}",
-                        cover_path.to_string_lossy(),
-                        e
-                    );
-                } else {
-                    log::info!(
-                        "cache: saved cover for {} -> {}",
-                        thread_id,
-                        cover_path.to_string_lossy()
-                    );
-                }
-            }
-            Err(e) => {
-                log::warn!("cache: fetch cover failed: id={} err={}", thread_id, e);
-            }
-        }
-
-        // Save screenshots as screen_1.png, screen_2.png, ...
-        // Download screenshots concurrently with a small limit and skip existing files
-        let mut set = tokio::task::JoinSet::new();
-        let max = 3usize;
-        for (idx, url) in meta.screens.iter().enumerate() {
-            let path = cache_dir.join(format!("screen_{}.png", idx + 1));
-            if tokio::fs::metadata(&path).await.is_ok() {
-                continue;
-            }
-            let url2 = crate::parser::normalize_url(url);
-            set.spawn(async move {
-                let res = crate::parser::fetch_image_f95(&url2).await;
-                (idx, res, path)
-            });
-            if set.len() >= max {
-                if let Some(joined) = set.join_next().await {
-                    if let Ok((jidx, res, jpath)) = joined {
-                        match res {
-                            Ok((w, h, rgba)) => {
-                                if let Err(e) = write_png_file(&jpath, w, h, rgba).await {
-                                    log::warn!(
-                                        "cache: save screen {} failed: {}",
-                                        jpath.to_string_lossy(),
-                                        e
-                                    );
-                                } else {
-                                    log::info!(
-                                        "cache: saved screen {} for {} -> {}",
-                                        jidx + 1,
-                                        thread_id,
-                                        jpath.to_string_lossy()
-                                    );
-                                }
-                            }
-                            Err(e) => {
-                                log::warn!(
-                                    "cache: fetch screen failed: id={} idx={} err={}",
-                                    thread_id,
-                                    jidx,
-                                    e
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        while let Some(joined) = set.join_next().await {
-            if let Ok((jidx, res, jpath)) = joined {
-                match res {
-                    Ok((w, h, rgba)) => {
-                        if let Err(e) = write_png_file(&jpath, w, h, rgba).await {
-                            log::warn!(
-                                "cache: save screen {} failed: {}",
-                                jpath.to_string_lossy(),
-                                e
-                            );
-                        } else {
-                            log::info!(
-                                "cache: saved screen {} for {} -> {}",
-                                jidx + 1,
-                                thread_id,
-                                jpath.to_string_lossy()
-                            );
-                        }
-                    }
-                    Err(e) => {
-                        log::warn!(
-                            "cache: fetch screen failed: id={} idx={} err={}",
-                            thread_id,
                             jidx,
                             e
                         );
