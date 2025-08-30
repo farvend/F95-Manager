@@ -41,22 +41,28 @@ impl Sorting {
 pub enum DateLimit {
     #[default]
     Anytime,
+    Today,
     Days3,
-    Week1,
-    Month1,
-    Month3,
-    Year1,
+    Days7,
+    Days14,
+    Days30,
+    Days90,
+    Days180,
+    Days365,
 }
 impl std::fmt::Display for DateLimit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use DateLimit::*;
         let s = match self {
             Anytime => "ANYTIME",
+            Today => "TODAY",
             Days3 => "LAST 3 DAYS",
-            Week1 => "LAST 7 DAYS",
-            Month1 => "LAST MONTH",
-            Month3 => "LAST 3 MONTHS",
-            Year1 => "LAST YEAR",
+            Days7 => "LAST 7 DAYS",
+            Days14 => "LAST 14 DAYS",
+            Days30 => "LAST 30 DAYS",
+            Days90 => "LAST 90 DAYS",
+            Days180 => "LAST 180 DAYS",
+            Days365 => "LAST 365 DAYS",
         };
         f.write_str(s)
     }
@@ -147,6 +153,53 @@ impl EnumWithAlternativeNames for SearchMode {
         match self {
             SearchMode::Creator => "CREATOR",
             SearchMode::Title => "TITLE",
+        }
+    }
+}
+
+// Localization keys for enums used in Filters UI
+impl crate::views::filters::LocalizableName for Sorting {
+    fn loc_key(&self) -> &'static str {
+        match self {
+            Sorting::Date => "sorting-date",
+            Sorting::Likes => "sorting-likes",
+            Sorting::Views => "sorting-views",
+            Sorting::Title => "sorting-title",
+            Sorting::Rating => "sorting-rating",
+        }
+    }
+}
+
+impl crate::views::filters::LocalizableName for DateLimit {
+    fn loc_key(&self) -> &'static str {
+        match self {
+            DateLimit::Anytime => "date-limit-anytime",
+            DateLimit::Today => "date-limit-today",
+            DateLimit::Days3 => "date-limit-days3",
+            DateLimit::Days7 => "date-limit-days7",
+            DateLimit::Days14 => "date-limit-days14",
+            DateLimit::Days30 => "date-limit-days30",
+            DateLimit::Days90 => "date-limit-days90",
+            DateLimit::Days180 => "date-limit-days180",
+            DateLimit::Days365 => "date-limit-days365",
+        }
+    }
+}
+
+impl crate::views::filters::LocalizableName for TagLogic {
+    fn loc_key(&self) -> &'static str {
+        match self {
+            TagLogic::Or => "tag-logic-or",
+            TagLogic::And => "tag-logic-and",
+        }
+    }
+}
+
+impl crate::views::filters::LocalizableName for SearchMode {
+    fn loc_key(&self) -> &'static str {
+        match self {
+            SearchMode::Creator => "search-mode-creator",
+            SearchMode::Title => "search-mode-title",
         }
     }
 }

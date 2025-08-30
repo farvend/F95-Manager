@@ -117,11 +117,14 @@ impl F95Filters {
     pub fn with_date_limit(mut self, limit: DateLimit) -> Self {
         self.date_days = match limit {
             DateLimit::Anytime => None,
+            DateLimit::Today => Some(1),
             DateLimit::Days3 => Some(3),
-            DateLimit::Week1 => Some(7),
-            DateLimit::Month1 => Some(30),
-            DateLimit::Month3 => Some(90),
-            DateLimit::Year1 => Some(365),
+            DateLimit::Days7 => Some(7),
+            DateLimit::Days14 => Some(14),
+            DateLimit::Days30 => Some(30),
+            DateLimit::Days90 => Some(90),
+            DateLimit::Days180 => Some(180),
+            DateLimit::Days365 => Some(365),
         };
         self
     }

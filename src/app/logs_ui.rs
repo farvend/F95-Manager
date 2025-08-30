@@ -35,7 +35,7 @@ pub fn draw_logs_viewport(ctx: &egui::Context) {
     ctx.show_viewport_immediate(
         viewport_id,
         egui::ViewportBuilder::default()
-            .with_title("Logs")
+            .with_title(crate::localization::translate("logs-window-title"))
             .with_inner_size([800.0, 500.0])
             .with_resizable(true),
         move |ctx, _class| {
@@ -52,22 +52,22 @@ pub fn draw_logs_viewport(ctx: &egui::Context) {
             egui::CentralPanel::default().show(ctx, |ui| {
                 // Toolbar
                 ui.horizontal(|ui| {
-                    if ui.button("Clear").clicked() {
+                    if ui.button(crate::localization::translate("logs-clear")).clicked() {
                         crate::logger::clear();
                     }
-                    if ui.button("Copy").clicked() {
+                    if ui.button(crate::localization::translate("logs-copy")).clicked() {
                         let text = crate::logger::get_all().join("\n");
                         ui.output_mut(|o| o.copied_text = text);
                     }
                     // Autoscroll toggle
                     let mut autoscroll = AUTOSCROLL.read().map(|g| *g).unwrap_or(true);
-                    if ui.checkbox(&mut autoscroll, "Autoscroll").changed() {
+                    if ui.checkbox(&mut autoscroll, crate::localization::translate("logs-autoscroll")).changed() {
                         if let Ok(mut w) = AUTOSCROLL.write() {
                             *w = autoscroll;
                         }
                     }
                     ui.separator();
-                    ui.label(format!("{} lines", crate::logger::len()));
+                    ui.label(crate::localization::translate_with("logs-lines", &[("n", crate::logger::len().to_string())]));
                 });
                 ui.separator();
 

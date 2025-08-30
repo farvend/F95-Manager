@@ -208,8 +208,8 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                 //         *CACHE_ON_DOWNLOAD_INPUT.write().unwrap() = cache_val;
                 //     }
                 // });
-                ui.label("Startup tags (added on app start):");
-                if let Some(id) = tags_picker(ui, "settings_startup_tags", "Select a startup tag...") {
+                ui.label(crate::localization::translate("settings-startup-tags"));
+                if let Some(id) = tags_picker(ui, "settings_startup_tags", crate::localization::translate("settings-startup-tags-placeholder").as_str()) {
                     let mut list = STARTUP_TAGS_INPUT.write().unwrap();
                     if list.len() < 10 && !list.contains(&id) {
                         list.push(id);
@@ -237,8 +237,8 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                 });
 
                 ui.add_space(6.0);
-                ui.label("Startup exclude tags (excluded on app start):");
-                if let Some(id) = tags_picker(ui, "settings_startup_exclude_tags", "Select a tag to exclude at startup...") {
+                ui.label(crate::localization::translate("settings-startup-exclude-tags"));
+                if let Some(id) = tags_picker(ui, "settings_startup_exclude_tags", crate::localization::translate("settings-startup-exclude-tags-placeholder").as_str()) {
                     let mut list = STARTUP_EXCLUDE_TAGS_INPUT.write().unwrap();
                     if list.len() < 10 && !list.contains(&id) {
                         list.push(id);
@@ -266,8 +266,8 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                 });
 
                 ui.add_space(6.0);
-                ui.label("Startup prefixes (included on app start):");
-                if let Some(id) = prefixes_picker(ui, "settings_startup_prefixes", "Select a prefix to include at startup...") {
+                ui.label(crate::localization::translate("settings-startup-prefixes"));
+                if let Some(id) = prefixes_picker(ui, "settings_startup_prefixes", crate::localization::translate("settings-startup-prefixes-placeholder").as_str()) {
                     let mut list = STARTUP_PREFIXES_INPUT.write().unwrap();
                     if list.len() < 10 && !list.contains(&id) {
                         list.push(id);
@@ -299,8 +299,8 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                 });
 
                 ui.add_space(6.0);
-                ui.label("Startup exclude prefixes (excluded on app start):");
-                if let Some(id) = prefixes_picker(ui, "settings_startup_exclude_prefixes", "Select a prefix to exclude at startup...") {
+                ui.label(crate::localization::translate("settings-startup-exclude-prefixes"));
+                if let Some(id) = prefixes_picker(ui, "settings_startup_exclude_prefixes", crate::localization::translate("settings-startup-exclude-prefixes-placeholder").as_str()) {
                     let mut list = STARTUP_EXCLUDE_PREFIXES_INPUT.write().unwrap();
                     if list.len() < 10 && !list.contains(&id) {
                         list.push(id);
@@ -332,10 +332,10 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                 });
 
                 ui.add_space(6.0);
-                ui.label("Warn on tags/prefixes:");
+                ui.label(crate::localization::translate("settings-warn-heading"));
 
-                ui.label("Warn tags:");
-                if let Some(id) = tags_picker(ui, "settings_warn_tags", "Select a tag to warn...") {
+                ui.label(crate::localization::translate("settings-warn-tags"));
+                if let Some(id) = tags_picker(ui, "settings_warn_tags", crate::localization::translate("settings-warn-tags-placeholder").as_str()) {
                     let mut list = WARN_TAGS_INPUT.write().unwrap();
                     if !list.contains(&id) {
                         list.push(id);
@@ -363,8 +363,8 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                 });
 
                 ui.add_space(6.0);
-                ui.label("Warn prefixes:");
-                if let Some(id) = prefixes_picker(ui, "settings_warn_prefixes", "Select a prefix to warn...") {
+                ui.label(crate::localization::translate("settings-warn-prefixes"));
+                if let Some(id) = prefixes_picker(ui, "settings_warn_prefixes", crate::localization::translate("settings-warn-prefixes-placeholder").as_str()) {
                     let mut list = WARN_PREFIXES_INPUT.write().unwrap();
                     if !list.contains(&id) {
                         list.push(id);
@@ -464,15 +464,15 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
 
                     // Confirmation modal for moving installed games when extract-dir changes
                     if *MOVE_CONFIRM_OPEN.read().unwrap() {
-                        egui::Window::new("Подтверждение изменения папки")
+                        egui::Window::new(crate::localization::translate("settings-move-confirm-title"))
                             .collapsible(false)
                             .resizable(false)
                             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                             .show(ctx, |ui| {
-                                ui.label("Обнаружены установленные игры. Все игры будут перенесены в новую папку. Продолжить?");
+                                ui.label(crate::localization::translate("settings-move-confirm-text"));
                                 ui.add_space(8.0);
                                 ui.horizontal(|ui| {
-                                    if ui.button("Перенести").clicked() {
+                                    if ui.button(crate::localization::translate("settings-move-confirm-move")).clicked() {
                                         let new_extract_str = PENDING_EXTRACT_DIR.read().unwrap().clone();
                                         let old_extract = PENDING_OLD_EXTRACT_DIR.read().unwrap().clone();
                                         let new_extract = std::path::PathBuf::from(&new_extract_str);
@@ -509,7 +509,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                                         // Close confirmation modal, keep settings window open to show progress
                                         *MOVE_CONFIRM_OPEN.write().unwrap() = false;
                                     }
-                                    if ui.button("Отмена").clicked() {
+                                    if ui.button(crate::localization::translate("settings-cancel")).clicked() {
                                         *MOVE_CONFIRM_OPEN.write().unwrap() = false;
                                     }
                                 });
@@ -520,12 +520,12 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
 
             // Show progress / completion overlay while moving games
             if *MOVE_RUNNING.read().unwrap() {
-                egui::Window::new("Перенос установленных игр")
+                egui::Window::new(crate::localization::translate("settings-move-progress-title"))
                     .collapsible(false)
                     .resizable(false)
                     .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                     .show(ctx, |ui| {
-                        ui.label("Переносим игры… Не закрывайте приложение.");
+                        ui.label(crate::localization::translate("settings-move-progress-text"));
                     });
                 ctx.request_repaint(); // keep UI responsive during background work
             } else {

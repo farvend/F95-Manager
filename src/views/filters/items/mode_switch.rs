@@ -8,7 +8,12 @@ use crate::views::filters::EnumWithAlternativeNames;
 
 pub fn mode_switch_small<T>(ui: &mut Ui, name: &str, current: &T) -> Option<T>
 where
-    T: IntoEnumIterator + EnumCount + PartialEq + Clone + EnumWithAlternativeNames,
+    T: IntoEnumIterator
+        + EnumCount
+        + PartialEq
+        + Clone
+        + EnumWithAlternativeNames
+        + crate::views::filters::LocalizableName,
 {
     let mut changed_to: Option<T> = None;
 
@@ -33,7 +38,7 @@ where
             for (i, v) in variants.iter().enumerate() {
                 let is_active = *v == *current;
                 let color = if is_active { accent } else { inactive };
-                let txt = v.alternative_name().to_uppercase();
+                let txt = crate::localization::translate(v.loc_key());
 
                 job.append(
                     &txt,

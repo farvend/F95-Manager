@@ -7,13 +7,19 @@ use strum::{EnumCount, IntoEnumIterator};
 /// Returns Some(new_variant) when user clicked a segment this frame.
 pub fn segmented_panel<T>(ui: &mut Ui, name: &str, current: &mut T) -> bool
 where
-    T: IntoEnumIterator + EnumCount + crate::views::filters::EnumWithAlternativeNames + PartialEq + Clone + ToString,
+    T: IntoEnumIterator
+        + EnumCount
+        + crate::views::filters::EnumWithAlternativeNames
+        + crate::views::filters::LocalizableName
+        + PartialEq
+        + Clone
+        + ToString,
 {
     // Header: label left, current value right
     ui.horizontal(|ui| {
-        ui.add(eframe::egui::Label::new(RichText::new(name).weak()).selectable(false));
+        ui.add(eframe::egui::Label::new(RichText::new(crate::localization::translate(name)).weak()).selectable(false));
         ui.with_layout(eframe::egui::Layout::right_to_left(eframe::egui::Align::Center), |ui| {
-            ui.add(eframe::egui::Label::new(RichText::new(current.to_string())).selectable(false));
+            ui.add(eframe::egui::Label::new(RichText::new(crate::localization::translate(current.loc_key()))).selectable(false));
         });
     });
 

@@ -6,7 +6,7 @@ use eframe::egui::{self, pos2, Color32, Rect, RichText, Rounding, Stroke, Ui, Ve
 /// Returns Some(new_value) if changed by user interaction this frame.
 pub fn discrete_slider<T>(ui: &mut Ui, name: &str, current: &T, values: &[T]) -> Option<T>
 where
-    T: PartialEq + Clone + ToString,
+    T: PartialEq + Clone + ToString + crate::views::filters::LocalizableName,
 {
     // Header: label left, current value right
     ui.horizontal(|ui| {
@@ -14,7 +14,7 @@ where
         ui.with_layout(
             eframe::egui::Layout::right_to_left(eframe::egui::Align::Center),
             |ui| {
-                ui.add(egui::Label::new(RichText::new(current.to_string())).selectable(false));
+                ui.add(egui::Label::new(RichText::new(crate::localization::translate(current.loc_key()))).selectable(false));
             },
         );
     });

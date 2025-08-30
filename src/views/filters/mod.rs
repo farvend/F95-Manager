@@ -5,3 +5,7 @@ pub use render::draw_filters_panel;
 pub trait EnumWithAlternativeNames {
     fn alternative_name(&self) -> &'static str;
 }
+
+pub trait LocalizableName {
+    fn loc_key(&self) -> &'static str;
+}

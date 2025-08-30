@@ -39,11 +39,11 @@ pub fn draw_filters_panel(
         )
         .resizable(false)
         .show(ctx, |ui| {
-            ui.label(RichText::new("Filters").strong());
+            ui.label(RichText::new(crate::localization::translate("filters-title")).strong());
             ui.separator();
 
             // SORTING
-            if segmented_panel(ui, "SORTING", sort) {
+            if segmented_panel(ui, "filters-sorting", sort) {
                 changed_now = true;
             }
 
@@ -51,7 +51,7 @@ pub fn draw_filters_panel(
 
             // DATE LIMIT
             let values: Vec<DateLimit> = DateLimit::iter().collect();
-            if let Some(new_limit) = discrete_slider(ui, "DATE LIMIT", date_limit, &values) {
+            if let Some(new_limit) = discrete_slider(ui, crate::localization::translate("filters-date-limit").as_str(), date_limit, &values) {
                 *date_limit = new_limit;
                 changed_now = true;
             }
@@ -59,7 +59,7 @@ pub fn draw_filters_panel(
             ui.separator();
 
             // SEARCH
-            if let Some(new_mode) = mode_switch_small(ui, "SEARCH", search_mode) {
+            if let Some(new_mode) = mode_switch_small(ui, crate::localization::translate("filters-search").as_str(), search_mode) {
                 *search_mode = new_mode;
                 changed_now = true;
             }
@@ -68,11 +68,11 @@ pub fn draw_filters_panel(
             ui.separator();
 
             // TAGS (MAX 10) with OR/AND logic
-            if let Some(new_mode) = mode_switch_small(ui, "TAGS (MAX 10)", include_logic) {
+            if let Some(new_mode) = mode_switch_small(ui, crate::localization::translate_with("filters-include-tags-header", &[("max", "10".to_string())]).as_str(), include_logic) {
                 *include_logic = new_mode;
                 changed_now = true;
             }
-            if let Some(id) = tags_picker(ui, "include_tags", "Select a tag to filter...") {
+            if let Some(id) = tags_picker(ui, "include_tags", crate::localization::translate("filters-select-tag-include").as_str()) {
                 if include_tags.len() < 10 && !include_tags.contains(&id) {
                     include_tags.push(id);
                     // Clear main text query when picking a tag
@@ -101,8 +101,8 @@ pub fn draw_filters_panel(
             ui.separator();
 
             // EXCLUDE TAGS (MAX 10)
-            ui.label(RichText::new("EXCLUDE TAGS (MAX 10)").weak());
-            if let Some(id) = tags_picker(ui, "exclude_tags", "Select a tag to exclude...") {
+            ui.label(RichText::new(crate::localization::translate_with("filters-exclude-tags-header", &[("max", "10".to_string())])).weak());
+            if let Some(id) = tags_picker(ui, "exclude_tags", crate::localization::translate("filters-select-tag-exclude").as_str()) {
                 if exclude_tags.len() < 10 && !exclude_tags.contains(&id) {
                     exclude_tags.push(id);
                     // Clear main text query when picking a tag
@@ -130,8 +130,8 @@ pub fn draw_filters_panel(
             ui.separator();
 
             // PREFIXES (MAX 10)
-            ui.label(RichText::new("PREFIXES (MAX 10)").weak());
-            if let Some(id) = prefixes_picker(ui, "include_prefixes", "Select a prefix to filter...") {
+            ui.label(RichText::new(crate::localization::translate_with("filters-include-prefixes-header", &[("max", "10".to_string())])).weak());
+            if let Some(id) = prefixes_picker(ui, "include_prefixes", crate::localization::translate("filters-select-prefix-include").as_str()) {
                 if include_prefixes.len() < 10 && !include_prefixes.contains(&id) {
                     include_prefixes.push(id);
                     changed_now = true;
@@ -162,8 +162,8 @@ pub fn draw_filters_panel(
             ui.separator();
 
             // EXCLUDE PREFIXES (MAX 10)
-            ui.label(RichText::new("EXCLUDE PREFIXES (MAX 10)").weak());
-            if let Some(id) = prefixes_picker(ui, "exclude_prefixes", "Select a prefix to exclude...") {
+            ui.label(RichText::new(crate::localization::translate_with("filters-exclude-prefixes-header", &[("max", "10".to_string())])).weak());
+            if let Some(id) = prefixes_picker(ui, "exclude_prefixes", crate::localization::translate("filters-select-prefix-exclude").as_str()) {
                 if exclude_prefixes.len() < 10 && !exclude_prefixes.contains(&id) {
                     exclude_prefixes.push(id);
                     changed_now = true;
@@ -193,17 +193,17 @@ pub fn draw_filters_panel(
 
             ui.add_space(8.0);
             ui.with_layout(Layout::bottom_up(egui::Align::LEFT), |ui| {
-                if ui.button("Logs").clicked() {
+                if ui.button(crate::localization::translate("common-logs")).clicked() {
                     logs_clicked = true;
                 }
-                if ui.button("About").clicked() {
+                if ui.button(crate::localization::translate("common-about")).clicked() {
                     about_clicked = true;
                 }
-                if ui.button("Settings").clicked() {
+                if ui.button(crate::localization::translate("common-settings")).clicked() {
                     settings_clicked = true;
                 }
                 // Library toggle above Settings
-                let label = if *library_only { "Library (ON)" } else { "Library" };
+                let label = if *library_only { crate::localization::translate("filters-library-on") } else { crate::localization::translate("filters-library") };
                 if ui.button(label).clicked() {
                     *library_only = !*library_only;
                 }
