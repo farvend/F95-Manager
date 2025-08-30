@@ -4,6 +4,94 @@ use crate::{parser::F95Thread, views::cards::items::card::CardHover};
 use crate::parser::game_info::link::DownloadLink;
 use crate::app::settings as app_settings;
 
+fn draw_badge_with_overlay(
+    ui: &mut egui::Ui,
+    thread_id: u64,
+    cover_rect: egui::Rect,
+    id_ns: &'static str,
+    label: &str,
+    bg_color: Color32,
+    overlay_ui: impl FnOnce(&mut egui::Ui),
+) {
+    let font_id = egui::TextStyle::Small.resolve(ui.style()).clone();
+    let text_color = Color32::WHITE;
+    let text_w = ui.fonts(|f| {
+        f.layout_no_wrap(label.to_string(), font_id.clone(), text_color)
+            .rect
+            .width()
+    });
+    let badge_h = 18.0f32;
+    let pad_x = 12.0f32;
+    let w = text_w + pad_x * 2.0;
+    let pad = 8.0f32;
+    let rect = egui::Rect::from_min_max(
+        egui::pos2(cover_rect.max.x - pad - w, cover_rect.max.y - pad - badge_h),
+        egui::pos2(cover_rect.max.x - pad, cover_rect.max.y - pad),
+    );
+
+    ui.expand_to_include_rect(rect);
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(rect, Rounding::same(4.0), bg_color);
+    painter.rect_stroke(
+        rect,
+        Rounding::same(4.0),
+        Stroke::new(1.0, Color32::from_gray(40)),
+    );
+    ui.allocate_ui_at_rect(rect, |ui| {
+        ui.centered_and_justified(|ui| {
+            ui.add(
+                egui::Label::new(RichText::new(label).color(text_color))
+                    .truncate(true)
+                    .wrap(false),
+            );
+        });
+    });
+
+    let resp = ui
+        .interact(
+            rect,
+            ui.id().with((id_ns, "badge", thread_id)),
+            Sense::hover(),
+        )
+        .on_hover_cursor(eframe::egui::CursorIcon::PointingHand);
+
+    let over_now = ui
+        .input(|i| i.pointer.hover_pos())
+        .map_or(false, |p| rect.contains(p));
+
+    let popup_id: egui::Id = egui::Id::new((id_ns, "overlay", thread_id));
+    let mut is_open = ui
+        .memory(|m| m.data.get_temp::<bool>(popup_id))
+        .unwrap_or(false);
+    if resp.hovered() || over_now {
+        is_open = true;
+    }
+    if is_open {
+        let popup_pos = egui::pos2(rect.min.x, rect.min.y - 6.0);
+        let inner = egui::Area::new(popup_id)
+            .order(egui::Order::Foreground)
+            .fixed_pos(popup_pos)
+            .show(ui.ctx(), |ui| {
+                egui::Frame::default()
+                    .fill(Color32::from_rgb(28, 28, 28))
+                    .stroke(Stroke::new(1.0, Color32::from_gray(60)))
+                    .rounding(Rounding::same(6.0))
+                    .inner_margin(6.0)
+                    .show(ui, |ui| overlay_ui(ui));
+            });
+        let pointer_pos = ui.input(|i| i.pointer.hover_pos());
+        let over_badge = pointer_pos.map_or(false, |p| rect.contains(p));
+        let overlay_rect = inner.response.rect;
+        let over_overlay = pointer_pos.map_or(false, |p| overlay_rect.contains(p));
+        if !(over_badge || over_overlay) {
+            is_open = false;
+        }
+    }
+    ui.memory_mut(|m| {
+        m.data.insert_temp(popup_id, is_open);
+    });
+}
+
 /// Hover info for the cover area (image + markers).
 // pub struct CoverHover {
 //     pub hovered: bool,
@@ -339,196 +427,62 @@ pub fn draw_cover(
 
     // Select Link badge (shown when backend requests link selection)
     if let Some(links) = link_choices {
-        let font_id = egui::TextStyle::Small.resolve(ui.style()).clone();
-        let text_color = Color32::WHITE;
-        let label = "SELECT LINK";
-        let text_w = ui.fonts(|f| {
-            f.layout_no_wrap(label.to_string(), font_id.clone(), text_color)
-                .rect
-                .width()
-        });
-        let badge_h = 18.0f32;
-        let pad_x = 12.0f32;
-        let w = text_w + pad_x * 2.0;
-        let pad = 8.0f32;
-        let sel_rect = egui::Rect::from_min_max(
-            egui::pos2(cover_rect.max.x - pad - w, cover_rect.max.y - pad - badge_h),
-            egui::pos2(cover_rect.max.x - pad, cover_rect.max.y - pad),
-        );
-        ui.expand_to_include_rect(sel_rect);
-        let painter = ui.painter_at(sel_rect);
-        painter.rect_filled(sel_rect, Rounding::same(4.0), Color32::from_rgb(60, 120, 200));
-        painter.rect_stroke(
-            sel_rect,
-            Rounding::same(4.0),
-            Stroke::new(1.0, Color32::from_gray(40)),
-        );
-        ui.allocate_ui_at_rect(sel_rect, |ui| {
-            ui.centered_and_justified(|ui| {
-                ui.add(
-                    egui::Label::new(RichText::new(label).color(text_color))
-                        .truncate(true)
-                        .wrap(false),
-                );
-            });
-        });
-        // Interactive hover area
-        let sel_resp = ui
-            .interact(
-                sel_rect,
-                ui.id().with(("dl_select_badge", thread.thread_id)),
-                Sense::hover(),
-            )
-            .on_hover_cursor(eframe::egui::CursorIcon::PointingHand);
-        // Keep overlay open while hovering badge or overlay itself
-        let over_sel_now = ui
-            .input(|i| i.pointer.hover_pos())
-            .map_or(false, |p| sel_rect.contains(p));
-        let popup_id: egui::Id = egui::Id::new(("dl_select_overlay", thread.thread_id));
-        let mut is_open = ui.memory(|m| m.data.get_temp::<bool>(popup_id)).unwrap_or(false);
-        if sel_resp.hovered() || over_sel_now {
-            is_open = true;
-        }
-        if is_open {
-            let popup_pos = egui::pos2(sel_rect.min.x, sel_rect.min.y - 6.0);
-            let inner = egui::Area::new(popup_id)
-                .order(egui::Order::Foreground)
-                .fixed_pos(popup_pos)
-                .show(ui.ctx(), |ui| {
-                    egui::Frame::default()
-                        .fill(Color32::from_rgb(28, 28, 28))
-                        .stroke(Stroke::new(1.0, Color32::from_gray(60)))
-                        .rounding(Rounding::same(6.0))
-                        .inner_margin(6.0)
-                        .show(ui, |ui| {
-                            ui.set_max_width(250.);
-                            for link in links.iter() {
-                                let label = match link {
-                                    crate::parser::game_info::link::DownloadLink::Direct(d) => {
-                                        let last = d.path
-                                            .iter()
-                                            .intersperse(&"/".to_string())
-                                            .cloned()
-                                            .collect::<String>();
-                                        format!("{}/{}", d.hosting.to_string(), last)
-                                    }
-                                    crate::parser::game_info::link::DownloadLink::Masked(u) => {
-                                        format!("{}{}", u.domain().unwrap(), u.path())
-                                    }
-                                };
-                                ui.horizontal(|ui| {
-                                    if ui.add(
-                                        Label::new(
-                                            RichText::new(label)
-                                        ).truncate(true)
-                                        .selectable(true)
-                                        .sense(Sense::click())
-                                        .selectable(false)
-                                    ).on_hover_cursor(egui::CursorIcon::PointingHand)
-                                    .clicked() {
-                                        selected_link = Some(link.clone());
-                                    }
-                                    //ui.label(RichText::new(label).color(Color32::from_gray(220)));
-                                    // if ui.button("Download").clicked() {
-                                    //     selected_link = Some(link.clone());
-                                    // }
-                                });
-                            }
-                        });
-                });
-            let pointer_pos = ui.input(|i| i.pointer.hover_pos());
-            let over_badge = pointer_pos.map_or(false, |p| sel_rect.contains(p));
-            let overlay_rect = inner.response.rect;
-            let over_overlay = pointer_pos.map_or(false, |p| overlay_rect.contains(p));
-            if !(over_badge || over_overlay) {
-                is_open = false;
+        draw_badge_with_overlay(
+            ui,
+            thread.thread_id.get(),
+            cover_rect,
+            "dl_select",
+            "SELECT LINK",
+            Color32::from_rgb(60, 120, 200),
+            |ui| {
+                ui.set_max_width(250.);
+                for link in links.iter() {
+                    let label = match link {
+                        crate::parser::game_info::link::DownloadLink::Direct(d) => {
+                            let last = d.path
+                                .iter()
+                                .intersperse(&"/".to_string())
+                                .cloned()
+                                .collect::<String>();
+                            format!("{}/{}", d.hosting.to_string(), last)
+                        }
+                        crate::parser::game_info::link::DownloadLink::Masked(u) => {
+                            format!("{}{}", u.domain().unwrap_or_default(), u.path())
+                        }
+                    };
+                    ui.horizontal(|ui| {
+                        if ui.add(
+                            Label::new(RichText::new(label))
+                                .truncate(true)
+                                .selectable(true)
+                                .sense(Sense::click())
+                                .selectable(false)
+                        ).on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .clicked() {
+                            selected_link = Some(link.clone());
+                        }
+                    });
+                }
             }
-        }
-        ui.memory_mut(|m| {
-            m.data.insert_temp(popup_id, is_open);
-        });
+        );
     }
 
     // Error badge shown when download/unzip error occurs
     if let Some(err) = download_error {
-        let font_id = egui::TextStyle::Small.resolve(ui.style()).clone();
-        let text_color = Color32::WHITE;
-        let label = "ERROR";
-        let text_w = ui.fonts(|f| {
-            f.layout_no_wrap(label.to_string(), font_id.clone(), text_color)
-                .rect
-                .width()
-        });
-        let badge_h = 18.0f32;
-        let pad_x = 12.0f32;
-        let w = text_w + pad_x * 2.0;
-        let pad = 8.0f32;
-        let err_rect = egui::Rect::from_min_max(
-            egui::pos2(cover_rect.max.x - pad - w, cover_rect.max.y - pad - badge_h),
-            egui::pos2(cover_rect.max.x - pad, cover_rect.max.y - pad),
-        );
-        ui.expand_to_include_rect(err_rect);
-        let painter = ui.painter_at(err_rect);
-        painter.rect_filled(err_rect, Rounding::same(4.0), Color32::from_rgb(170, 40, 40));
-        painter.rect_stroke(
-            err_rect,
-            Rounding::same(4.0),
-            Stroke::new(1.0, Color32::from_gray(40)),
-        );
-        ui.allocate_ui_at_rect(err_rect, |ui| {
-            ui.centered_and_justified(|ui| {
+        draw_badge_with_overlay(
+            ui,
+            thread.thread_id.get(),
+            cover_rect,
+            "dl_error",
+            "ERROR",
+            Color32::from_rgb(170, 40, 40),
+            |ui| {
                 ui.add(
-                    egui::Label::new(RichText::new(label).color(text_color))
-                        .truncate(true)
-                        .wrap(false),
+                    egui::Label::new(RichText::new(err).color(Color32::from_gray(220)))
+                        .wrap(true),
                 );
-            });
-        });
-        // Create interactive hit-test area and cursor for hover
-        let err_resp = ui
-            .interact(
-                err_rect,
-                ui.id().with(("dl_error_badge", thread.thread_id)),
-                Sense::hover(),
-            )
-            .on_hover_cursor(eframe::egui::CursorIcon::PointingHand);
-        // Hover detection for error badge (both response and raw-rect check)
-        let over_err_now = ui
-            .input(|i| i.pointer.hover_pos())
-            .map_or(false, |p| err_rect.contains(p));
-        let popup_id: egui::Id = egui::Id::new(("dl_error_overlay", thread.thread_id));
-        let mut is_open = ui.memory(|m| m.data.get_temp::<bool>(popup_id)).unwrap_or(false);
-        if err_resp.hovered() || over_err_now {
-            is_open = true;
-        }
-        if is_open {
-            let popup_pos = egui::pos2(err_rect.min.x, err_rect.min.y - 6.0);
-            let inner = egui::Area::new(popup_id)
-                .order(egui::Order::Foreground)
-                .fixed_pos(popup_pos)
-                .show(ui.ctx(), |ui| {
-                    egui::Frame::default()
-                        .fill(Color32::from_rgb(28, 28, 28))
-                        .stroke(Stroke::new(1.0, Color32::from_gray(60)))
-                        .rounding(Rounding::same(6.0))
-                        .inner_margin(6.0)
-                        .show(ui, |ui| {
-                            ui.add(
-                                egui::Label::new(RichText::new(err).color(Color32::from_gray(220)))
-                                    .wrap(true),
-                            );
-                        });
-                });
-            // keep open while hovering badge or overlay; close otherwise
-            let pointer_pos = ui.input(|i| i.pointer.hover_pos());
-            let over_badge = pointer_pos.map_or(false, |p| err_rect.contains(p));
-            let overlay_rect = inner.response.rect;
-            let over_overlay = pointer_pos.map_or(false, |p| overlay_rect.contains(p));
-            if !(over_badge || over_overlay) {
-                is_open = false;
             }
-        }
-        ui.memory_mut(|m| { m.data.insert_temp(popup_id, is_open); });
+        );
     }
 
     // Thin download progress line at the very bottom of the cover image
