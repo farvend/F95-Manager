@@ -123,9 +123,9 @@ pub fn init() {
     // Install logger
     let _ = log::set_boxed_logger(Box::new(GuiLogger));
 
-    // Log everything by default to ensure full log capture.
+    // Log debug and higher by default to hide TRACE spam.
     // Can be overridden by RUST_LOG environment variable if set.
-    let level = level_from_env().unwrap_or(LevelFilter::Trace);
+    let level = level_from_env().unwrap_or(LevelFilter::Warn);
     log::set_max_level(level);
 
     // Open (or create) log file for appending
@@ -143,10 +143,43 @@ pub fn init() {
     // Install a panic hook to log unexpected panics to log.txt (and in-memory buffer).
     install_panic_hook();
 
-    log::info!(
-        "GUI logger initialized at level {} (persisting to log.txt)",
-        display_level(level)
-    );
+    let persisting = LOG_FILE.lock().map(|g| g.is_some()).unwrap_or(false);
+    if persisting {
+        log::info!(
+            "GUI logger initialized at level {} (persisting to log.txt)",
+            display_level(level)
+        );
+    } else {
+        log::info!(
+            "GUI logger initialized at level {} (file logging disabled)",
+            display_level(level)
+        );
+    }
+}
+
+// Public API: enable or disable file logging at runtime according to settings
+pub fn set_file_logging_enabled(enabled: bool) {
+    if enabled {
+        // Ensure file is open
+        let need_open = LOG_FILE.lock().ok().map(|g| g.is_none()).unwrap_or(false);
+        if need_open {
+            if let Ok(mut lf) = LOG_FILE.lock() {
+                *lf = OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open("log.txt")
+                    .ok();
+            }
+            log::info!("File logging enabled");
+        }
+    } else {
+        if let Ok(mut lf) = LOG_FILE.lock() {
+            if lf.is_some() {
+                *lf = None;
+                log::info!("File logging disabled");
+            }
+        }
+    }
 }
 
 fn display_level(level: LevelFilter) -> &'static str {
