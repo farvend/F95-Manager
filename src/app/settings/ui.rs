@@ -23,6 +23,8 @@ lazy_static! {
     static ref LANGUAGE_INPUT: RwLock<Option<crate::localization::SupportedLang>> = RwLock::new(None);
     // Loading animation preference
     static ref LOADING_ANIM_INPUT: RwLock<crate::app::settings::store::LoadingAnim> = RwLock::new(crate::app::settings::store::LoadingAnim::BottomBar);
+    // New: Toggle file logging (warn+ to log.txt)
+    static ref LOG_TO_FILE_INPUT: RwLock<bool> = RwLock::new(true);
     // State for extract-dir change confirmation and migration
     static ref MOVE_CONFIRM_OPEN: RwLock<bool> = RwLock::new(false);
     static ref PENDING_TEMP_DIR: RwLock<String> = RwLock::new(String::new());
@@ -101,6 +103,10 @@ pub fn open_settings() {
     {
         let mut a = LOADING_ANIM_INPUT.write().unwrap();
         *a = s.loading_anim;
+    }
+    {
+        let mut b = LOG_TO_FILE_INPUT.write().unwrap();
+        *b = s.log_to_file;
     }
     *SETTINGS_OPEN.write().unwrap() = true;
 }
@@ -218,6 +224,14 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     }
                 }
  
+                // New: File logging toggle
+                ui.horizontal(|ui| {
+                    let mut log_to_file = *LOG_TO_FILE_INPUT.read().unwrap();
+                    if ui.checkbox(&mut log_to_file, crate::localization::translate("settings-log-to-file")).changed() {
+                        *LOG_TO_FILE_INPUT.write().unwrap() = log_to_file;
+                    }
+                });
+
                 ui.label(crate::localization::translate("settings-custom-launch"));
                 {
                     let mut custom_val = CUSTOM_LAUNCH_INPUT.read().unwrap().clone();
@@ -452,6 +466,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                                 let startup_exclude_tags = STARTUP_EXCLUDE_TAGS_INPUT.read().unwrap().clone();
                                 let startup_prefixes = STARTUP_PREFIXES_INPUT.read().unwrap().clone();
                                 let startup_exclude_prefixes = STARTUP_EXCLUDE_PREFIXES_INPUT.read().unwrap().clone();
+                                let log_to_file = *LOG_TO_FILE_INPUT.read().unwrap();
                                 let mut st = APP_SETTINGS.write().unwrap();
                                 st.temp_dir = std::path::PathBuf::from(temp_val);
                                 st.extract_dir = new_extract_pb;
@@ -465,6 +480,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                                 st.cache_on_download = cache_on_download;
                                 st.cache_dir = std::path::PathBuf::from(cache_dir_str);
                                 st.loading_anim = loading_anim;
+                                st.log_to_file = log_to_file;
                                 // Store language selection
                                 st.language = *LANGUAGE_INPUT.read().unwrap();
                             } // drop write lock before saving to avoid deadlock
@@ -476,6 +492,11 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                                 } else {
                                     let _ = crate::localization::set_language_auto();
                                 }
+                            }
+                            // Apply logger toggle immediately
+                            {
+                                let enabled = APP_SETTINGS.read().unwrap().log_to_file;
+                                crate::logger::set_file_logging_enabled(enabled);
                             }
                             save_settings_to_disk();
                             *SETTINGS_OPEN.write().unwrap() = false;
@@ -589,6 +610,8 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                         st.loading_anim = loading_anim;
                         // Store language selection (post-migration path)
                         st.language = *LANGUAGE_INPUT.read().unwrap();
+                        // Apply log_to_file setting
+                        st.log_to_file = *LOG_TO_FILE_INPUT.read().unwrap();
                         for (tid, nf, ne) in moved {
                             if let Some(entry) = st.downloaded_games.iter_mut().find(|e| e.thread_id == tid) {
                                 entry.folder = nf;
@@ -606,6 +629,11 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                         } else {
                             let _ = crate::localization::set_language_auto();
                         }
+                    }
+                    // Apply logger toggle immediately
+                    {
+                        let enabled = APP_SETTINGS.read().unwrap().log_to_file;
+                        crate::logger::set_file_logging_enabled(enabled);
                     }
                     save_settings_to_disk();
                     *SETTINGS_OPEN.write().unwrap() = false;
