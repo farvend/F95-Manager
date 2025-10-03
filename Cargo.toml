@@ -29,7 +29,7 @@ futures = "0.3"
 scraper = "0.24.0"
 fluent-bundle = "0.15"
 fluent-syntax = "0.11"
-unic-langid = "0.9"
+unic-langid = { version = "0.9", features = ["unic-langid-macros"] }
 sys-locale = "0.3"
 thiserror = "1.0"
 intl-memoizer = "0.5"
@@ -41,3 +41,6 @@ strip = true
 lto = true
 codegen-units = 1
 panic = "abort"
+
+[build]
+rustflags = ["-C", "link-arg=/STACK:8000000"]

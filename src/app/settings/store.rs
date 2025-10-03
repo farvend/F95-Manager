@@ -1,7 +1,7 @@
 // Settings store: data types, global state, load/save, and records of downloaded games.
 
 use lazy_static::lazy_static;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Deserializer, Serializer};
 use std::path::PathBuf;
 use std::sync::RwLock;
 
@@ -15,6 +15,16 @@ pub struct DownloadedGame {
     pub folder: PathBuf,
     pub exe_path: Option<PathBuf>,
 }
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum LoadingAnim {
+    #[serde(rename = "bottom_bar")]
+    #[default]
+    BottomBar,
+    #[serde(rename = "circle_bottom_right")]
+    CircleBottomRight,
+}
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
@@ -51,9 +61,16 @@ pub struct AppSettings {
     // Cache metadata/images on download click (default: false)
     #[serde(default)]
     pub cache_on_download: bool,
-    // UI language (None = auto/system)
+    // Loading indicator animation type
     #[serde(default)]
-    pub language: Option<String>,
+    pub loading_anim: LoadingAnim,
+    // UI language (None = auto/system). Stored as "en"/"ru" or null; legacy "auto" maps to null.
+    #[serde(
+        default,
+        serialize_with = "serialize_language_opt",
+        deserialize_with = "deserialize_language_opt"
+    )]
+    pub language: Option<crate::localization::SupportedLang>,
 }
 
 impl Default for AppSettings {
@@ -73,8 +90,43 @@ impl Default for AppSettings {
             warn_prefixes: Vec::new(),
             custom_launch: String::new(),
             cache_on_download: false,
+            loading_anim: LoadingAnim::BottomBar,
             language: None,
         }
+    }
+}
+
+//// Serde helpers for language field to keep backward compatibility with older JSONs.
+fn deserialize_language_opt<'de, D>(deserializer: D) -> Result<Option<crate::localization::SupportedLang>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt = Option::<String>::deserialize(deserializer)?;
+    Ok(match opt {
+        Some(s) => {
+            let s = s.to_ascii_lowercase();
+            match s.as_str() {
+                "en" => Some(crate::localization::SupportedLang::English),
+                "ru" => Some(crate::localization::SupportedLang::Russian),
+                // treat "auto" or any unknown as None
+                _ => None,
+            }
+        }
+        None => None,
+    })
+}
+
+fn serialize_language_opt<S>(
+    value: &Option<crate::localization::SupportedLang>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match value {
+        Some(crate::localization::SupportedLang::English) => serializer.serialize_some("en"),
+        Some(crate::localization::SupportedLang::Russian) => serializer.serialize_some("ru"),
+        None => serializer.serialize_none(),
     }
 }
 

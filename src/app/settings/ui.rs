@@ -19,8 +19,10 @@ lazy_static! {
     static ref CUSTOM_LAUNCH_INPUT: RwLock<String> = RwLock::new(String::new());
     // Toggle: cache metadata/images on download click
     static ref CACHE_ON_DOWNLOAD_INPUT: RwLock<bool> = RwLock::new(false);
-    // UI language selection ("auto" | "en" | "ru")
-    static ref LANGUAGE_INPUT: RwLock<String> = RwLock::new(String::from("auto"));
+    // UI language selection (None = Auto)
+    static ref LANGUAGE_INPUT: RwLock<Option<crate::localization::SupportedLang>> = RwLock::new(None);
+    // Loading animation preference
+    static ref LOADING_ANIM_INPUT: RwLock<crate::app::settings::store::LoadingAnim> = RwLock::new(crate::app::settings::store::LoadingAnim::BottomBar);
     // State for extract-dir change confirmation and migration
     static ref MOVE_CONFIRM_OPEN: RwLock<bool> = RwLock::new(false);
     static ref PENDING_TEMP_DIR: RwLock<String> = RwLock::new(String::new());
@@ -94,7 +96,11 @@ pub fn open_settings() {
     }
     {
         let mut l = LANGUAGE_INPUT.write().unwrap();
-        *l = s.language.clone().unwrap_or_else(|| "auto".to_string());
+        *l = s.language;
+    }
+    {
+        let mut a = LOADING_ANIM_INPUT.write().unwrap();
+        *a = s.loading_anim;
     }
     *SETTINGS_OPEN.write().unwrap() = true;
 }
@@ -112,6 +118,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
             .with_resizable(true),
         move |ctx, _class| {
             egui::CentralPanel::default().show(ctx, |ui| {
+                egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
                 // Temp folder
                 ui.horizontal(|ui| {
                     ui.label(crate::localization::translate("settings-temp-folder"));
@@ -166,11 +173,11 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
 
                 // Language selection
                 {
-                    let mut lang_val = LANGUAGE_INPUT.read().unwrap().clone();
-                    let selected_text = match lang_val.as_str() {
-                        "en" => crate::localization::translate("settings-language-en"),
-                        "ru" => crate::localization::translate("settings-language-ru"),
-                        _ => crate::localization::translate("settings-language-auto"),
+                    let mut lang_val = *LANGUAGE_INPUT.read().unwrap();
+                    let selected_text = match lang_val {
+                        Some(crate::localization::SupportedLang::English) => crate::localization::translate("settings-language-en"),
+                        Some(crate::localization::SupportedLang::Russian) => crate::localization::translate("settings-language-ru"),
+                        None => crate::localization::translate("settings-language-auto"),
                     };
                     ui.horizontal(|ui| {
                         ui.label(crate::localization::translate("settings-language"));
@@ -180,16 +187,37 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                                 let lbl_auto = crate::localization::translate("settings-language-auto");
                                 let lbl_en = crate::localization::translate("settings-language-en");
                                 let lbl_ru = crate::localization::translate("settings-language-ru");
-                                ui.selectable_value(&mut lang_val, "auto".to_string(), lbl_auto);
-                                ui.selectable_value(&mut lang_val, "en".to_string(), lbl_en);
-                                ui.selectable_value(&mut lang_val, "ru".to_string(), lbl_ru);
+                                ui.selectable_value(&mut lang_val, None, lbl_auto);
+                                ui.selectable_value(&mut lang_val, Some(crate::localization::SupportedLang::English), lbl_en);
+                                ui.selectable_value(&mut lang_val, Some(crate::localization::SupportedLang::Russian), lbl_ru);
                             });
                     });
                     if lang_val != *LANGUAGE_INPUT.read().unwrap() {
                         *LANGUAGE_INPUT.write().unwrap() = lang_val;
                     }
                 }
-
+ 
+                // Loading animation selection
+                {
+                    let mut anim_val = *LOADING_ANIM_INPUT.read().unwrap();
+                    let selected_text = match anim_val {
+                        crate::app::settings::store::LoadingAnim::BottomBar => crate::localization::translate("settings-loading-anim-bottom-bar"),
+                        crate::app::settings::store::LoadingAnim::CircleBottomRight => crate::localization::translate("settings-loading-anim-circle-bottom-right"),
+                    };
+                    ui.horizontal(|ui| {
+                        ui.label(crate::localization::translate("settings-loading-anim"));
+                        egui::ComboBox::from_id_source("settings_loading_anim_combo")
+                            .selected_text(selected_text)
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut anim_val, crate::app::settings::store::LoadingAnim::BottomBar, crate::localization::translate("settings-loading-anim-bottom-bar"));
+                                ui.selectable_value(&mut anim_val, crate::app::settings::store::LoadingAnim::CircleBottomRight, crate::localization::translate("settings-loading-anim-circle-bottom-right"));
+                            });
+                    });
+                    if anim_val != *LOADING_ANIM_INPUT.read().unwrap() {
+                        *LOADING_ANIM_INPUT.write().unwrap() = anim_val;
+                    }
+                }
+ 
                 ui.label(crate::localization::translate("settings-custom-launch"));
                 {
                     let mut custom_val = CUSTOM_LAUNCH_INPUT.read().unwrap().clone();
@@ -419,6 +447,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                                 let custom_launch = CUSTOM_LAUNCH_INPUT.read().unwrap().clone();
                                 let cache_on_download = *CACHE_ON_DOWNLOAD_INPUT.read().unwrap();
                                 let cache_dir_str = CACHE_DIR_INPUT.read().unwrap().clone();
+                                let loading_anim = *LOADING_ANIM_INPUT.read().unwrap();
                                 let startup_tags = STARTUP_TAGS_INPUT.read().unwrap().clone();
                                 let startup_exclude_tags = STARTUP_EXCLUDE_TAGS_INPUT.read().unwrap().clone();
                                 let startup_prefixes = STARTUP_PREFIXES_INPUT.read().unwrap().clone();
@@ -435,18 +464,15 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                                 st.custom_launch = custom_launch;
                                 st.cache_on_download = cache_on_download;
                                 st.cache_dir = std::path::PathBuf::from(cache_dir_str);
+                                st.loading_anim = loading_anim;
                                 // Store language selection
-                                st.language = match LANGUAGE_INPUT.read().unwrap().as_str() {
-                                    "en" => Some("en".to_string()),
-                                    "ru" => Some("ru".to_string()),
-                                    _ => None,
-                                };
+                                st.language = *LANGUAGE_INPUT.read().unwrap();
                             } // drop write lock before saving to avoid deadlock
                             // Apply language immediately
                             {
-                                let lang_opt = APP_SETTINGS.read().unwrap().language.clone();
+                                let lang_opt = APP_SETTINGS.read().unwrap().language;
                                 if let Some(lang) = lang_opt {
-                                    let _ = crate::localization::set_current_language(&lang);
+                                    let _ = crate::localization::set_current_language(lang);
                                 } else {
                                     let _ = crate::localization::set_language_auto();
                                 }
@@ -516,6 +542,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                             });
                     }
                 });
+                });
             });
 
             // Show progress / completion overlay while moving games
@@ -541,6 +568,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     let cache_on_download = *CACHE_ON_DOWNLOAD_INPUT.read().unwrap();
                     let cache_dir_str = CACHE_DIR_INPUT.read().unwrap().clone();
                     let cache_dir = std::path::PathBuf::from(&cache_dir_str);
+                    let loading_anim = *LOADING_ANIM_INPUT.read().unwrap();
                     let startup_tags = STARTUP_TAGS_INPUT.read().unwrap().clone();
                     let startup_exclude_tags = STARTUP_EXCLUDE_TAGS_INPUT.read().unwrap().clone();
                     let startup_prefixes = STARTUP_PREFIXES_INPUT.read().unwrap().clone();
@@ -558,12 +586,9 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                         st.custom_launch = custom_launch;
                         st.cache_on_download = cache_on_download;
                         st.cache_dir = cache_dir;
+                        st.loading_anim = loading_anim;
                         // Store language selection (post-migration path)
-                        st.language = match LANGUAGE_INPUT.read().unwrap().as_str() {
-                            "en" => Some("en".to_string()),
-                            "ru" => Some("ru".to_string()),
-                            _ => None,
-                        };
+                        st.language = *LANGUAGE_INPUT.read().unwrap();
                         for (tid, nf, ne) in moved {
                             if let Some(entry) = st.downloaded_games.iter_mut().find(|e| e.thread_id == tid) {
                                 entry.folder = nf;
@@ -575,9 +600,9 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     }
                     // Apply language immediately
                     {
-                        let lang_opt = APP_SETTINGS.read().unwrap().language.clone();
+                        let lang_opt = APP_SETTINGS.read().unwrap().language;
                         if let Some(lang) = lang_opt {
-                            let _ = crate::localization::set_current_language(&lang);
+                            let _ = crate::localization::set_current_language(lang);
                         } else {
                             let _ = crate::localization::set_language_auto();
                         }
@@ -606,7 +631,8 @@ impl SettingsApp {
 impl App for SettingsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Settings");
+            egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
+                ui.heading("Settings");
             ui.separator();
 
             ui.horizontal(|ui| {
@@ -636,6 +662,7 @@ impl App for SettingsApp {
                 }
 
                 ui.add_space(8.0);
+            });
             });
         });
     }

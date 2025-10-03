@@ -22,9 +22,11 @@ fn main() -> eframe::Result<()> {
     app::settings::load_settings_from_disk();
     // Load lightweight app_config (for cookies/auth gating)
     app::config::load_config_from_disk();
-    // Initialize localization based on settings or system locale
-    let preferred_lang = { app::settings::APP_SETTINGS.read().unwrap().language.clone() };
-    let _ = localization::initialize_localization(preferred_lang.as_deref());
+    // Initialize localization based on settings or system locale (enum-based)
+    let preferred_lang = { app::settings::APP_SETTINGS.read().unwrap().language };
+    if let Err(e) = localization::initialize_localization(preferred_lang) {
+        log::error!("Localization initialization failed: {e}");
+    }
 
     // Настройки для минимальной задержки:
     // - renderer: Wgpu (быстрее и даёт контроль над present mode)
@@ -45,9 +47,13 @@ fn main() -> eframe::Result<()> {
         ..Default::default()
     };
 
-    eframe::run_native(
+    let res = eframe::run_native(
         localization::translate("app-window-title").as_str(),
         native_options,
         Box::new(|_cc| Box::new(app::NoLagApp::default())),
-    )
+    );
+    if let Err(ref e) = res {
+        log::error!("eframe::run_native failed: {e}");
+    }
+    res
 }

@@ -1,119 +1,61 @@
 use fluent_bundle::{FluentArgs, FluentBundle, FluentResource};
-use std::cell::RefCell;
-use std::collections::HashMap;
+use once_cell::sync::OnceCell;
+use serde::{Deserialize, Serialize};
+use std::sync::RwLock;
 use thiserror::Error;
-use unic_langid::LanguageIdentifier;
+use unic_langid::{langid, LanguageIdentifier};
 
 type Bundle = FluentBundle<FluentResource>;
 
-const SUPPORTED_LANGS: [&str; 2] = ["en", "ru"];
-const FALLBACK_LANG: &str = "en";
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub enum SupportedLang {
+    #[serde(rename = "en")]
+    English,
+    #[serde(rename = "ru")]
+    Russian,
+}
 
-fn load_ftl_source(lang: &str) -> &'static str {
-    match lang {
-        "en" => include_str!("resources/en.ftl"),
-        "ru" => include_str!("resources/ru.ftl"),
-        _ => include_str!("resources/en.ftl"),
+// Map incoming strings to enum without allocating, ignoring case and suffixes like "-US"/"_RU".
+impl From<&str> for SupportedLang {
+    fn from(code: &str) -> Self {
+        let mut string = code.to_string();
+        if let Some(idx) = string.find(['-', '_']) {
+            string = string[..idx].to_string();
+        }
+        string.make_ascii_lowercase();
+        SupportedLang::English
     }
 }
 
-fn parse_lang(lang_code: &str) -> LanguageIdentifier {
-    lang_code
-        .parse::<LanguageIdentifier>()
-        .unwrap_or_else(|_| FALLBACK_LANG.parse().unwrap())
-}
-
-fn normalize_lang(mut code: String) -> String {
-    code.make_ascii_lowercase();
-    let sep = code.find(['-', '_']).unwrap_or(code.len());
-    let short = &code[..sep];
-    if SUPPORTED_LANGS.contains(&short) {
-        short.to_string()
-    } else {
-        FALLBACK_LANG.to_string()
+// Convert enum directly to LanguageIdentifier via macro, no string roundtrips.
+impl From<SupportedLang> for LanguageIdentifier {
+    fn from(lang: SupportedLang) -> Self {
+        match lang {
+            SupportedLang::English => langid!("en"),
+            SupportedLang::Russian => langid!("ru"),
+        }
     }
 }
 
-fn detect_system_lang() -> String {
+impl SupportedLang {
+    fn ftl(self) -> &'static str {
+        match self {
+            SupportedLang::English => include_str!("resources/en.ftl"),
+            SupportedLang::Russian => include_str!("resources/ru.ftl"),
+        }
+    }
+}
+
+fn detect_system_lang() -> SupportedLang {
     let sys = sys_locale::get_locale().unwrap_or_default();
-    normalize_lang(sys)
+    SupportedLang::from(sys.as_str())
 }
 
-struct LocalizationManager {
-    current: String,
-    fallback: String,
-    bundles: HashMap<String, Bundle>,
-}
+// Global current language stored as the enum itself (no TLS, no integer mapping).
+static CURRENT_LANG: OnceCell<RwLock<SupportedLang>> = OnceCell::new();
 
-impl LocalizationManager {
-    fn new() -> Self {
-        let mut bundles: HashMap<String, Bundle> = HashMap::new();
-        for &code in SUPPORTED_LANGS.iter() {
-            let langid = parse_lang(code);
-            let mut bundle: Bundle = FluentBundle::new(vec![langid]);
-            let res_str = load_ftl_source(code);
-            let res = FluentResource::try_new(res_str.to_string())
-                .expect("Failed to parse embedded FTL resource");
-            bundle.add_resource(res).expect("Failed to add FTL to bundle");
-            bundles.insert(code.to_string(), bundle);
-        }
-        Self {
-            current: FALLBACK_LANG.to_string(),
-            fallback: FALLBACK_LANG.to_string(),
-            bundles,
-        }
-    }
-
-    fn set_current(&mut self, code: &str) -> Result<(), LocalizationError> {
-        let code = normalize_lang(code.to_string());
-        if !self.bundles.contains_key(&code) {
-            return Err(LocalizationError::UnsupportedLanguage(code));
-        }
-        self.current = code;
-        Ok(())
-    }
-
-    fn set_auto(&mut self) -> Result<(), LocalizationError> {
-        let detected = detect_system_lang();
-        self.current = detected;
-        Ok(())
-    }
-
-    fn get_bundle(&self, code: &str) -> Option<&Bundle> {
-        self.bundles.get(code)
-    }
-
-    fn format_no_args(&self, id: &str) -> String {
-        self.format_with_args(id, None)
-    }
-
-    fn format_with_args(&self, id: &str, args: Option<&FluentArgs>) -> String {
-        // Try current
-        if let Some(b) = self.get_bundle(&self.current) {
-            if let Some(msg) = b.get_message(id) {
-                if let Some(pat) = msg.value() {
-                    let mut errors = vec![];
-                    let s = b.format_pattern(pat, args, &mut errors).to_string();
-                    return s;
-                }
-            }
-        }
-        // Fallback
-        if let Some(b) = self.get_bundle(self.fallback.as_str()) {
-            if let Some(msg) = b.get_message(id) {
-                if let Some(pat) = msg.value() {
-                    let mut errors = vec![];
-                    let s = b.format_pattern(pat, args, &mut errors).to_string();
-                    return s;
-                }
-            }
-        }
-        format!("[missing: {}]", id)
-    }
-}
-
-thread_local! {
-    static LOCALIZATION: RefCell<LocalizationManager> = RefCell::new(LocalizationManager::new());
+fn lang_lock() -> &'static RwLock<SupportedLang> {
+    CURRENT_LANG.get_or_init(|| RwLock::new(SupportedLang::English))
 }
 
 #[derive(Debug, Error)]
@@ -124,48 +66,81 @@ pub enum LocalizationError {
     InitError(String),
 }
 
-/// Initialize localization system. If preferred_lang is None, system locale will be used.
-/// If preferred/lang is unsupported, fallback to "en".
-pub fn initialize_localization(preferred_lang: Option<&str>) -> Result<(), LocalizationError> {
-    LOCALIZATION.with(|cell| {
-        let mut mgr = cell.borrow_mut();
-        match preferred_lang {
-            Some(code) => mgr.set_current(code).or_else(|_| mgr.set_current(FALLBACK_LANG)),
-            None => mgr.set_auto(),
-        }
-    })
+fn make_bundle(lang: SupportedLang) -> Bundle {
+    let mut bundle: Bundle = FluentBundle::new(vec![LanguageIdentifier::from(lang)]);
+    let res_str = lang.ftl();
+    let res = FluentResource::try_new(res_str.to_string()).expect("Failed to parse embedded FTL resource");
+    bundle.add_resource(res).expect("Failed to add FTL to bundle");
+    bundle
 }
 
-/// Explicitly set current language to a supported code like "en" or "ru".
-pub fn set_current_language(lang_code: &str) -> Result<(), LocalizationError> {
-    LOCALIZATION.with(|cell| cell.borrow_mut().set_current(lang_code))
+fn try_format(bundle: &Bundle, id: &str, args: Option<&FluentArgs>) -> Option<String> {
+    let msg = bundle.get_message(id)?;
+    let pat = msg.value()?;
+    let mut errors = vec![];
+    let s = bundle.format_pattern(pat, args, &mut errors).to_string();
+    Some(s)
+}
+
+/// Initialize localization system. If preferred_lang is None, system locale will be used.
+pub fn initialize_localization(preferred_lang: Option<SupportedLang>) -> Result<(), LocalizationError> {
+    match preferred_lang {
+        Some(lang) => set_current_language(lang)?,
+        None => set_language_auto()?,
+    }
+    Ok(())
+}
+
+/// Explicitly set current language.
+pub fn set_current_language(lang: SupportedLang) -> Result<(), LocalizationError> {
+    let lock = lang_lock();
+    *lock.write().expect("lang write lock") = lang;
+    Ok(())
 }
 
 /// Set language from system locale (auto-detect).
 pub fn set_language_auto() -> Result<(), LocalizationError> {
-    LOCALIZATION.with(|cell| cell.borrow_mut().set_auto())
+    let detected = detect_system_lang();
+    let lock = lang_lock();
+    *lock.write().expect("lang write lock") = detected;
+    Ok(())
 }
 
-/// Return current language code ("en", "ru").
-pub fn get_current_language() -> String {
-    LOCALIZATION.with(|cell| cell.borrow().current.clone())
-}
-
-/// Return list of available languages.
-pub fn available_languages() -> Vec<String> {
-    SUPPORTED_LANGS.iter().map(|s| s.to_string()).collect()
+/// Return current language as enum.
+pub fn get_current_language() -> SupportedLang {
+    let lock = lang_lock();
+    *lock.read().expect("lang read lock")
 }
 
 /// Translate a message without arguments. Returns owned String.
 pub fn translate(message_id: &str) -> String {
-    LOCALIZATION.with(|cell| cell.borrow().format_no_args(message_id))
+    translate_with(message_id, &[])
 }
 
 /// Translate a message with arguments given as (&str, String) pairs.
 pub fn translate_with(message_id: &str, args: &[(&str, String)]) -> String {
+    let cur = get_current_language();
+
     let mut fargs = FluentArgs::new();
     for (k, v) in args {
         fargs.set(*k, v.clone());
     }
-    LOCALIZATION.with(|cell| cell.borrow().format_with_args(message_id, Some(&fargs)))
+    let opt_args = if args.is_empty() { None } else { Some(&fargs) };
+
+    // Try current language
+    let cur_bundle = make_bundle(cur);
+    if let Some(s) = try_format(&cur_bundle, message_id, opt_args) {
+        return s;
+    }
+
+    // Fallback
+    let fallback = SupportedLang::English;
+    if cur != fallback {
+        let fb_bundle = make_bundle(fallback);
+        if let Some(s) = try_format(&fb_bundle, message_id, opt_args) {
+            return s;
+        }
+    }
+
+    format!("[missing: {}]", message_id)
 }
