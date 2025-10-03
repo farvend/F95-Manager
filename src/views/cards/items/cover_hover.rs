@@ -1,4 +1,5 @@
 use eframe::egui::{self, Color32, Label, RichText, Rounding, Sense, Stroke, Vec2};
+use eframe::egui::epaint::{Mesh, Vertex};
 
 use crate::{parser::F95Thread, views::cards::items::card::CardHover};
 use crate::parser::game_info::link::DownloadLink;
@@ -434,25 +435,41 @@ pub fn draw_cover(
     }
 
     // Thin download progress line at the very bottom of the cover image
+    let anim_pref = { crate::app::settings::APP_SETTINGS.read().unwrap().loading_anim.clone() };
     match progress {
         Some(crate::game_download::Progress::Pending(mut dp)) => {
             dp = dp.clamp(0.0, 1.0);
-            let thickness = 2.0;
-            let x0 = cover_rect.min.x;
-            let x1 = x0 + cover_rect.width() * dp;
-            let y1 = cover_rect.max.y;
-            let y0 = y1 - thickness;
-            let line_rect = egui::Rect::from_min_max(egui::pos2(x0, y0), egui::pos2(x1, y1));
             let color = if download_error.is_some() {
                 Color32::from_rgb(180, 40, 40)
             } else {
                 ui.visuals().selection.bg_fill
             };
-            ui.painter_at(cover_rect).rect_filled(line_rect, Rounding::same(0.0), color);
+            match anim_pref {
+                crate::app::settings::store::LoadingAnim::BottomBar => {
+                    let thickness = 2.0;
+                    let x0 = cover_rect.min.x;
+                    let x1 = x0 + cover_rect.width() * dp;
+                    let y1 = cover_rect.max.y;
+                    let y0 = y1 - thickness;
+                    let line_rect = egui::Rect::from_min_max(egui::pos2(x0, y0), egui::pos2(x1, y1));
+                    ui.painter_at(cover_rect).rect_filled(line_rect, Rounding::same(0.0), color);
+                }
+                crate::app::settings::store::LoadingAnim::CircleBottomRight => {
+                    draw_circular_progress_bottom_right(ui, cover_rect, dp, color);
+                }
+            }
         }
         Some(crate::game_download::Progress::Unknown) => {
-            // Animated right-moving blue-to-transparent gradient with blue dominant
-            draw_unknown_progress_bar(ui, cover_rect);
+            match anim_pref {
+                crate::app::settings::store::LoadingAnim::BottomBar => {
+                    // Animated right-moving blue-to-transparent gradient with blue dominant
+                    draw_unknown_progress_bar(ui, cover_rect);
+                }
+                crate::app::settings::store::LoadingAnim::CircleBottomRight => {
+                    let color = ui.visuals().selection.bg_fill;
+                    draw_indeterminate_circular_bottom_right(ui, cover_rect, color);
+                }
+            }
         }
         _ => {}
     }
@@ -492,4 +509,75 @@ fn draw_unknown_progress_bar(ui: &mut egui::Ui, cover_rect: egui::Rect) {
     let color = Color32::from_rgba_premultiplied(r, g, b, a);
 
     painter.rect_filled(line_rect, Rounding::same(0.0), color);
+}
+
+fn draw_circular_progress_bottom_right(ui: &mut egui::Ui, cover_rect: egui::Rect, dp: f32, color: Color32) {
+    let margin = 8.0;
+    let radius = 10.0;
+    let center = egui::pos2(cover_rect.max.x - margin - radius, cover_rect.max.y - margin - radius);
+
+    let painter = ui.painter_at(cover_rect);
+
+    // Background circle
+    painter.circle_filled(center, radius, Color32::from_rgba_premultiplied(0, 0, 0, 120));
+    painter.circle_stroke(center, radius, Stroke::new(1.0, Color32::from_gray(80)));
+
+    if dp <= 0.0 {
+        return;
+    }
+
+    let segments: usize = ((dp * 48.0).ceil() as i32).max(1) as usize;
+    let sweep = dp * std::f32::consts::TAU;
+    let start = -std::f32::consts::FRAC_PI_2; // from top, clockwise
+
+    let mut mesh = Mesh::default();
+    for i in 0..segments {
+        let t0 = i as f32 / (segments as f32);
+        let t1 = (i + 1) as f32 / (segments as f32);
+        let a0 = start - sweep * t0;
+        let a1 = start - sweep * t1;
+        let p0 = egui::pos2(center.x + radius * a0.cos(), center.y + radius * a0.sin());
+        let p1 = egui::pos2(center.x + radius * a1.cos(), center.y + radius * a1.sin());
+        let start = mesh.vertices.len() as u32;
+        mesh.vertices.push(Vertex { pos: center, uv: egui::pos2(0.0, 0.0), color });
+        mesh.vertices.push(Vertex { pos: p0, uv: egui::pos2(0.0, 0.0), color });
+        mesh.vertices.push(Vertex { pos: p1, uv: egui::pos2(0.0, 0.0), color });
+        mesh.add_triangle(start, start + 1, start + 2);
+    }
+    painter.add(eframe::egui::Shape::mesh(mesh));
+}
+
+fn draw_indeterminate_circular_bottom_right(ui: &mut egui::Ui, cover_rect: egui::Rect, color: Color32) {
+    // Keep animation running
+    ui.ctx().request_repaint_after(std::time::Duration::from_millis(16));
+
+    let margin = 8.0;
+    let radius = 10.0;
+    let center = egui::pos2(cover_rect.max.x - margin - radius, cover_rect.max.y - margin - radius);
+
+    let painter = ui.painter_at(cover_rect);
+    painter.circle_filled(center, radius, Color32::from_rgba_premultiplied(0, 0, 0, 120));
+    painter.circle_stroke(center, radius, Stroke::new(1.0, Color32::from_gray(80)));
+
+    let t: f32 = ui.input(|i| i.time) as f32;
+    let speed = 1.6;
+    let sweep = std::f32::consts::TAU * 0.35;
+    let start = -std::f32::consts::FRAC_PI_2 - t * speed * std::f32::consts::TAU;
+
+    let segments: usize = 32;
+    let mut mesh = Mesh::default();
+    for i in 0..segments {
+        let f0 = i as f32 / (segments as f32);
+        let f1 = (i + 1) as f32 / (segments as f32);
+        let a0 = start - sweep * f0;
+        let a1 = start - sweep * f1;
+        let p0 = egui::pos2(center.x + radius * a0.cos(), center.y + radius * a0.sin());
+        let p1 = egui::pos2(center.x + radius * a1.cos(), center.y + radius * a1.sin());
+        let start = mesh.vertices.len() as u32;
+        mesh.vertices.push(Vertex { pos: center, uv: egui::pos2(0.0, 0.0), color });
+        mesh.vertices.push(Vertex { pos: p0, uv: egui::pos2(0.0, 0.0), color });
+        mesh.vertices.push(Vertex { pos: p1, uv: egui::pos2(0.0, 0.0), color });
+        mesh.add_triangle(start, start + 1, start + 2);
+    }
+    painter.add(eframe::egui::Shape::mesh(mesh));
 }
