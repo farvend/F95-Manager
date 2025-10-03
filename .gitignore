@@ -6,3 +6,4 @@ cargo.lock
 /app_settings.json
 /app_config.json
 /cache
+log.txt
