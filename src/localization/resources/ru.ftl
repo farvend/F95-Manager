@@ -14,6 +14,7 @@ settings-loading-anim-circle-bottom-right = Круг (внизу справа)
 settings-custom-launch = Своя команда запуска (используйте {{path}} как путь к exe):
 settings-save = Сохранить
 settings-cancel = Отмена
+settings-log-to-file = Писать логи в файл (предупреждения и ошибки)
 
 auth-login-title = Вход
 auth-username = Имя пользователя:
