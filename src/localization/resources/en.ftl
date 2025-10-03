@@ -14,6 +14,7 @@ settings-loading-anim-circle-bottom-right = Circle (bottom-right)
 settings-custom-launch = Custom launch command (use {{path}} placeholder):
 settings-save = Save
 settings-cancel = Cancel
+settings-log-to-file = Write logs to file (warn and error)
 
 auth-login-title = Login
 auth-username = Username:
