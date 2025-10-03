@@ -1,5 +1,5 @@
 use eframe::egui::{
-    pos2, Color32, Id, Rounding, Sense, Stroke, Ui, Vec2, TextEdit, ScrollArea,
+    pos2, Color32, Id, Rounding, Sense, Stroke, Ui, Vec2, TextEdit, ScrollArea, Key, Modifiers,
 };
 
 use crate::tags::TAGS;
@@ -48,6 +48,12 @@ pub fn prefixes_picker(ui: &mut Ui, key: &str, placeholder: &str) -> Option<u32>
         .memory(|m| m.data.get_temp::<String>(search_id))
         .unwrap_or_default();
 
+    // Track selected index in the popup for keyboard navigation
+    let sel_id: Id = Id::new(("prefixes_picker_sel", key));
+    let mut sel_idx: usize = ui
+        .memory(|m| m.data.get_temp::<usize>(sel_id))
+        .unwrap_or(0);
+
     // Inline TextEdit inside the container (reserve a bit of space for the arrow)
     let inner_rect = container_rect.shrink2(Vec2::new(12.0, 6.0));
     let arrow_space = 18.0;
@@ -89,6 +95,7 @@ pub fn prefixes_picker(ui: &mut Ui, key: &str, placeholder: &str) -> Option<u32>
 
     if arrow_resp.clicked() {
         is_open = !is_open;
+        if is_open { sel_idx = 0; }
     } else if response.clicked() {
         if is_open {
             // close when open and clicking container (non-input area)
@@ -96,6 +103,7 @@ pub fn prefixes_picker(ui: &mut Ui, key: &str, placeholder: &str) -> Option<u32>
         } else {
             // open and focus the input
             is_open = true;
+            sel_idx = 0;
             if let Some(id) = edit_response.as_ref().map(|r| r.id) {
                 ui.memory_mut(|m| m.request_focus(id));
             }
@@ -103,11 +111,13 @@ pub fn prefixes_picker(ui: &mut Ui, key: &str, placeholder: &str) -> Option<u32>
     }
     if let Some(r) = &edit_response {
         if r.clicked() || r.has_focus() || r.changed() {
+            if r.changed() { sel_idx = 0; }
             is_open = true;
         }
     }
     ui.memory_mut(|m| {
         m.data.insert_temp(popup_id, is_open);
+        m.data.insert_temp(sel_id, sel_idx);
     });
 
     // Draw caret and active border depending on open state
@@ -143,6 +153,55 @@ pub fn prefixes_picker(ui: &mut Ui, key: &str, placeholder: &str) -> Option<u32>
         let popup_pos = pos2(container_rect.left(), container_rect.bottom() + 4.0);
         let popup_width = container_rect.width();
 
+        // Build and sort items by name from TAGS.prefixes.games
+        let ql = q.to_lowercase();
+        let mut items: Vec<(u32, String)> = Vec::new();
+        for group in &TAGS.prefixes.games {
+            for p in &group.prefixes {
+                let name = p.name.as_str();
+                if !ql.is_empty() && !name.to_lowercase().contains(&ql) {
+                    continue;
+                }
+                items.push((p.id as u32, name.to_string()));
+            }
+        }
+        items.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()));
+        if items.is_empty() { sel_idx = 0; }
+        if sel_idx >= items.len() { sel_idx = items.len().saturating_sub(1); }
+
+        // Keyboard navigation while popup is open
+        let (down, up, enter) = ui.input_mut(|i| {
+            (
+                i.consume_key(Modifiers::NONE, Key::ArrowDown),
+                i.consume_key(Modifiers::NONE, Key::ArrowUp),
+                i.consume_key(Modifiers::NONE, Key::Enter),
+            )
+        });
+        if down {
+            if !items.is_empty() {
+                sel_idx = (sel_idx + 1).min(items.len().saturating_sub(1));
+            }
+        }
+        if up {
+            if !items.is_empty() {
+                sel_idx = sel_idx.saturating_sub(1);
+            }
+        }
+        if enter {
+            if !items.is_empty() {
+                pick = Some(items[sel_idx].0);
+                // Close popup and clear input
+                ui.memory_mut(|m| {
+                    m.data.insert_temp(popup_id, false);
+                    m.data.insert_temp(search_id, String::new());
+                    m.data.insert_temp(sel_id, 0usize);
+                });
+                q.clear();
+            }
+        }
+        // Persist selection index updates
+        ui.memory_mut(|m| { m.data.insert_temp(sel_id, sel_idx); });
+
         let inner = crate::views::ui_helpers::show_popup_area(
             ui,
             popup_id,
@@ -151,26 +210,11 @@ pub fn prefixes_picker(ui: &mut Ui, key: &str, placeholder: &str) -> Option<u32>
             border_color,
             rounding,
             |ui| {
-                let ql = q.to_lowercase();
-
-                // Build and sort items by name from TAGS.prefixes.games
-                let mut items: Vec<(u32, String)> = Vec::new();
-                for group in &TAGS.prefixes.games {
-                    for p in &group.prefixes {
-                        let name = p.name.as_str();
-                        if !ql.is_empty() && !name.to_lowercase().contains(&ql) {
-                            continue;
-                        }
-                        items.push((p.id as u32, name.to_string()));
-                    }
-                }
-                items.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()));
-
                 ScrollArea::vertical()
                     .max_height(240.0)
                     .show(ui, |ui| {
                         ui.set_width(popup_width - 8.0);
-                        for (id, name) in items {
+                        for (i, (id, name)) in items.iter().enumerate() {
                             let row_height = ui.spacing().interact_size.y * 1.2;
                             let (row_rect, row_resp) = ui.allocate_exact_size(
                                 Vec2::new(ui.available_width(), row_height),
@@ -178,7 +222,8 @@ pub fn prefixes_picker(ui: &mut Ui, key: &str, placeholder: &str) -> Option<u32>
                             );
                             let row_p = ui.painter();
 
-                            if row_resp.hovered() {
+                            // Highlight hovered or keyboard-selected row
+                            if row_resp.hovered() || i == sel_idx {
                                 row_p.rect(
                                     row_rect.shrink2(Vec2::new(2.0, 2.0)),
                                     Rounding::same(4.0),
@@ -190,16 +235,24 @@ pub fn prefixes_picker(ui: &mut Ui, key: &str, placeholder: &str) -> Option<u32>
                             row_p.text(
                                 pos2(row_rect.left() + 8.0, row_rect.center().y),
                                 eframe::egui::Align2::LEFT_CENTER,
-                                &name,
+                                name,
                                 eframe::egui::FontId::proportional(14.0),
                                 Color32::from_gray(210),
                             );
 
                             let row_resp = row_resp.on_hover_cursor(eframe::egui::CursorIcon::PointingHand);
+                            if row_resp.hovered() {
+                                // sync keyboard selection with mouse hover for intuitiveness
+                                ui.memory_mut(|m| { m.data.insert_temp(sel_id, i); });
+                                sel_idx = i;
+                            }
                             if row_resp.clicked() {
-                                pick = Some(id);
+                                pick = Some(*id);
+                                // Close popup and clear input
                                 ui.memory_mut(|m| {
                                     m.data.insert_temp(popup_id, false);
+                                    m.data.insert_temp(search_id, String::new());
+                                    m.data.insert_temp(sel_id, 0usize);
                                 });
                             }
                         }
