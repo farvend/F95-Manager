@@ -272,6 +272,27 @@ impl App for NoLagApp {
             about_ui::open_about();
             ctx.request_repaint();
         }
+        // When filters changed this frame, auto-save selected tags if enabled in settings
+        if apply {
+            let do_autosave = { settings::APP_SETTINGS.read().unwrap().autosave_selected_tags };
+            if do_autosave {
+                let mut need_save = false;
+                {
+                    let mut st = settings::APP_SETTINGS.write().unwrap();
+                    if st.startup_tags != self.filters.include_tags {
+                        st.startup_tags = self.filters.include_tags.clone();
+                        need_save = true;
+                    }
+                    if st.startup_exclude_tags != self.filters.exclude_tags {
+                        st.startup_exclude_tags = self.filters.exclude_tags.clone();
+                        need_save = true;
+                    }
+                }
+                if need_save {
+                    settings::save_settings_to_disk();
+                }
+            }
+        }
         // Trigger new fetch when Library mode toggles
         if self.filters.last_library_only != self.filters.library_only {
             self.filters.last_library_only = self.filters.library_only;
