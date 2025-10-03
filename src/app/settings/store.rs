@@ -71,6 +71,12 @@ pub struct AppSettings {
         deserialize_with = "deserialize_language_opt"
     )]
     pub language: Option<crate::localization::SupportedLang>,
+    // Whether to persist logs to a file (warn and error only). Default: true for backward compatibility
+    #[serde(default = "default_log_to_file")]
+    pub log_to_file: bool,
+    // Auto-save selected include/exclude tags to startup settings when filters change
+    #[serde(default)]
+    pub autosave_selected_tags: bool,
 }
 
 impl Default for AppSettings {
@@ -92,9 +98,13 @@ impl Default for AppSettings {
             cache_on_download: false,
             loading_anim: LoadingAnim::BottomBar,
             language: None,
+            log_to_file: default_log_to_file(),
+            autosave_selected_tags: false,
         }
     }
 }
+
+fn default_log_to_file() -> bool { true }
 
 //// Serde helpers for language field to keep backward compatibility with older JSONs.
 fn deserialize_language_opt<'de, D>(deserializer: D) -> Result<Option<crate::localization::SupportedLang>, D::Error>
@@ -158,7 +168,9 @@ pub fn load_settings_from_disk() {
     let path = settings_file_path();
     match AppSettings::load_from_file(&path) {
         Ok(s) => {
-            *APP_SETTINGS.write().unwrap() = s;
+            *APP_SETTINGS.write().unwrap() = s.clone();
+            // Apply logger toggle based on settings
+            crate::logger::set_file_logging_enabled(s.log_to_file);
             log::info!("Loaded settings from {}", path.to_string_lossy());
         }
         Err(e) => {
@@ -168,6 +180,9 @@ pub fn load_settings_from_disk() {
                 path.to_string_lossy(),
                 e
             );
+            // Apply default logger toggle
+            let enabled = APP_SETTINGS.read().unwrap().log_to_file;
+            crate::logger::set_file_logging_enabled(enabled);
         }
     }
 }
