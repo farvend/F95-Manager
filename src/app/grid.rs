@@ -15,33 +15,65 @@ impl super::NoLagApp {
         let tx = self.images.cover_tx.clone();
         let ctx2 = ctx.clone();
         let url_cloned = url.clone();
-        super::rt().spawn(async move {
-            let result = crate::parser::fetch_image_f95(&url_cloned).await;
 
-            let msg = match result {
-                Ok((w, h, rgba)) => {
-                    log::info!(
-                        "screen ok: id={} idx={} size={}x{} url={}",
-                        thread_id,
-                        idx,
-                        w,
-                        h,
-                        url_cloned
-                    );
-                    super::CoverMsg::ScreenOk { thread_id, idx, w, h, rgba }
+        // Try cached file first: cache/<thread_id>/screen_<idx+1>.png
+        let cache_path = {
+            let base = crate::app::settings::APP_SETTINGS.read().unwrap().cache_dir.clone();
+            base.join(thread_id.to_string()).join(format!("screen_{}.png", idx + 1))
+        };
+
+        super::rt().spawn(async move {
+            let mut served_from_cache = false;
+            if tokio::fs::metadata(&cache_path).await.is_ok() {
+                match tokio::task::spawn_blocking(move || -> Result<(usize, usize, Vec<u8>), String> {
+                    let bytes = std::fs::read(&cache_path).map_err(|e| format!("read cache error: {}", e))?;
+                    let img = image::load_from_memory(&bytes).map_err(|e| format!("decode cache error: {}", e))?;
+                    let rgba = img.to_rgba8();
+                    let (w, h) = rgba.dimensions();
+                    Ok((w as usize, h as usize, rgba.into_vec()))
+                }).await {
+                    Ok(Ok((w, h, rgba))) => {
+                        log::info!("screen cache hit: id={} idx={}", thread_id, idx);
+                        let _ = tx.send(super::CoverMsg::ScreenOk { thread_id, idx, w, h, rgba });
+                        served_from_cache = true;
+                    }
+                    Ok(Err(e)) => {
+                        log::warn!("screen cache decode failed: id={} idx={} err={}", thread_id, idx, e);
+                    }
+                    Err(e) => {
+                        log::warn!("screen cache task join failed: id={} idx={} err={}", thread_id, idx, e);
+                    }
                 }
-                Err(err) => {
-                    log::warn!(
-                        "screen fetch failed: id={} idx={} err={} url={}",
-                        thread_id,
-                        idx,
-                        err,
-                        url_cloned
-                    );
-                    super::CoverMsg::ScreenErr { thread_id, idx }
-                }
-            };
-            let _ = tx.send(msg);
+            }
+
+            if !served_from_cache {
+                let result = crate::parser::fetch_image_f95(&url_cloned).await;
+
+                let msg = match result {
+                    Ok((w, h, rgba)) => {
+                        log::info!(
+                            "screen ok: id={} idx={} size={}x{} url={}",
+                            thread_id,
+                            idx,
+                            w,
+                            h,
+                            url_cloned
+                        );
+                        super::CoverMsg::ScreenOk { thread_id, idx, w, h, rgba }
+                    }
+                    Err(err) => {
+                        log::warn!(
+                            "screen fetch failed: id={} idx={} err={} url={}",
+                            thread_id,
+                            idx,
+                            err,
+                            url_cloned
+                        );
+                        super::CoverMsg::ScreenErr { thread_id, idx }
+                    }
+                };
+                let _ = tx.send(msg);
+            }
             ctx2.request_repaint();
         });
     }

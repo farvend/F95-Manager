@@ -306,29 +306,55 @@ impl super::NoLagApp {
                 let url_raw = if let Some(u) = helpers::get_cover_or_first_screen_url(t) {
                     u
                 } else {
-                    // nothing to show
                     self.images.covers_loading.remove(&id);
                     continue;
                 };
+                let is_cover_choice = !t.cover.is_empty() && url_raw == t.cover;
                 let url = crate::parser::normalize_url(&url_raw);
                 let tx = self.images.cover_tx.clone();
                 let ctx2 = ctx.clone();
-                log::info!("cover schedule: id={} url={}", id, url);
-                rt().spawn(async move {
-                    let result = crate::parser::fetch_image_f95(&url).await;
 
-                    let _ = tx.send(match result {
-                        Ok((w, h, rgba)) => CoverMsg::Ok {
-                            thread_id,
-                            w,
-                            h,
-                            rgba,
-                        },
-                        Err(err) => {
-                            log::warn!("cover fetch failed: id={} err={} url={}", id, err, url);
-                            CoverMsg::Err { thread_id: id }
+                // Attempt to load from cache first (cover.png or screen_1.png if we fell back)
+                let cache_path = {
+                    let base = crate::app::settings::APP_SETTINGS.read().unwrap().cache_dir.clone();
+                    let file = if is_cover_choice { "cover.png".to_string() } else { "screen_1.png".to_string() };
+                    base.join(id.to_string()).join(file)
+                };
+
+                log::info!("cover schedule: id={} url={} cache_path={}", id, url, cache_path.to_string_lossy());
+                super::rt().spawn(async move {
+                    let mut served_from_cache = false;
+                    if tokio::fs::metadata(&cache_path).await.is_ok() {
+                        match tokio::task::spawn_blocking(move || -> Result<(usize, usize, Vec<u8>), String> {
+                            let bytes = std::fs::read(&cache_path).map_err(|e| format!("read cache error: {}", e))?;
+                            let img = image::load_from_memory(&bytes).map_err(|e| format!("decode cache error: {}", e))?;
+                            let rgba = img.to_rgba8();
+                            let (w, h) = rgba.dimensions();
+                            Ok((w as usize, h as usize, rgba.into_vec()))
+                        }).await {
+                            Ok(Ok((w, h, rgba))) => {
+                                let _ = tx.send(CoverMsg::Ok { thread_id, w, h, rgba });
+                                served_from_cache = true;
+                            }
+                            Ok(Err(e)) => {
+                                log::warn!("cover cache decode failed: id={} err={}", id, e);
+                            }
+                            Err(e) => {
+                                log::warn!("cover cache task join failed: id={} err={}", id, e);
+                            }
                         }
-                    });
+                    }
+
+                    if !served_from_cache {
+                        let result = crate::parser::fetch_image_f95(&url).await;
+                        let _ = tx.send(match result {
+                            Ok((w, h, rgba)) => CoverMsg::Ok { thread_id, w, h, rgba },
+                            Err(err) => {
+                                log::warn!("cover fetch failed: id={} err={} url={}", id, err, url);
+                                CoverMsg::Err { thread_id: id }
+                            }
+                        });
+                    }
                     ctx2.request_repaint();
                 });
             }
