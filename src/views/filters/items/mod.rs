@@ -4,6 +4,7 @@ pub mod segmented_panel;
 pub mod mode_switch;
 pub mod discrete_slider;
 pub mod search_with_mode;
+pub mod picker;
 pub mod tags_menu;
 pub mod prefixes_menu;
 //pub use segmented_panel;
