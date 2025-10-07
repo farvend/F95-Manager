@@ -6,7 +6,6 @@ use std::sync::mpsc;
 use std::time::Instant;
 
 use crate::types::{DateLimit, SearchMode, Sorting, TagLogic};
-use super::settings::APP_SETTINGS;
 use super::fetch::CoverMsg;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,15 +33,19 @@ pub struct FiltersState {
 
 impl Default for FiltersState {
     fn default() -> Self {
-        let st = APP_SETTINGS.read().unwrap();
-        let mut inc = st.startup_tags.clone();
-        let mut exc = st.startup_exclude_tags.clone();
-        let mut pref = st.startup_prefixes.clone();
-        let mut nopref = st.startup_exclude_prefixes.clone();
-        if inc.len() > 10 { inc.truncate(10); }
-        if exc.len() > 10 { exc.truncate(10); }
-        if pref.len() > 10 { pref.truncate(10); }
-        if nopref.len() > 10 { nopref.truncate(10); }
+        let (mut inc, mut exc, mut pref, mut nopref) = super::settings::with_settings(|st| {
+            (
+                st.startup_tags.clone(),
+                st.startup_exclude_tags.clone(),
+                st.startup_prefixes.clone(),
+                st.startup_exclude_prefixes.clone(),
+            )
+        });
+        let max = crate::ui_constants::MAX_FILTER_ITEMS;
+        if inc.len() > max { inc.truncate(max); }
+        if exc.len() > max { exc.truncate(max); }
+        if pref.len() > max { pref.truncate(max); }
+        if nopref.len() > max { nopref.truncate(max); }
 
         Self {
             sort: Sorting::default(),

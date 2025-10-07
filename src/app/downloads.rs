@@ -2,13 +2,50 @@ use std::sync::mpsc;
 
 use eframe::egui;
 
-use crate::game_download::GameDownloadStatus;
+use crate::game_download::{GameDownloadStatus, Progress};
 use crate::parser::game_info::link::DownloadLink;
+use crate::ui_constants::download::{DOWNLOAD_WEIGHT, UNZIP_WEIGHT};
 
 pub(super) struct DownloadState {
     pub(super) rx: mpsc::Receiver<GameDownloadStatus>,
-    pub(super) progress: Option<crate::game_download::Progress>,
+    pub(super) progress: Option<Progress>,
     pub(super) link_choices: Option<Vec<DownloadLink>>,
+}
+
+/// Helper function to handle progress updates uniformly.
+/// DRY principle: Unifies duplicated progress handling logic.
+fn handle_progress(
+    state: &mut DownloadState,
+    progress: Progress,
+    ctx: &egui::Context,
+    id: u64,
+    base_offset: f32,
+    weight: f32,
+    phase: &str,
+) {
+    match progress {
+        Progress::Pending(p) => {
+            let mapped = (base_offset + (weight * p).clamp(0.0, weight)).clamp(0.0, 1.0);
+            state.progress = Some(Progress::Pending(mapped));
+            ctx.request_repaint();
+        }
+        Progress::Paused => {
+            state.progress = Some(Progress::Paused);
+            ctx.request_repaint();
+        }
+        Progress::Error(e) => {
+            if phase == "Unzip" {
+                log::error!("error during {}: {e}", phase);
+            }
+            super::errors_ui::append_error(format!("{} error (thread {}): {}", phase, id, e));
+            state.progress = Some(Progress::Error(e));
+            ctx.request_repaint();
+        }
+        Progress::Unknown => {
+            state.progress = Some(Progress::Unknown);
+            ctx.request_repaint();
+        }
+    }
 }
 
 impl super::NoLagApp {
@@ -21,69 +58,14 @@ impl super::NoLagApp {
                     GameDownloadStatus::SelectLinks(links) => {
                         // Ask UI to let user select a link; keep progress unknown to show "awaiting" state
                         state.link_choices = Some(links);
-                        state.progress = Some(crate::game_download::Progress::Unknown);
+                        state.progress = Some(Progress::Unknown);
                         ctx.request_repaint();
                     }
                     GameDownloadStatus::Downloading(progress) => {
-                        match progress {
-                            crate::game_download::Progress::Pending(p) => {
-                                // Map downloading [0..1] to overall [0..DOWNLOAD_WEIGHT]
-                                state.progress = Some(crate::game_download::Progress::Pending(
-                                    (super::DOWNLOAD_WEIGHT * p).clamp(0.0, super::DOWNLOAD_WEIGHT),
-                                ));
-                                ctx.request_repaint();
-                            }
-                            crate::game_download::Progress::Paused => {
-                                state.progress = Some(crate::game_download::Progress::Paused);
-                                ctx.request_repaint();
-                            }
-                            crate::game_download::Progress::Error(e) => {
-                                let err_str = e;
-                                super::errors_ui::append_error(format!(
-                                    "Download error (thread {}): {}",
-                                    id, err_str
-                                ));
-                                state.progress =
-                                    Some(crate::game_download::Progress::Error(err_str));
-                                ctx.request_repaint();
-                            }
-                            crate::game_download::Progress::Unknown => {
-                                state.progress = Some(crate::game_download::Progress::Unknown);
-                                ctx.request_repaint();
-                            }
-                        }
+                        handle_progress(state, progress, ctx, *id, 0.0, DOWNLOAD_WEIGHT, "Download");
                     }
                     GameDownloadStatus::Unzipping(progress) => {
-                        match progress {
-                            crate::game_download::Progress::Pending(p) => {
-                                // Map unzipping [0..1] to overall [DOWNLOAD_WEIGHT..1.0]
-                                state.progress = Some(crate::game_download::Progress::Pending(
-                                    super::DOWNLOAD_WEIGHT
-                                        + (super::UNZIP_WEIGHT * p)
-                                            .clamp(0.0, super::UNZIP_WEIGHT),
-                                ));
-                                ctx.request_repaint();
-                            }
-                            crate::game_download::Progress::Paused => {
-                                state.progress = Some(crate::game_download::Progress::Paused);
-                                ctx.request_repaint();
-                            }
-                            crate::game_download::Progress::Error(e) => {
-                                log::error!("error during download: {e}");
-                                let err_str = e;
-                                super::errors_ui::append_error(format!(
-                                    "Unzip error (thread {}): {}",
-                                    id, err_str
-                                ));
-                                state.progress =
-                                    Some(crate::game_download::Progress::Error(err_str));
-                                ctx.request_repaint();
-                            }
-                            crate::game_download::Progress::Unknown => {
-                                state.progress = Some(crate::game_download::Progress::Unknown);
-                                ctx.request_repaint();
-                            }
-                        }
+                        handle_progress(state, progress, ctx, *id, DOWNLOAD_WEIGHT, UNZIP_WEIGHT, "Unzip");
                     }
                     GameDownloadStatus::Completed { dest_dir, exe_path } => {
                         state.progress = None;

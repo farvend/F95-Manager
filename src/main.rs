@@ -13,6 +13,7 @@ mod app;
 mod tags;
 mod logger;
 mod localization;
+mod ui_constants;
 pub mod game_download;
 
 //#[tokio::main(flavor = "multi_thread", worker_threads = 10)]

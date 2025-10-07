@@ -41,3 +41,23 @@ pub use ui::{
     SettingsMsg,
     SettingsApp,
 };
+
+/// Helper function to read settings with a closure.
+/// DRY principle: Reduces boilerplate of `.read().unwrap()` pattern.
+pub fn with_settings<F, R>(f: F) -> R
+where
+    F: FnOnce(&AppSettings) -> R,
+{
+    let st = APP_SETTINGS.read().unwrap();
+    f(&st)
+}
+
+/// Helper function to modify settings with a closure.
+/// DRY principle: Reduces boilerplate of `.write().unwrap()` pattern.
+pub fn with_settings_mut<F, R>(f: F) -> R
+where
+    F: FnOnce(&mut AppSettings) -> R,
+{
+    let mut st = APP_SETTINGS.write().unwrap();
+    f(&mut st)
+}

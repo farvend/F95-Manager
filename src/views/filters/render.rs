@@ -11,6 +11,33 @@ use crate::views::filters::items::{
     prefixes_menu::prefixes_picker,
 };
 
+/// Helper function to render removable items (tags/prefixes) with close buttons.
+/// Returns true if an item was removed, false otherwise.
+/// DRY principle: Unifies 4 duplicated blocks of code.
+fn render_removable_items<F>(
+    ui: &mut egui::Ui,
+    items: &mut Vec<u32>,
+    name_resolver: F,
+) -> bool
+where
+    F: Fn(u32) -> String,
+{
+    let mut to_remove: Option<usize> = None;
+    ui.horizontal_wrapped(|ui| {
+        for (i, &id) in items.iter().enumerate() {
+            let name = name_resolver(id);
+            if ui.button(format!("{} ×", name)).clicked() {
+                to_remove = Some(i);
+            }
+        }
+    });
+    if let Some(i) = to_remove {
+        items.remove(i);
+        return true;
+    }
+    false
+}
+
 /// Draws the right-side filters panel.
 /// State is passed in by mutable references and updated in-place.
 pub fn draw_filters_panel(
@@ -19,7 +46,7 @@ pub fn draw_filters_panel(
     date_limit: &mut DateLimit,
     include_logic: &mut TagLogic,
     include_tags: &mut Vec<u32>,
-    exclude_mode: &mut Vec<u32>,
+    _exclude_mode: &mut Vec<u32>,
     exclude_tags: &mut Vec<u32>,
     include_prefixes: &mut Vec<u32>,
     exclude_prefixes: &mut Vec<u32>,
@@ -68,128 +95,64 @@ pub fn draw_filters_panel(
             ui.separator();
 
             // TAGS (MAX 10) with OR/AND logic
-            if let Some(new_mode) = mode_switch_small(ui, crate::localization::translate_with("filters-include-tags-header", &[("max", "10".to_string())]).as_str(), include_logic) {
+            if let Some(new_mode) = mode_switch_small(ui, crate::localization::translate_with("filters-include-tags-header", &[("max", crate::ui_constants::MAX_FILTER_ITEMS_STR.to_string())]).as_str(), include_logic) {
                 *include_logic = new_mode;
                 changed_now = true;
             }
             if let Some(id) = tags_picker(ui, "include_tags", crate::localization::translate("filters-select-tag-include").as_str()) {
-                if include_tags.len() < 10 && !include_tags.contains(&id) {
+                if include_tags.len() < crate::ui_constants::MAX_FILTER_ITEMS && !include_tags.contains(&id) {
                     include_tags.push(id);
                     // Clear main text query when picking a tag
                     query.clear();
                     changed_now = true;
                 }
             }
-            ui.horizontal_wrapped(|ui| {
-                let mut to_remove: Option<usize> = None;
-                for (i, id) in include_tags.iter().enumerate() {
-                    let name = crate::tags::TAGS
-                        .tags
-                        .get(&id.to_string())
-                        .cloned()
-                        .unwrap_or_else(|| id.to_string());
-                    if ui.button(format!("{} ×", name)).clicked() {
-                        to_remove = Some(i);
-                    }
-                }
-                if let Some(i) = to_remove {
-                    include_tags.remove(i);
-                    changed_now = true;
-                }
-            });
+            if render_removable_items(ui, include_tags, crate::tags::get_tag_name_by_id) {
+                changed_now = true;
+            }
 
             ui.separator();
 
             // EXCLUDE TAGS (MAX 10)
-            ui.label(RichText::new(crate::localization::translate_with("filters-exclude-tags-header", &[("max", "10".to_string())])).weak());
+            ui.label(RichText::new(crate::localization::translate_with("filters-exclude-tags-header", &[("max", crate::ui_constants::MAX_FILTER_ITEMS_STR.to_string())])).weak());
             if let Some(id) = tags_picker(ui, "exclude_tags", crate::localization::translate("filters-select-tag-exclude").as_str()) {
-                if exclude_tags.len() < 10 && !exclude_tags.contains(&id) {
+                if exclude_tags.len() < crate::ui_constants::MAX_FILTER_ITEMS && !exclude_tags.contains(&id) {
                     exclude_tags.push(id);
                     // Clear main text query when picking a tag
                     query.clear();
                     changed_now = true;
                 }
             }
-            ui.horizontal_wrapped(|ui| {
-                let mut to_remove: Option<usize> = None;
-                for (i, id) in exclude_tags.iter().enumerate() {
-                    let name = crate::tags::TAGS
-                        .tags
-                        .get(&id.to_string())
-                        .cloned()
-                        .unwrap_or_else(|| id.to_string());
-                    if ui.button(format!("{} ×", name)).clicked() {
-                        to_remove = Some(i);
-                    }
-                }
-                if let Some(i) = to_remove {
-                    exclude_tags.remove(i);
-                    changed_now = true;
-                }
-            });
+            if render_removable_items(ui, exclude_tags, crate::tags::get_tag_name_by_id) {
+                changed_now = true;
+            }
             ui.separator();
 
             // PREFIXES (MAX 10)
-            ui.label(RichText::new(crate::localization::translate_with("filters-include-prefixes-header", &[("max", "10".to_string())])).weak());
+            ui.label(RichText::new(crate::localization::translate_with("filters-include-prefixes-header", &[("max", crate::ui_constants::MAX_FILTER_ITEMS_STR.to_string())])).weak());
             if let Some(id) = prefixes_picker(ui, "include_prefixes", crate::localization::translate("filters-select-prefix-include").as_str()) {
-                if include_prefixes.len() < 10 && !include_prefixes.contains(&id) {
+                if include_prefixes.len() < crate::ui_constants::MAX_FILTER_ITEMS && !include_prefixes.contains(&id) {
                     include_prefixes.push(id);
                     changed_now = true;
                 }
             }
-            ui.horizontal_wrapped(|ui| {
-                let mut to_remove: Option<usize> = None;
-                for (i, id) in include_prefixes.iter().enumerate() {
-                    // Find prefix name by id
-                    let mut name: Option<String> = None;
-                    for group in &crate::tags::TAGS.prefixes.games {
-                        if let Some(pref) = group.prefixes.iter().find(|p| p.id as u32 == *id) {
-                            name = Some(pref.name.clone());
-                            break;
-                        }
-                    }
-                    let name = name.unwrap_or_else(|| id.to_string());
-                    if ui.button(format!("{} ×", name)).clicked() {
-                        to_remove = Some(i);
-                    }
-                }
-                if let Some(i) = to_remove {
-                    include_prefixes.remove(i);
-                    changed_now = true;
-                }
-            });
+            if render_removable_items(ui, include_prefixes, crate::tags::get_prefix_name_by_id) {
+                changed_now = true;
+            }
 
             ui.separator();
 
             // EXCLUDE PREFIXES (MAX 10)
-            ui.label(RichText::new(crate::localization::translate_with("filters-exclude-prefixes-header", &[("max", "10".to_string())])).weak());
+            ui.label(RichText::new(crate::localization::translate_with("filters-exclude-prefixes-header", &[("max", crate::ui_constants::MAX_FILTER_ITEMS_STR.to_string())])).weak());
             if let Some(id) = prefixes_picker(ui, "exclude_prefixes", crate::localization::translate("filters-select-prefix-exclude").as_str()) {
-                if exclude_prefixes.len() < 10 && !exclude_prefixes.contains(&id) {
+                if exclude_prefixes.len() < crate::ui_constants::MAX_FILTER_ITEMS && !exclude_prefixes.contains(&id) {
                     exclude_prefixes.push(id);
                     changed_now = true;
                 }
             }
-            ui.horizontal_wrapped(|ui| {
-                let mut to_remove: Option<usize> = None;
-                for (i, id) in exclude_prefixes.iter().enumerate() {
-                    // Find prefix name by id
-                    let mut name: Option<String> = None;
-                    for group in &crate::tags::TAGS.prefixes.games {
-                        if let Some(pref) = group.prefixes.iter().find(|p| p.id as u32 == *id) {
-                            name = Some(pref.name.clone());
-                            break;
-                        }
-                    }
-                    let name = name.unwrap_or_else(|| id.to_string());
-                    if ui.button(format!("{} ×", name)).clicked() {
-                        to_remove = Some(i);
-                    }
-                }
-                if let Some(i) = to_remove {
-                    exclude_prefixes.remove(i);
-                    changed_now = true;
-                }
-            });
+            if render_removable_items(ui, exclude_prefixes, crate::tags::get_prefix_name_by_id) {
+                changed_now = true;
+            }
 
             ui.add_space(8.0);
             ui.with_layout(Layout::bottom_up(egui::Align::LEFT), |ui| {

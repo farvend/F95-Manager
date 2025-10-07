@@ -1,8 +1,5 @@
-use std::backtrace;
-
 use eframe::egui;
-
-use crate::parser::{game_info::ThreadId, F95Error};
+use crate::parser::game_info::ThreadId;
 
 use super::rt;
 mod helpers;

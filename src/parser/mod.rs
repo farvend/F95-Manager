@@ -19,9 +19,6 @@ use std::fmt;
 use crate::{parser::game_info::{ThreadId, cookies}, types::{DateLimit, Sorting}};
 
 pub const BASE_URL: &str = "https://f95zone.to/sam/latest_alpha/latest_data.php";
-// const CLIENT: LazyCell<reqwest::Client, reqwest::Client> = LazyCell::new(|| reqwest::Client::builder()
-//         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
-//         .build().unwrap());
 
 lazy_static!(
     static ref CLIENT: reqwest::Client = reqwest::Client::builder()
@@ -30,26 +27,6 @@ lazy_static!(
 );
 
 pub mod game_info;
-// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-// pub enum SortParam {
-//     Date,
-//     Likes,
-//     Views,
-//     Alphabetical,
-//     Rating,
-// }
-
-// impl SortParam {
-//     pub fn as_str(&self) -> &'static str {
-//         match self {
-//             SortParam::Date => "date",
-//             SortParam::Likes => "likes",
-//             SortParam::Views => "views",
-//             SortParam::Alphabetical => "alpha",
-//             SortParam::Rating => "rating",
-//         }
-//     }
-// }
 
 #[derive(Debug, Clone)]
 pub struct F95Filters {

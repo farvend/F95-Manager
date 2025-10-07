@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use crate::types::*;
-use crate::views::cards::CARD_WIDTH;
 use crate::views::filters::draw_filters_panel;
 
 mod grid;
@@ -30,9 +29,6 @@ pub use runtime::RUNTIME;
 pub use fetch::CoverMsg;
 use downloads::DownloadState;
 use state::{AuthState, FiltersState, ImagesState, NetState, Screen};
-
-const DOWNLOAD_WEIGHT: f32 = 0.75;
-const UNZIP_WEIGHT: f32 = 1.0 - DOWNLOAD_WEIGHT;
 
 pub struct NoLagApp {
     // Пагинация
@@ -247,7 +243,7 @@ impl App for NoLagApp {
                 self.start_fetch(ctx);
             }
         }
-        // Debounce text query changes: run search 0.3s after last edit
+        // Debounce text query changes: run search after last edit
         let query_changed = self.filters.query != prev_query;
         if query_changed {
             if apply {
@@ -255,9 +251,10 @@ impl App for NoLagApp {
                 self.filters.search_due_at = None;
             } else {
                 self.page = 1;
-                self.filters.search_due_at = Some(Instant::now() + Duration::from_millis(300));
+                let debounce = Duration::from_millis(crate::ui_constants::SEARCH_DEBOUNCE_MS);
+                self.filters.search_due_at = Some(Instant::now() + debounce);
                 // Wake up after the debounce interval to fire the search
-                ctx.request_repaint_after(Duration::from_millis(300));
+                ctx.request_repaint_after(debounce);
             }
         }
         if open_settings {
@@ -274,20 +271,20 @@ impl App for NoLagApp {
         }
         // When filters changed this frame, auto-save selected tags if enabled in settings
         if apply {
-            let do_autosave = { settings::APP_SETTINGS.read().unwrap().autosave_selected_tags };
+            let do_autosave = settings::with_settings(|s| s.autosave_selected_tags);
             if do_autosave {
-                let mut need_save = false;
-                {
-                    let mut st = settings::APP_SETTINGS.write().unwrap();
+                let need_save = settings::with_settings_mut(|st| {
+                    let mut changed = false;
                     if st.startup_tags != self.filters.include_tags {
                         st.startup_tags = self.filters.include_tags.clone();
-                        need_save = true;
+                        changed = true;
                     }
                     if st.startup_exclude_tags != self.filters.exclude_tags {
                         st.startup_exclude_tags = self.filters.exclude_tags.clone();
-                        need_save = true;
+                        changed = true;
                     }
-                }
+                    changed
+                });
                 if need_save {
                     settings::save_settings_to_disk();
                 }
@@ -337,8 +334,8 @@ impl App for NoLagApp {
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
                     let avail_w = ui.available_width().floor();
-                    let card_w = CARD_WIDTH;
-                    let gap = 16.0;
+                    let card_w = crate::ui_constants::CARD_WIDTH;
+                    let gap = crate::ui_constants::CARD_GAP;
 
                     let mut cols = ((avail_w + gap) / (card_w + gap)).floor() as usize;
                     if cols == 0 {
@@ -365,30 +362,26 @@ impl App for NoLagApp {
                             msg.data.clone()
                         };
                         // Build a set of hidden thread_ids and filter them out from rendering
-                        let hidden: std::collections::HashSet<u64> = {
-                            let st = settings::APP_SETTINGS.read().unwrap();
-                            st.hidden_threads.iter().copied().collect()
-                        };
+                        let hidden: std::collections::HashSet<u64> = 
+                            settings::with_settings(|st| st.hidden_threads.iter().copied().collect());
 
                         // When Library mode is ON, show downloaded AND in-progress games; always ignore hidden ones
                         let mut display_data: Vec<crate::parser::F95Thread> = if self.filters.library_only {
                             // Persisted completed downloads
-                            let downloaded_ids: std::collections::HashSet<u64> = {
-                                let st = settings::APP_SETTINGS.read().unwrap();
-                                st.downloaded_games
-                                    .iter()
-                                    .filter(|g| settings::game_folder_exists(&g.folder))
-                                    .map(|g| g.thread_id)
-                                    .collect()
-                            };
+                            let downloaded_ids: std::collections::HashSet<u64> = 
+                                settings::with_settings(|st| {
+                                    st.downloaded_games
+                                        .iter()
+                                        .filter(|g| settings::game_folder_exists(&g.folder))
+                                        .map(|g| g.thread_id)
+                                        .collect()
+                                });
                             // In-progress downloads (runtime-only)
                             let downloading_ids: std::collections::HashSet<u64> =
                                 self.downloads.keys().copied().collect();
                             // Persisted pending/incomplete downloads (from previous sessions or failed attempts)
-                            let pending_ids: std::collections::HashSet<u64> = {
-                                let st = settings::APP_SETTINGS.read().unwrap();
-                                st.pending_downloads.iter().copied().collect()
-                            };
+                            let pending_ids: std::collections::HashSet<u64> = 
+                                settings::with_settings(|st| st.pending_downloads.iter().copied().collect());
                             let in_library = |id: u64| {
                                 downloaded_ids.contains(&id)
                                     || downloading_ids.contains(&id)
@@ -450,13 +443,12 @@ impl App for NoLagApp {
                         ui.add_space(8.0);
                         ui.vertical_centered(|ui| {
                             if self.filters.library_only {
-                                let installed_count = {
-                                    let st = settings::APP_SETTINGS.read().unwrap();
+                                let installed_count = settings::with_settings(|st| {
                                     st.downloaded_games
                                         .iter()
                                         .filter(|g| settings::game_folder_exists(&g.folder))
                                         .count()
-                                };
+                                });
                                 ui.label(crate::localization::translate_with("library-summary", &[("shown", display_data.len().to_string()), ("installed", installed_count.to_string())]));
                             } else {
                                 let (cur, total) = {
