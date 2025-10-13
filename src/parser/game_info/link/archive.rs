@@ -8,6 +8,7 @@ use std::{
 use tokio::sync::mpsc::UnboundedSender;
 use zip::ZipArchive;
 use sevenz_rust;
+use unrar;
 
 use crate::game_download::{GameDownloadStatus, Progress};
 
@@ -374,12 +375,67 @@ pub fn extract_archive(
     // Supported formats:
     // - .zip (native streaming unzip)
     // - .7z (pure Rust via sevenz_rust)
+    // - .rar (via unrar + UnRAR.dll on Windows)
     if name_lower.ends_with(".zip") {
         return unzip_streaming(archive_path, dest_base, sd);
     }
     if name_lower.ends_with(".7z") {
         return extract_with_sevenz(archive_path, dest_base);
     }
+    if name_lower.ends_with(".rar") {
+        return extract_with_unrar(archive_path, dest_base);
+    }
 
     Err(format!("Unsupported archive format: {}", name_lower))
+}
+
+fn extract_with_unrar(
+    archive_path: &Path,
+    dest_base: &Path,
+) -> Result<(PathBuf, Option<PathBuf>), String> {
+    // Use archive_dest_dir and ensure unique directory to avoid mixing contents
+    let base_dest = archive_dest_dir(archive_path, dest_base);
+    let mut dest_dir = base_dest.clone();
+    if dest_dir.exists() {
+        let orig_name = dest_dir
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("extracted")
+            .to_string();
+        let mut idx = 2usize;
+        loop {
+            let candidate = dest_dir.with_file_name(format!("{orig_name}-{idx}"));
+            if !candidate.exists() {
+                dest_dir = candidate;
+                break;
+            }
+            idx += 1;
+        }
+    }
+
+    std::fs::create_dir_all(&dest_dir).map_err(|e| format!("Create dest dir failed: {e}"))?;
+
+    // Open for processing and extract every entry under dest_dir
+    let rar_path = archive_path
+        .to_str()
+        .ok_or_else(|| "RAR path contains invalid UTF-8".to_string())?;
+
+    let mut open = unrar::Archive::new(rar_path)
+        .open_for_processing()
+        .map_err(|e| format!("UnRAR open failed: {e}"))?;
+
+    loop {
+        match open.read_header() {
+            Ok(Some(hdr)) => {
+                // Extract current entry into base directory (creates subdirs as needed)
+                open = hdr
+                    .extract_with_base(&dest_dir)
+                    .map_err(|e| format!("UnRAR extract failed: {e}"))?;
+            }
+            Ok(None) => break,
+            Err(e) => return Err(format!("UnRAR read header failed: {e}")),
+        }
+    }
+
+    Ok((dest_dir.clone(), find_first_exe(&dest_dir)))
 }

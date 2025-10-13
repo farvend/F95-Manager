@@ -12,6 +12,7 @@ settings-loading-anim = Loading indicator:
 settings-loading-anim-bottom-bar = Bottom bar
 settings-loading-anim-circle-bottom-right = Circle (bottom-right)
 settings-custom-launch = Custom launch command (use {{path}} placeholder):
+settings-cache-on-download = Cache metadata and images on download
 settings-save = Save
 settings-cancel = Cancel
 settings-log-to-file = Write logs to file (warn and error)

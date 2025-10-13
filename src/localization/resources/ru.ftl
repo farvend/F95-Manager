@@ -12,6 +12,7 @@ settings-loading-anim = Индикатор загрузки:
 settings-loading-anim-bottom-bar = Нижняя полоска
 settings-loading-anim-circle-bottom-right = Круг (внизу справа)
 settings-custom-launch = Своя команда запуска (используйте {{path}} как путь к exe):
+settings-cache-on-download = Кешировать метаданные и изображения при загрузке
 settings-save = Сохранить
 settings-cancel = Отмена
 settings-log-to-file = Писать логи в файл (предупреждения и ошибки)
