@@ -278,7 +278,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     }
                 });
 
-                ui.add_space(6.0);
+                ui.add_space(crate::ui_constants::card::STATS_MARGIN_V);
                 ui.label(crate::localization::translate("settings-startup-exclude-tags"));
                 if let Some(id) = tags_picker(ui, "settings_startup_exclude_tags", crate::localization::translate("settings-startup-exclude-tags-placeholder").as_str()) {
                     let mut list = STARTUP_EXCLUDE_TAGS_INPUT.write().unwrap();
@@ -307,7 +307,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     }
                 });
 
-                ui.add_space(6.0);
+                ui.add_space(crate::ui_constants::card::STATS_MARGIN_V);
                 ui.label(crate::localization::translate("settings-startup-prefixes"));
                 if let Some(id) = prefixes_picker(ui, "settings_startup_prefixes", crate::localization::translate("settings-startup-prefixes-placeholder").as_str()) {
                     let mut list = STARTUP_PREFIXES_INPUT.write().unwrap();
@@ -340,7 +340,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     }
                 });
 
-                ui.add_space(6.0);
+                ui.add_space(crate::ui_constants::card::STATS_MARGIN_V);
                 ui.label(crate::localization::translate("settings-startup-exclude-prefixes"));
                 if let Some(id) = prefixes_picker(ui, "settings_startup_exclude_prefixes", crate::localization::translate("settings-startup-exclude-prefixes-placeholder").as_str()) {
                     let mut list = STARTUP_EXCLUDE_PREFIXES_INPUT.write().unwrap();
@@ -373,7 +373,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     }
                 });
 
-                ui.add_space(6.0);
+                ui.add_space(crate::ui_constants::card::STATS_MARGIN_V);
                 ui.label(crate::localization::translate("settings-warn-heading"));
 
                 ui.label(crate::localization::translate("settings-warn-tags"));
@@ -404,7 +404,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     }
                 });
 
-                ui.add_space(6.0);
+                ui.add_space(crate::ui_constants::card::STATS_MARGIN_V);
                 ui.label(crate::localization::translate("settings-warn-prefixes"));
                 if let Some(id) = prefixes_picker(ui, "settings_warn_prefixes", crate::localization::translate("settings-warn-prefixes-placeholder").as_str()) {
                     let mut list = WARN_PREFIXES_INPUT.write().unwrap();
@@ -507,7 +507,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                         *SETTINGS_OPEN.write().unwrap() = false;
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
-                    ui.add_space(8.0);
+                    ui.add_space(crate::ui_constants::spacing::MEDIUM);
 
                     // Confirmation modal for moving installed games when extract-dir changes
                     if *MOVE_CONFIRM_OPEN.read().unwrap() {
@@ -517,7 +517,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                             .show(ctx, |ui| {
                                 ui.label(crate::localization::translate("settings-move-confirm-text"));
-                                ui.add_space(8.0);
+                                ui.add_space(crate::ui_constants::spacing::MEDIUM);
                                 ui.horizontal(|ui| {
                                     if ui.button(crate::localization::translate("settings-move-confirm-move")).clicked() {
                                         let new_extract_str = PENDING_EXTRACT_DIR.read().unwrap().clone();
@@ -673,7 +673,7 @@ impl App for SettingsApp {
                 ui.text_edit_singleline(&mut self.extract_dir);
             });
 
-            ui.add_space(8.0);
+            ui.add_space(crate::ui_constants::spacing::MEDIUM);
             ui.separator();
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -689,7 +689,7 @@ impl App for SettingsApp {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
 
-                ui.add_space(8.0);
+                ui.add_space(crate::ui_constants::spacing::MEDIUM);
             });
             });
         });

@@ -28,7 +28,7 @@ pub fn thread_card(
     progress: Option<crate::game_download::Progress>,
     link_choices: Option<&[crate::parser::game_info::link::DownloadLink]>,
 ) -> CardHover {
-    let rounding = Rounding::same(8.0);
+    let rounding = Rounding::same(crate::ui_constants::card::ROUNDING);
     let fill = Color32::from_rgb(36, 36, 36);
     let stroke = Stroke::new(1.0, Color32::from_rgb(64, 64, 64));
 
@@ -46,8 +46,8 @@ pub fn thread_card(
         .unwrap_or(false);
     let card_rounding = if was_open {
         Rounding {
-            nw: 8.0,
-            ne: 8.0,
+            nw: crate::ui_constants::card::ROUNDING,
+            ne: crate::ui_constants::card::ROUNDING,
             sw: 0.0,
             se: 0.0,
         }
@@ -62,10 +62,13 @@ pub fn thread_card(
         .fill(fill)
         .stroke(stroke)
         .rounding(card_rounding)
-        .inner_margin(egui::Margin::symmetric(8.0, 8.0))
+        .inner_margin(egui::Margin::symmetric(
+            crate::ui_constants::card::INNER_MARGIN,
+            crate::ui_constants::card::INNER_MARGIN,
+        ))
         .show(ui, |ui| {
             // Constrain inner content to card width minus inner margins (8 + 8).
-            let inner_w = width - 16.0;
+            let inner_w = width - 2.0 * crate::ui_constants::card::INNER_MARGIN;
             ui.set_width(inner_w);
 
             // Cover + markers (handles hover index and screenshot swap if available)
@@ -80,7 +83,7 @@ pub fn thread_card(
             // Use a fixed post-cover gap to avoid data-driven layout hacks.
             // Combined with markers area height from draw_cover this ensures consistent spacing.
             // Fixed gap after cover; independent of data and width.
-            ui.add_space(20.0);
+            ui.add_space(crate::ui_constants::card::POST_COVER_GAP);
             ui.add(
                 egui::Label::new(RichText::new(&t.title).heading().color(Color32::from_rgb(230, 230, 230)))
                     //.truncate(true)
@@ -88,7 +91,7 @@ pub fn thread_card(
             );
 
             // Creator under title (no background) to match main page layout
-            ui.add_space(4.0);
+            ui.add_space(crate::ui_constants::spacing::SMALL);
             ui.add(
                 egui::Label::new(
                     RichText::new(format!("by {}", t.creator))
@@ -98,13 +101,16 @@ pub fn thread_card(
                 .truncate(true)
                 .wrap(false),
             );
-            ui.add_space(4.0);
+            ui.add_space(crate::ui_constants::spacing::SMALL);
 
             // Stats plaque (meta row) on a dark rounded background, below the creator
             egui::Frame::none()
                 .fill(Color32::from_rgba_premultiplied(28, 28, 28, 180))
-                .rounding(Rounding::same(6.0))
-                .inner_margin(egui::Margin::symmetric(8.0, 6.0))
+                .rounding(Rounding::same(crate::ui_constants::card::STATS_ROUNDING))
+                .inner_margin(egui::Margin::symmetric(
+                    crate::ui_constants::card::STATS_MARGIN_H,
+                    crate::ui_constants::card::STATS_MARGIN_V,
+                ))
                 .show(ui, |ui| {
                     // Meta row: time (date), likes, views, rating — single line
                     draw_meta_row(ui, t);

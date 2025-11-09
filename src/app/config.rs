@@ -17,6 +17,10 @@ lazy_static! {
 
 fn config_file_path() -> PathBuf {
     // Separate lightweight config file for authorization-related data
+    // Allow override for tests via env var
+    if let Ok(p) = std::env::var("F95_APP_CONFIG_PATH") {
+        return PathBuf::from(p);
+    }
     PathBuf::from("app_config.json")
 }
 
@@ -70,12 +74,35 @@ pub fn save_config_to_disk() {
 /// Perform login against f95zone and persist cookies into app_config.json.
 /// On success, APP_CONFIG.cookies will contain a ready-to-use "Cookie" header string.
 pub async fn login_and_store(login: String, password: String) -> Result<(), String> {
+
+
     // Do not follow redirects to ensure we capture Set-Cookie from the login response itself.
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|e| format!("client build error: {e}"))?;
+    
+    // Fetch CSRF token
+    let page_resp = client
+        .get("https://f95zone.to/")
+        .send()
+        .await
+        .map_err(|e| format!("failed to fetch login page: {e}"))?;
+        
+    let html = page_resp
+        .text()
+        .await
+        .map_err(|e| format!("failed to read login page: {e}"))?;
+
+    // Extract data-csrf token
+    let csrf_token = html
+        .split("data-csrf=\"")
+        .nth(1)
+        .and_then(|s| s.split('"').next())
+        .ok_or_else(|| "could not find data-csrf token in login page".to_string())?;
+
+    dbg!(csrf_token);
 
     let mut form = std::collections::HashMap::<String, String>::new();
     form.insert("login".to_string(), login.clone());
@@ -86,11 +113,12 @@ pub async fn login_and_store(login: String, password: String) -> Result<(), Stri
     form.insert("remember".to_string(), "1".to_string());
     form.insert("_xfRedirect".to_string(), "https://f95zone.to/".to_string());
     form.insert("website_code".to_string(), "".to_string());
+    form.insert("_xfToken".to_string(), csrf_token.to_string());
 
     let resp = client
         .post("https://f95zone.to/login/login")
         .header("Content-Type", "application/x-www-form-urlencoded")
-        .header("Referer", "https://f95zone.to/login/")
+        .header("Referer", "https://f95zone.to/")
         .form(&form)
         .send()
         .await
@@ -141,4 +169,61 @@ pub async fn login_and_store(login: String, password: String) -> Result<(), Stri
     }
     save_config_to_disk();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    // В тестах используем путь к временному файлу конфигурации, чтобы не перезаписать рабочий
+    // app_config.json. Имя дополнительно содержит PID процесса для уникальности между запусками.
+    fn temp_config_path(name: &str) -> String {
+        let mut p = std::env::temp_dir();
+        p.push(format!("{}_{}.json", name, std::process::id()));
+        p.to_string_lossy().to_string()
+    }
+
+    // Интеграционный тест: использует реальные F95_LOGIN и F95_PASSWORD из .env или переменных окружения.
+    // Если переменных нет — тест ПАДАЕТ с понятным сообщением (чтобы не "пропускался").
+    #[tokio::test]
+    async fn login_from_env_integration() {
+        // Перенаправляем путь конфигурации, чтобы не перетирать рабочий app_config.json
+        let cfg_path = temp_config_path("app_config_test_env_ok");
+        unsafe { std::env::set_var("F95_APP_CONFIG_PATH", &cfg_path); }
+
+        // Пытаемся загрузить .env (не ошибка, если файла нет)
+        let _ = dotenvy::dotenv();
+
+        let login = std::env::var("F95_LOGIN")
+            .expect("Отсутствует переменная окружения F95_LOGIN. Укажите её в .env или окружении.");
+        let password = std::env::var("F95_PASSWORD")
+            .expect("Отсутствует переменная окружения F95_PASSWORD. Укажите её в .env или окружении.");
+
+        let res = login_and_store(login, password).await;
+        assert!(res.is_ok(), "Login failed: {res:?}");
+
+        // Cleanup
+        let _ = std::fs::remove_file(cfg_path);
+    }
+}
+
+/// Залогиниться, взяв логин/пароль из .env/переменных окружения (F95_LOGIN, F95_PASSWORD)
+pub async fn login_from_env_and_store() -> Result<(), String> {
+    // Загружаем .env, если есть
+    let _ = dotenvy::dotenv();
+    let login = match std::env::var("F95_LOGIN") {
+        Ok(v) => v,
+        Err(_) => {
+            log::warn!("Переменная окружения F95_LOGIN не задана. Укажите её в .env или окружении.");
+            return Err("F95_LOGIN not set".to_string());
+        }
+    };
+    let password = match std::env::var("F95_PASSWORD") {
+        Ok(v) => v,
+        Err(_) => {
+            log::warn!("Переменная окружения F95_PASSWORD не задана. Укажите её в .env или окружении.");
+            return Err("F95_PASSWORD not set".to_string());
+        }
+    };
+    login_and_store(login, password).await
 }

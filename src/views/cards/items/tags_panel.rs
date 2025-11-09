@@ -3,8 +3,6 @@ use eframe::egui::{self, Color32, Rounding, Stroke, Vec2};
 use crate::parser::F95Thread;
 use crate::tags::TAGS;
 
-const TAGS_ROUNDING: f32 = 4.;
-
 //// Renders the floating tags panel below the card without affecting layout.
 /// - Opens only while `base_hovered` (card hover) is true; moving cursor onto the panel closes it.
 /// - Persists only last base hover state for one-frame rounding in the card.
@@ -42,7 +40,10 @@ pub fn draw_tags_panel(
                         sw: rounding.sw,
                         se: rounding.se,
                     })
-                    .inner_margin(egui::Margin::symmetric(8.0, 8.0))
+                    .inner_margin(egui::Margin::symmetric(
+                        crate::ui_constants::card::INNER_MARGIN,
+                        crate::ui_constants::card::INNER_MARGIN,
+                    ))
                     .show(ui, |ui| {
                         // Layout as fixed-width chips (pills) in wrapped rows
                         let gap = 5.;
@@ -80,10 +81,10 @@ pub fn draw_tags_panel(
                                 };
                                 let border = Color32::from_rgb(180, 80, 80);
 
-                                p.rect_filled(rect, Rounding::same(TAGS_ROUNDING), bg);
+                                p.rect_filled(rect, Rounding::same(crate::ui_constants::card::STATS_ROUNDING), bg);
                                 p.rect_stroke(
                                     rect,
-                                    Rounding::same(TAGS_ROUNDING),
+                                    Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
                                     Stroke::new(1.5, border),
                                 );
                                 p.text(

@@ -56,7 +56,7 @@ pub(super) fn draw_update_notice(ctx: &egui::Context) -> f32 {
             let response = ui.add(btn);
 
             // Reserve a bit of spacing so the next overlay (e.g., Errors) can sit above
-            used_height = response.rect.height() + 8.0;
+            used_height = response.rect.height() + crate::ui_constants::spacing::MEDIUM;
 
             if response.clicked() {
                 if let Some(u) = url_opt.as_ref() {

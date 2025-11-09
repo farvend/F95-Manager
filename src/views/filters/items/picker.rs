@@ -15,7 +15,7 @@ where
     F: Fn(&str) -> Vec<(u32, String)>,
 {
     // Visual constants shared by pickers
-    let rounding = Rounding::same(6.0);
+    let rounding = Rounding::same(crate::ui_constants::card::STATS_ROUNDING);
     let border_color = Color32::from_gray(80);
     let container_bg = Color32::from_rgb(30, 30, 30);
     let hover_bg = Color32::from_rgba_premultiplied(255, 255, 255, 6);
@@ -41,7 +41,7 @@ where
     if response.hovered() {
         painter.rect(
             container_rect.shrink2(Vec2::new(2.0, 2.0)),
-            Rounding::same(4.0),
+            Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
             hover_bg,
             Stroke::NONE,
         );
@@ -60,7 +60,7 @@ where
         .unwrap_or(0);
 
     // Inline TextEdit inside the container (reserve a bit of space for the arrow)
-    let inner_rect = container_rect.shrink2(Vec2::new(12.0, 6.0));
+    let inner_rect = container_rect.shrink2(Vec2::new(12.0, crate::ui_constants::card::STATS_MARGIN_V));
     let arrow_space = 18.0;
     let edit_rect = egui::Rect::from_min_max(
         inner_rect.min,
@@ -155,7 +155,7 @@ where
     // Popup with dynamic list
     let mut pick: Option<u32> = None;
     if is_open {
-        let popup_pos = pos2(container_rect.left(), container_rect.bottom() + 4.0);
+        let popup_pos = pos2(container_rect.left(), container_rect.bottom() + crate::ui_constants::spacing::SMALL);
         let popup_width = container_rect.width();
 
         // Build and sort items by name (based on current query)
@@ -215,7 +215,7 @@ where
                 ScrollArea::vertical()
                     .max_height(240.0)
                     .show(ui, |ui| {
-                        ui.set_width(popup_width - 8.0);
+                        ui.set_width(popup_width - crate::ui_constants::spacing::MEDIUM);
                         for (i, (id, name)) in items.iter().enumerate() {
                             let row_height = ui.spacing().interact_size.y * 1.2;
                             let (row_rect, row_resp) = ui.allocate_exact_size(
@@ -228,14 +228,14 @@ where
                             if row_resp.hovered() || i == sel_idx {
                                 row_p.rect(
                                     row_rect.shrink2(Vec2::new(2.0, 2.0)),
-                                    Rounding::same(4.0),
+                                    Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
                                     hover_bg,
                                     Stroke::NONE,
                                 );
                             }
 
                             row_p.text(
-                                pos2(row_rect.left() + 8.0, row_rect.center().y),
+                                pos2(row_rect.left() + crate::ui_constants::spacing::MEDIUM, row_rect.center().y),
                                 egui::Align2::LEFT_CENTER,
                                 name,
                                 egui::FontId::proportional(14.0),

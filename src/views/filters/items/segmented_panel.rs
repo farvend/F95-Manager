@@ -28,7 +28,7 @@ where
     // Visuals
     let available_width = ui.available_width();
     let height = (ui.spacing().interact_size.y * 1.4).clamp(28.0, 40.0);
-    let rounding = Rounding::same(6.0);
+    let rounding = Rounding::same(crate::ui_constants::card::STATS_ROUNDING);
     let border_color = Color32::from_gray(80);
     let bg = Color32::from_rgb(30, 30, 30);
     let accent = Color32::from_rgb(210, 85, 85);
@@ -51,8 +51,8 @@ where
         let x = seg_rect.min.x;
         painter.line_segment(
             [
-                eframe::egui::pos2(x, seg_rect.min.y + 4.0),
-                eframe::egui::pos2(x, seg_rect.max.y - 4.0),
+                eframe::egui::pos2(x, seg_rect.min.y + crate::ui_constants::spacing::SMALL),
+                eframe::egui::pos2(x, seg_rect.max.y - crate::ui_constants::spacing::SMALL),
             ],
             Stroke::new(1.0, Color32::from_gray(60)),
         );
@@ -67,14 +67,14 @@ where
         if is_selected {
             painter.rect(
                 seg_rect.shrink2(Vec2::new(2.0, 2.0)),
-                Rounding::same(4.0),
+                Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
                 Color32::from_rgb(45, 45, 45),
                 Stroke::NONE,
             );
         } else if response.hovered() {
             painter.rect(
                 seg_rect.shrink2(Vec2::new(2.0, 2.0)),
-                Rounding::same(4.0),
+                Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
                 Color32::from_rgba_premultiplied(255, 255, 255, 6),
                 Stroke::NONE,
             );

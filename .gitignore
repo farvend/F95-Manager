@@ -8,3 +8,4 @@ cargo.lock
 /cache
 log.txt
 /.github/instructions
+.env

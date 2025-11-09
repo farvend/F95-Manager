@@ -5,7 +5,7 @@ use crate::parser::F95Thread;
 /// Draws a single-line meta row: date, likes, views, rating.
 pub fn draw_meta_row(ui: &mut egui::Ui, t: &F95Thread) {
     ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 8.0;
+        ui.spacing_mut().item_spacing.x = crate::ui_constants::spacing::MEDIUM;
         let col = Color32::from_rgb(170, 170, 170);
 
         ui.label(RichText::new(format!("🕓 {}", t.date)).small().color(col));

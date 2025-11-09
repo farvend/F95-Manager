@@ -49,14 +49,14 @@ pub fn draw_about_viewport(ctx: &egui::Context) {
 
             egui::CentralPanel::default().show(ctx, |ui| {
                 ui.heading("F95 Manager");
-                ui.add_space(4.0);
+                ui.add_space(crate::ui_constants::spacing::SMALL);
                 ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
-                ui.add_space(8.0);
+                ui.add_space(crate::ui_constants::spacing::MEDIUM);
                 ui.hyperlink_to(
                     "Source code and updates",
                     "https://github.com/farvend/F95-Manager",
                 );
-                ui.add_space(8.0);
+                ui.add_space(crate::ui_constants::spacing::MEDIUM);
                 ui.hyperlink_to(
                     "F95 thread",
                     "https://f95zone.to/threads/267483/",

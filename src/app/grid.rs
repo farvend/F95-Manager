@@ -236,11 +236,19 @@ impl super::NoLagApp {
         // - Meta row frame: Small height + 12 (inner vertical margins)
         let heading_h = ui.text_style_height(&egui::TextStyle::Heading);
         let small_h = ui.text_style_height(&egui::TextStyle::Small);
-        let inner_w = (card_w - 16.0).max(1.0);
+        let inner_w = (card_w - 2.0 * crate::ui_constants::card::INNER_MARGIN).max(1.0);
         let cover_h = inner_w * 9.0 / 16.0;
-        let markers_h = 12.0;
+        let markers_h = 12.0; // keep as-is for now
         let card_h =
-            16.0 + cover_h + markers_h + 20.0 + heading_h + 4.0 + small_h + 4.0 + (small_h + 12.0);
+            2.0 * crate::ui_constants::card::INNER_MARGIN
+            + cover_h
+            + markers_h
+            + crate::ui_constants::card::POST_COVER_GAP
+            + heading_h
+            + crate::ui_constants::spacing::SMALL
+            + small_h
+            + crate::ui_constants::spacing::SMALL
+            + (small_h + 12.0);
         let row_h = card_h + gap;
 
         // Determine which rows are visible in the current clip rect

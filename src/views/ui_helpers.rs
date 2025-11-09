@@ -33,7 +33,7 @@ pub fn show_sticky_overlay<F>(
                 egui::Frame::default()
                     .fill(Color32::from_rgb(28, 28, 28))
                     .stroke(Stroke::new(1.0, Color32::from_gray(60)))
-                    .rounding(Rounding::same(6.0))
+                    .rounding(Rounding::same(crate::ui_constants::card::STATS_ROUNDING))
                     .inner_margin(inner_margin)
                     .show(ui, |ui| overlay_ui(ui));
             });

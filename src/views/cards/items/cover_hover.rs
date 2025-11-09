@@ -24,7 +24,7 @@ fn draw_badge_with_overlay(
     let badge_h = 18.0f32;
     let pad_x = 12.0f32;
     let w = text_w + pad_x * 2.0;
-    let pad = 8.0f32;
+    let pad = crate::ui_constants::spacing::MEDIUM;
     let rect = egui::Rect::from_min_max(
         egui::pos2(cover_rect.max.x - pad - w, cover_rect.max.y - pad - badge_h),
         egui::pos2(cover_rect.max.x - pad, cover_rect.max.y - pad),
@@ -32,10 +32,10 @@ fn draw_badge_with_overlay(
 
     ui.expand_to_include_rect(rect);
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, Rounding::same(4.0), bg_color);
+    painter.rect_filled(rect, Rounding::same(crate::ui_constants::card::STATS_ROUNDING), bg_color);
     painter.rect_stroke(
         rect,
-        Rounding::same(4.0),
+    Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
         Stroke::new(1.0, Color32::from_gray(40)),
     );
     ui.allocate_ui_at_rect(rect, |ui| {
@@ -60,8 +60,8 @@ fn draw_badge_with_overlay(
         ui,
         rect,
         (id_ns, thread_id),
-        6.0,
-        6.0,
+        crate::ui_constants::card::STATS_MARGIN_V,
+        crate::ui_constants::card::STATS_MARGIN_V,
         overlay_ui,
     );
 }
@@ -140,7 +140,7 @@ pub fn draw_cover(
         if let Some(tex) = cover {
             p.image(tex.id(), cover_rect, uv, Color32::WHITE);
         } else {
-            p.rect_filled(cover_rect, Rounding::same(6.0), Color32::from_rgb(58, 58, 58));
+            p.rect_filled(cover_rect, Rounding::same(crate::ui_constants::card::ROUNDING), Color32::from_rgb(58, 58, 58));
         }
     }
 
@@ -155,10 +155,20 @@ pub fn draw_cover(
     let badge_w = (text_w + pad_x * 2.0).clamp(36.0, inner_w - 16.0);
     let badge_h = 20.0f32;
     let badge_rect = egui::Rect::from_min_max(
-        egui::pos2(cover_rect.max.x - 8.0 - badge_w, cover_rect.min.y + 8.0),
-        egui::pos2(cover_rect.max.x - 8.0, cover_rect.min.y + 8.0 + badge_h),
+        egui::pos2(
+            cover_rect.max.x - crate::ui_constants::spacing::MEDIUM - badge_w,
+            cover_rect.min.y + crate::ui_constants::spacing::MEDIUM,
+        ),
+        egui::pos2(
+            cover_rect.max.x - crate::ui_constants::spacing::MEDIUM,
+            cover_rect.min.y + crate::ui_constants::spacing::MEDIUM + badge_h,
+        ),
     );
-    p.rect_filled(badge_rect, Rounding::same(4.0), Color32::from_rgb(54, 54, 54));
+    p.rect_filled(
+        badge_rect,
+        Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
+        Color32::from_rgb(54, 54, 54),
+    );
     // Clip text to the badge rect and truncate with ellipsis
     ui.allocate_ui_at_rect(badge_rect, |ui| {
         ui.centered_and_justified(|ui| {
@@ -192,8 +202,8 @@ pub fn draw_cover(
             egui::pos2(next_x + w, y0 + badge_h),
         );
         let painter = ui.painter_at(engine_rect);
-        painter.rect_filled(engine_rect, Rounding::same(4.0), Color32::from_rgb(54, 54, 54));
-        painter.rect_stroke(engine_rect, Rounding::same(4.0), Stroke::new(1.0, Color32::from_gray(60)));
+    painter.rect_filled(engine_rect, Rounding::same(crate::ui_constants::card::STATS_ROUNDING), Color32::from_rgb(54, 54, 54));
+    painter.rect_stroke(engine_rect, Rounding::same(crate::ui_constants::card::STATS_ROUNDING), Stroke::new(1.0, Color32::from_gray(60)));
         ui.allocate_ui_at_rect(engine_rect, |ui| {
             ui.centered_and_justified(|ui| {
                 ui.add(
@@ -203,7 +213,7 @@ pub fn draw_cover(
                 );
             });
         });
-        next_x = engine_rect.max.x + 6.0;
+    next_x = engine_rect.max.x + crate::ui_constants::card::STATS_MARGIN_V;
     } else {
         //ui.allocate_space(Vec2 { x: next_x, y: cover_h - 30. });
         let w = text_w + pad_x * 2.0;
@@ -228,9 +238,9 @@ pub fn draw_cover(
                 Sense::hover(),
             )
             .on_hover_cursor(eframe::egui::CursorIcon::PointingHand);
-        let painter = ui.painter_at(warn_rect);
-        painter.rect_filled(warn_rect, Rounding::same(4.0), Color32::from_rgb(170, 40, 40));
-        painter.rect_stroke(warn_rect, Rounding::same(4.0), Stroke::new(1.0, Color32::from_gray(40)));
+    let painter = ui.painter_at(warn_rect);
+    painter.rect_filled(warn_rect, Rounding::same(crate::ui_constants::card::STATS_ROUNDING), Color32::from_rgb(170, 40, 40));
+    painter.rect_stroke(warn_rect, Rounding::same(crate::ui_constants::card::STATS_ROUNDING), Stroke::new(1.0, Color32::from_gray(40)));
         painter.text(
             warn_rect.center(),
             eframe::egui::Align2::CENTER_CENTER,
@@ -258,13 +268,13 @@ pub fn draw_cover(
             ui,
             warn_rect,
             ("warn_overlay", thread.thread_id.get()),
-            6.0,
-            4.0,
+            crate::ui_constants::card::STATS_MARGIN_V,
+            crate::ui_constants::spacing::SMALL,
             |ui| {
                 //ui.set_min_width(220.0);
                 for (i, line) in lines.iter().enumerate() {
                     if line.is_empty() {
-                        ui.add_space(4.0);
+                        ui.add_space(crate::ui_constants::spacing::SMALL);
                     } else {
                         let mut text = RichText::new(line.clone()).color(Color32::from_gray(220));
                         if line == "Tags:" || line == "Prefixes:" {
@@ -308,7 +318,10 @@ pub fn draw_cover(
     // Download/Run overlay: always register hit-test; paint only when hovered
     let btn_size = egui::vec2(24.0, 24.0);
     let btn_rect = egui::Rect::from_min_size(
-        egui::pos2(cover_rect.min.x + 8.0, cover_rect.min.y + 8.0),
+        egui::pos2(
+            cover_rect.min.x + crate::ui_constants::spacing::MEDIUM,
+            cover_rect.min.y + crate::ui_constants::spacing::MEDIUM,
+        ),
         btn_size,
     );
     // ensure UI area includes button for interaction even if outside normal layout
@@ -331,10 +344,10 @@ pub fn draw_cover(
     let icon = if is_downloaded { "▶" } else { "⬇" };
 
     if over_cover || resp.hovered() {
-        let p = ui.painter_at(btn_rect);
+    let p = ui.painter_at(btn_rect);
         let bg = if resp.hovered() { Color32::from_gray(72) } else { Color32::from_gray(60) };
-        p.rect_filled(btn_rect, Rounding::same(4.0), bg);
-        p.rect_stroke(btn_rect, Rounding::same(4.0), Stroke::new(1.0, Color32::from_gray(100)));
+    p.rect_filled(btn_rect, Rounding::same(crate::ui_constants::card::STATS_ROUNDING), bg);
+    p.rect_stroke(btn_rect, Rounding::same(crate::ui_constants::card::STATS_ROUNDING), Stroke::new(1.0, Color32::from_gray(100)));
         p.text(
             btn_rect.center(),
             eframe::egui::Align2::CENTER_CENTER,
@@ -512,7 +525,7 @@ fn draw_unknown_progress_bar(ui: &mut egui::Ui, cover_rect: egui::Rect) {
 }
 
 fn draw_circular_progress_bottom_right(ui: &mut egui::Ui, cover_rect: egui::Rect, dp: f32, color: Color32) {
-    let margin = 8.0;
+    let margin = crate::ui_constants::spacing::MEDIUM;
     let radius = 10.0;
     let center = egui::pos2(cover_rect.max.x - margin - radius, cover_rect.max.y - margin - radius);
 
@@ -551,7 +564,7 @@ fn draw_indeterminate_circular_bottom_right(ui: &mut egui::Ui, cover_rect: egui:
     // Keep animation running
     ui.ctx().request_repaint_after(std::time::Duration::from_millis(16));
 
-    let margin = 8.0;
+    let margin = crate::ui_constants::spacing::MEDIUM;
     let radius = 10.0;
     let center = egui::pos2(cover_rect.max.x - margin - radius, cover_rect.max.y - margin - radius);
 

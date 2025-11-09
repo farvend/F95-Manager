@@ -154,7 +154,7 @@ pub fn draw_filters_panel(
                 changed_now = true;
             }
 
-            ui.add_space(8.0);
+            ui.add_space(crate::ui_constants::spacing::MEDIUM);
             ui.with_layout(Layout::bottom_up(egui::Align::LEFT), |ui| {
                 if ui.button(crate::localization::translate("common-logs")).clicked() {
                     logs_clicked = true;

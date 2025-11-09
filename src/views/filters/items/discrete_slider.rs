@@ -28,7 +28,7 @@ where
     // Visual constants (match segmented_panel vibe)
     let available_width = ui.available_width();
     let height = (ui.spacing().interact_size.y * 1.4).clamp(28.0, 40.0);
-    let rounding = Rounding::same(6.0);
+    let rounding = Rounding::same(crate::ui_constants::card::STATS_ROUNDING);
     let border_color = Color32::from_gray(80);
     let container_bg = Color32::from_rgb(30, 30, 30);
     let track_bg = Color32::from_rgb(25, 25, 25);
@@ -48,8 +48,8 @@ where
     );
 
     // Track in the middle of the container
-    let track_height = 8.0f32;
-    let track_margin_h = 16.0f32; // left/right margin inside container
+    let track_height = crate::ui_constants::spacing::MEDIUM;
+    let track_margin_h = crate::ui_constants::spacing::LARGE; // left/right margin inside container
     let track_rect = Rect::from_min_max(
         pos2(
             container_rect.min.x + track_margin_h,
@@ -127,14 +127,14 @@ where
     // Draw thumb
     painter.rect(
         thumb_rect,
-        Rounding::same(4.0),
+        Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
         thumb_fill_col,
         Stroke::new(1.0, thumb_outline),
     );
 
     // Two vertical grip lines (like on the screenshot)
-    let grip_top = thumb_rect.center_top().y + 6.0;
-    let grip_bottom = thumb_rect.center_bottom().y - 6.0;
+    let grip_top = thumb_rect.center_top().y + crate::ui_constants::card::STATS_MARGIN_V;
+    let grip_bottom = thumb_rect.center_bottom().y - crate::ui_constants::card::STATS_MARGIN_V;
     let grip1_x = thumb_rect.center().x - 3.0;
     let grip2_x = thumb_rect.center().x + 3.0;
     let grip_col = Color32::from_gray(80);

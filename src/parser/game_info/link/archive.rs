@@ -102,7 +102,7 @@ fn find_first_exe(dir: &Path) -> Option<PathBuf> {
                     .map(|s| s.to_ascii_lowercase());
                 let is_blacklisted = name_lc
                     .as_deref()
-                    .map(|n| n.contains("unitycrashhandler") || n.contains("unitycrash") || n.contains("python"))
+                    .map(|n| n.contains("unitycrashhandler") || n.contains("unitycrash") || n.contains("python") || n.contains("WindowsIconUpdater"))
                     .unwrap_or(false);
                 if is_blacklisted {
                     continue;
