@@ -91,7 +91,12 @@ pub fn draw_logs_viewport(ctx: &egui::Context) {
                             ..Default::default()
                         };
                         fmt.font_id = egui::FontId::monospace(12.0);
-                        let line = format!("[{:>5}] {}: {}\n", e.level, e.target, e.msg);
+                        let location = match (&e.file, e.line) {
+                            (Some(file), Some(line)) => format!(" @ {}:{}", file, line),
+                            (Some(file), None) => format!(" @ {}", file),
+                            _ => String::new(),
+                        };
+                        let line = format!("[{:>5}] {}{}: {}\n", e.level, e.target, location, e.msg);
                         job.append(&line, 0.0, fmt);
                     });
                     ui.label(job);

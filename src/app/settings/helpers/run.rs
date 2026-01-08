@@ -193,7 +193,8 @@ fn pick_best_exe(exes: &[PathBuf]) -> Option<PathBuf> {
         "unitycrash",
         "unitycrashhandler",
         "python",
-        "IconUpdater"
+        "IconUpdater",
+        "WindowsIconUpdater"
     ];
     let filtered: Vec<&PathBuf> = exes
         .iter()

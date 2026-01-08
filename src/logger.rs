@@ -17,6 +17,8 @@ pub struct LogEntry {
     pub level: Level,
     pub target: String,
     pub msg: String,
+    pub file: Option<String>,
+    pub line: Option<u32>,
 }
 
 const MAX_LOG_LINES: usize = 5000;
@@ -53,13 +55,19 @@ impl Log for GuiLogger {
             return;
         }
 
-        // Compose one-line formatted record with timestamp.
+        // Compose one-line formatted record with timestamp, file and line info.
         let ts = timestamp_millis();
+        let location = match (record.file(), record.line()) {
+            (Some(file), Some(line)) => format!(" @ {}:{}", file, line),
+            (Some(file), None) => format!(" @ {}", file),
+            _ => String::new(),
+        };
         let line = format!(
-            "[{}] [{:>5}] {}: {}",
+            "[{}] [{:>5}] {}{}:  {}",
             ts,
             record.level(),
             record.target(),
+            location,
             record.args()
         );
 
@@ -78,6 +86,8 @@ impl Log for GuiLogger {
             level: record.level(),
             target: record.target().to_string(),
             msg: format!("{}", record.args()),
+            file: record.file().map(|s| s.to_string()),
+            line: record.line(),
         });
     }
 
@@ -216,7 +226,12 @@ pub fn get_all() -> Vec<String> {
 }
 
 fn format_line(e: &LogEntry) -> String {
-    format!("[{:>5}] {}: {}", e.level, e.target, e.msg)
+    let location = match (&e.file, e.line) {
+        (Some(file), Some(line)) => format!(" @ {}:{}", file, line),
+        (Some(file), None) => format!(" @ {}", file),
+        _ => String::new(),
+    };
+    format!("[{:>5}] {}{}: {}", e.level, e.target, location, e.msg)
 }
 
 pub fn len() -> usize {
