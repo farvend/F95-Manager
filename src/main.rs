@@ -4,7 +4,7 @@
 // Точка входа оставлена минимальной: только конфиг окна и запуск приложения.
 // Вся логика вынесена в модуль app (src/app.rs), чтобы убрать глубокую вложенность и "лес" табов.
 
-use eframe::{egui, egui_wgpu::WgpuConfiguration};
+use eframe::{egui, egui_wgpu::WgpuConfiguration, wgpu::PresentMode};
 
 mod parser;
 mod types;
@@ -33,7 +33,7 @@ fn main() -> eframe::Result<()> {
     // - renderer: Wgpu (быстрее и даёт контроль над present mode)
     // - vsync: false (меньше задержка, возможен tearing)
     let wgpu_options = WgpuConfiguration {
-        present_mode: eframe::wgpu::PresentMode::Mailbox,
+        present_mode: eframe::wgpu::PresentMode::AutoNoVsync,
         ..Default::default()
     };
     let native_options = eframe::NativeOptions {
