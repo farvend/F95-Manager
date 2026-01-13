@@ -8,12 +8,11 @@ mod about_ui;
 pub mod config;
 mod errors_ui;
 mod grid;
+pub mod library;
 mod logs_ui;
 pub mod settings;
 mod update_ui;
 
-// Вынесено: tokio runtime и вся логика получения данных
-mod cache;
 mod downloads;
 mod fetch;
 mod runtime;
@@ -30,22 +29,19 @@ pub use runtime::rt;
 use state::{AuthState, FiltersState, ImagesState, NetState, Screen};
 
 pub struct NoLagApp {
-    // Пагинация
     page: u32,
 
-    // Новый, сгруппированный стейт
     filters: FiltersState,
     net: NetState,
     images: ImagesState,
     auth: AuthState,
-
-    // Загрузки оставлены здесь (выполняют побочные эффекты в UI/Library)
     downloads: HashMap<u64, DownloadState>,
+
+    library_manager: library::LibraryCardManager,
 }
 
 impl Default for NoLagApp {
     fn default() -> Self {
-        // Ensure app_config.json is loaded before deciding which screen to show
         crate::app::config::load_config_from_disk();
         let need_auth = {
             let cfg = crate::app::config::APP_CONFIG.read().unwrap();
@@ -60,6 +56,12 @@ impl Default for NoLagApp {
             Screen::Main
         };
 
+        let cache_dir = settings::APP_SETTINGS.read().unwrap().cache_dir.clone();
+        let provider = std::sync::Arc::new(library::CachingProvider::new(
+            library::NetworkProvider::new(),
+            cache_dir,
+        ));
+
         Self {
             page: 1,
             filters: FiltersState::default(),
@@ -67,6 +69,7 @@ impl Default for NoLagApp {
             images: ImagesState::new(),
             auth: AuthState::new(screen),
             downloads: HashMap::new(),
+            library_manager: library::LibraryCardManager::new(provider),
         }
     }
 }

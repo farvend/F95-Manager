@@ -35,6 +35,8 @@ thiserror = "1.0"
 intl-memoizer = "0.5"
 once_cell = "1.19"
 unrar = "0.5.8"
+url = "2.5"
+async-trait = "0.1"
 
 dotenvy = "0.15"
 

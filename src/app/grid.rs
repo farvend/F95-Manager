@@ -10,97 +10,39 @@ impl super::NoLagApp {
         let ctx2 = ctx.clone();
         let url_cloned = url.clone();
 
-        // Try cached file first: cache/<thread_id>/screen_<idx+1>.png
-        let cache_path = {
-            let base = crate::app::settings::APP_SETTINGS
-                .read()
-                .unwrap()
-                .cache_dir
-                .clone();
-            base.join(thread_id.to_string())
-                .join(format!("screen_{}.png", idx + 1))
-        };
-
         super::rt().spawn(async move {
-            let mut served_from_cache = false;
-            if tokio::fs::metadata(&cache_path).await.is_ok() {
-                match tokio::task::spawn_blocking(
-                    move || -> Result<(usize, usize, Vec<u8>), String> {
-                        let bytes = std::fs::read(&cache_path)
-                            .map_err(|e| format!("read cache error: {}", e))?;
-                        let img = image::load_from_memory(&bytes)
-                            .map_err(|e| format!("decode cache error: {}", e))?;
-                        let rgba = img.to_rgba8();
-                        let (w, h) = rgba.dimensions();
-                        Ok((w as usize, h as usize, rgba.into_vec()))
-                    },
-                )
-                .await
-                {
-                    Ok(Ok((w, h, rgba))) => {
-                        log::info!("screen cache hit: id={} idx={}", thread_id, idx);
-                        let _ = tx.send(super::CoverMsg::ScreenOk {
-                            thread_id,
-                            idx,
-                            w,
-                            h,
-                            rgba,
-                        });
-                        served_from_cache = true;
-                    }
-                    Ok(Err(e)) => {
-                        log::warn!(
-                            "screen cache decode failed: id={} idx={} err={}",
-                            thread_id,
-                            idx,
-                            e
-                        );
-                    }
-                    Err(e) => {
-                        log::warn!(
-                            "screen cache task join failed: id={} idx={} err={}",
-                            thread_id,
-                            idx,
-                            e
-                        );
+            let result = crate::parser::fetch_image_f95(&url_cloned).await;
+
+            let msg = match result {
+                Ok((w, h, rgba)) => {
+                    log::info!(
+                        "screen ok: id={} idx={} size={}x{} url={}",
+                        thread_id,
+                        idx,
+                        w,
+                        h,
+                        url_cloned
+                    );
+                    super::CoverMsg::ScreenOk {
+                        thread_id,
+                        idx,
+                        w,
+                        h,
+                        rgba,
                     }
                 }
-            }
-
-            if !served_from_cache {
-                let result = crate::parser::fetch_image_f95(&url_cloned).await;
-
-                let msg = match result {
-                    Ok((w, h, rgba)) => {
-                        log::info!(
-                            "screen ok: id={} idx={} size={}x{} url={}",
-                            thread_id,
-                            idx,
-                            w,
-                            h,
-                            url_cloned
-                        );
-                        super::CoverMsg::ScreenOk {
-                            thread_id,
-                            idx,
-                            w,
-                            h,
-                            rgba,
-                        }
-                    }
-                    Err(err) => {
-                        log::warn!(
-                            "screen fetch failed: id={} idx={} err={} url={}",
-                            thread_id,
-                            idx,
-                            err,
-                            url_cloned
-                        );
-                        super::CoverMsg::ScreenErr { thread_id, idx }
-                    }
-                };
-                let _ = tx.send(msg);
-            }
+                Err(err) => {
+                    log::warn!(
+                        "screen fetch failed: id={} idx={} err={} url={}",
+                        thread_id,
+                        idx,
+                        err,
+                        url_cloned
+                    );
+                    super::CoverMsg::ScreenErr { thread_id, idx }
+                }
+            };
+            let _ = tx.send(msg);
             ctx2.request_repaint();
         });
     }
@@ -119,10 +61,17 @@ impl super::NoLagApp {
             ui.set_min_width(card_w);
             ui.set_max_width(card_w);
             let id = t.thread_id.get();
-            if self.filters.library_only {
-                super::cache::ensure_cache_for_thread_from(t);
-            }
-            let hover = {
+
+            let hover = if self.filters.library_only {
+                let cover = self.library_manager.get_cover(id);
+                let screens_slice = self.library_manager.get_screens_slice(id);
+                let progress = self.downloads.get(&id).and_then(|s| s.progress.clone());
+                let link_choices = self
+                    .downloads
+                    .get(&id)
+                    .and_then(|s| s.link_choices.as_ref().map(|v| v.as_slice()));
+                thread_card(ui, t, card_w, cover, screens_slice, progress, link_choices)
+            } else {
                 let cover = self.images.covers.get(&id);
                 let screens_slice = self.images.screens.get(&id).map(|v| v.as_slice());
                 let progress = self.downloads.get(&id).and_then(|s| s.progress.clone());
@@ -133,62 +82,72 @@ impl super::NoLagApp {
                 thread_card(ui, t, card_w, cover, screens_slice, progress, link_choices)
             };
 
-            // Prefetch all screenshots as soon as the cursor hovers the card
             if hover.hovered {
-                // Collect targets without holding a mutable borrow of self across spawns
-                let mut to_download: Vec<(usize, String)> = Vec::new();
-                {
-                    let entry = self
-                        .images
-                        .screens
-                        .entry(id)
-                        .or_insert_with(|| vec![None; t.screens.len()]);
-                    if entry.len() < t.screens.len() {
-                        entry.resize_with(t.screens.len(), || None);
-                    }
-                    for (idx, url) in t.screens.iter().enumerate() {
-                        if !url.is_empty() && entry.get(idx).and_then(|s| s.as_ref()).is_none() {
-                            to_download.push((idx, crate::parser::normalize_url(url)));
+                if self.filters.library_only {
+                    if let Some(card) = super::library::LibraryCard::from_f95_thread(t) {
+                        for idx in 0..card.screen_urls.len() {
+                            self.library_manager.schedule_screen_download(&card, idx);
                         }
                     }
-                }
-                for (idx, url) in to_download {
-                    if !self.images.screens_loading.contains(&(id, idx)) {
-                        self.images.screens_loading.insert((id, idx));
-                        self.spawn_screen_download(ctx, id, idx, url);
+                } else {
+                    let mut to_download: Vec<(usize, String)> = Vec::new();
+                    {
+                        let entry = self
+                            .images
+                            .screens
+                            .entry(id)
+                            .or_insert_with(|| vec![None; t.screens.len()]);
+                        if entry.len() < t.screens.len() {
+                            entry.resize_with(t.screens.len(), || None);
+                        }
+                        for (idx, url) in t.screens.iter().enumerate() {
+                            if !url.is_empty() && entry.get(idx).and_then(|s| s.as_ref()).is_none()
+                            {
+                                to_download.push((idx, crate::parser::normalize_url(url)));
+                            }
+                        }
+                    }
+                    for (idx, url) in to_download {
+                        if !self.images.screens_loading.contains(&(id, idx)) {
+                            self.images.screens_loading.insert((id, idx));
+                            self.spawn_screen_download(ctx, id, idx, url);
+                        }
                     }
                 }
             }
 
-            // Also keep lazy-load on a specific hovered marker (safe due to dedupe guards)
             if let Some(idx) = hover.hovered_line {
-                // Determine a single target without overlapping borrows
-                let mut maybe_url: Option<String> = None;
-                {
-                    let entry = self
-                        .images
-                        .screens
-                        .entry(id)
-                        .or_insert_with(|| vec![None; t.screens.len()]);
-                    if idx < entry.len() && entry[idx].is_none() {
-                        if let Some(url) = t.screens.get(idx) {
-                            if !url.is_empty() {
-                                maybe_url = Some(crate::parser::normalize_url(url));
+                if self.filters.library_only {
+                    if let Some(card) = super::library::LibraryCard::from_f95_thread(t) {
+                        self.library_manager.schedule_screen_download(&card, idx);
+                    }
+                } else {
+                    let mut maybe_url: Option<String> = None;
+                    {
+                        let entry = self
+                            .images
+                            .screens
+                            .entry(id)
+                            .or_insert_with(|| vec![None; t.screens.len()]);
+                        if idx < entry.len() && entry[idx].is_none() {
+                            if let Some(url) = t.screens.get(idx) {
+                                if !url.is_empty() {
+                                    maybe_url = Some(crate::parser::normalize_url(url));
+                                }
                             }
                         }
                     }
-                }
-                if let Some(url) = maybe_url {
-                    if !self.images.screens_loading.contains(&(id, idx)) {
-                        self.images.screens_loading.insert((id, idx));
-                        self.spawn_screen_download(ctx, id, idx, url);
+                    if let Some(url) = maybe_url {
+                        if !self.images.screens_loading.contains(&(id, idx)) {
+                            self.images.screens_loading.insert((id, idx));
+                            self.spawn_screen_download(ctx, id, idx, url);
+                        }
                     }
                 }
             }
-            // If user selected a specific link from "SELECT LINK" overlay, start that download
+
             if let Some(link) = hover.selected_link {
                 let rx_new = game_download::create_download_from_link(link);
-                // Update or insert download state for this thread without moving the same rx into multiple closures
                 if let Some(st) = self.downloads.get_mut(&id) {
                     st.rx = rx_new;
                     st.progress = Some(crate::game_download::Progress::Unknown);
@@ -204,13 +163,11 @@ impl super::NoLagApp {
                     );
                 }
                 super::settings::record_pending_download(id);
-                // Keep Library in sync immediately
                 self.refresh_prefetch_library(ctx);
                 ctx.request_repaint();
             }
 
             if hover.download_clicked {
-                // Allow restart if previous attempt failed
                 let should_start = match self.downloads.get(&id) {
                     None => true,
                     Some(st) => {
@@ -218,11 +175,8 @@ impl super::NoLagApp {
                     }
                 };
                 if should_start {
-                    // Drop previous errored state if present
                     self.downloads.remove(&id);
-                    // Persist pending download in settings so Library can show it across restarts
                     super::settings::record_pending_download(id);
-                    super::cache::spawn_cache_for_thread_from(t);
                     let rx = game_download::create_download_task(t.thread_id.get_page());
                     self.downloads.insert(
                         id,
@@ -232,9 +186,7 @@ impl super::NoLagApp {
                             link_choices: None,
                         },
                     );
-                    // Update background Library snapshot to include this downloading thread immediately
                     self.refresh_prefetch_library(ctx);
-                    // Library view will update from prefetch immediately via lib_rx; no direct fetch needed here
                     ctx.request_repaint();
                 }
             }

@@ -289,6 +289,14 @@ impl super::NoLagApp {
             for t in &msg.data {
                 let thread_id = t.thread_id.clone();
                 let id = t.thread_id.get();
+
+                if self.filters.library_only {
+                    if let Some(card) = super::library::LibraryCard::from_f95_thread(t) {
+                        self.library_manager.schedule_cover_download(&card);
+                    }
+                    continue;
+                }
+
                 if self.images.covers.contains_key(&id)
                     || self.images.covers_loading.contains(&id)
                     || t.cover.is_empty()
@@ -296,88 +304,31 @@ impl super::NoLagApp {
                     continue;
                 }
                 self.images.covers_loading.insert(id);
-                // Prefer cover; if missing, fallback to first screenshot so the main tile isn't blank.
                 let url_raw = if let Some(u) = helpers::get_cover_or_first_screen_url(t) {
                     u
                 } else {
                     self.images.covers_loading.remove(&id);
                     continue;
                 };
-                let is_cover_choice = !t.cover.is_empty() && url_raw == t.cover;
                 let url = crate::parser::normalize_url(&url_raw);
                 let tx = self.images.cover_tx.clone();
                 let ctx2 = ctx.clone();
 
-                // Attempt to load from cache first (cover.png or screen_1.png if we fell back)
-                let cache_path = {
-                    let base = crate::app::settings::APP_SETTINGS
-                        .read()
-                        .unwrap()
-                        .cache_dir
-                        .clone();
-                    let file = if is_cover_choice {
-                        "cover.png".to_string()
-                    } else {
-                        "screen_1.png".to_string()
-                    };
-                    base.join(id.to_string()).join(file)
-                };
-
-                log::info!(
-                    "cover schedule: id={} url={} cache_path={}",
-                    id,
-                    url,
-                    cache_path.to_string_lossy()
-                );
+                log::info!("cover schedule: id={} url={}", id, url);
                 super::rt().spawn(async move {
-                    let mut served_from_cache = false;
-                    if tokio::fs::metadata(&cache_path).await.is_ok() {
-                        match tokio::task::spawn_blocking(
-                            move || -> Result<(usize, usize, Vec<u8>), String> {
-                                let bytes = std::fs::read(&cache_path)
-                                    .map_err(|e| format!("read cache error: {}", e))?;
-                                let img = image::load_from_memory(&bytes)
-                                    .map_err(|e| format!("decode cache error: {}", e))?;
-                                let rgba = img.to_rgba8();
-                                let (w, h) = rgba.dimensions();
-                                Ok((w as usize, h as usize, rgba.into_vec()))
-                            },
-                        )
-                        .await
-                        {
-                            Ok(Ok((w, h, rgba))) => {
-                                let _ = tx.send(CoverMsg::Ok {
-                                    thread_id,
-                                    w,
-                                    h,
-                                    rgba,
-                                });
-                                served_from_cache = true;
-                            }
-                            Ok(Err(e)) => {
-                                log::warn!("cover cache decode failed: id={} err={}", id, e);
-                            }
-                            Err(e) => {
-                                log::warn!("cover cache task join failed: id={} err={}", id, e);
-                            }
+                    let result = crate::parser::fetch_image_f95(&url).await;
+                    let _ = tx.send(match result {
+                        Ok((w, h, rgba)) => CoverMsg::Ok {
+                            thread_id,
+                            w,
+                            h,
+                            rgba,
+                        },
+                        Err(err) => {
+                            log::warn!("cover fetch failed: id={} err={} url={}", id, err, url);
+                            CoverMsg::Err { thread_id: id }
                         }
-                    }
-
-                    if !served_from_cache {
-                        let result = crate::parser::fetch_image_f95(&url).await;
-                        let _ = tx.send(match result {
-                            Ok((w, h, rgba)) => CoverMsg::Ok {
-                                thread_id,
-                                w,
-                                h,
-                                rgba,
-                            },
-                            Err(err) => {
-                                log::warn!("cover fetch failed: id={} err={} url={}", id, err, url);
-                                CoverMsg::Err { thread_id: id }
-                            }
-                        });
-                    }
+                    });
                     ctx2.request_repaint();
                 });
             }
@@ -451,8 +402,6 @@ impl super::NoLagApp {
                     rgba,
                 } => {
                     let thread_id = thread_id.get();
-                    // Opportunistic cache save (if enabled)
-                    super::cache::maybe_save_cover_png(thread_id, w, h, rgba.clone());
                     let image = egui::ColorImage::from_rgba_unmultiplied([w, h], &rgba);
                     let tex = ctx.load_texture(
                         format!("cover_{:?}", thread_id),
@@ -473,8 +422,6 @@ impl super::NoLagApp {
                     h,
                     rgba,
                 } => {
-                    // Opportunistic cache save (if enabled)
-                    super::cache::maybe_save_screen_png(thread_id, idx, w, h, rgba.clone());
                     let image = egui::ColorImage::from_rgba_unmultiplied([w, h], &rgba);
                     let tex = ctx.load_texture(
                         format!("screen_{}_{}", thread_id, idx),
@@ -497,5 +444,7 @@ impl super::NoLagApp {
                 }
             }
         }
+
+        self.library_manager.poll(ctx);
     }
 }
