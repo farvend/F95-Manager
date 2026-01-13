@@ -13,7 +13,7 @@
 // https://f95zone.to/sam/latest_alpha/latest_data.php?cmd=list&cat=games&page=1&sort=date
 
 use lazy_static::lazy_static;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::fmt;
 
 use crate::{
@@ -290,11 +290,30 @@ impl From<reqwest::Error> for F95Error {
     }
 }
 
+fn deserialize_version<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum VersionValue {
+        Str(String),
+        Num(f64),
+    }
+    
+    match VersionValue::deserialize(deserializer)? {
+        VersionValue::Str(s) => Ok(s),
+        VersionValue::Num(n) => Ok(n.to_string()),
+    }
+}
+
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct F95Thread {
     pub thread_id: ThreadId,
     pub title: String,
     pub creator: String,
+    #[serde(deserialize_with = "deserialize_version")]
     pub version: String,
     pub views: u64,
     pub likes: u64,
@@ -440,6 +459,7 @@ pub async fn fetch_list_page(page: u32, filters: &F95Filters) -> Result<F95Msg, 
         .query(&params)
         .send()
         .await?;
+    dbg!(1);
 
     if raw_resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
         log::warn!("fetch_list_page: received 429 Too Many Requests; delaying 1s before retry");
@@ -451,9 +471,21 @@ pub async fn fetch_list_page(page: u32, filters: &F95Filters) -> Result<F95Msg, 
             .send()
             .await?;
     }
+    dbg!(2);
 
     let raw_resp = raw_resp.error_for_status()?;
-    let resp: Root = raw_resp.json().await?;
+    dbg!(3);
+    // dbg!("raw response: {:?}", &raw_resp.text().await);
+    let resp: Root = match raw_resp.json().await {
+        Ok(v) => v,
+        Err(err) => {
+            let text = format!("Failed to parse JSON response: {err}");
+            log::error!("{}", text);
+            return Err(F95Error::Api(text));
+        }
+    };
+    // return todo!();
+    // dbg!(4);
 
     match resp.msg {
         Msg::Success(msg) if resp.status == "ok" => Ok(msg),
