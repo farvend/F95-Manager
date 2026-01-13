@@ -1,7 +1,7 @@
 use eframe::egui::Ui;
 
-use crate::tags::TAGS;
 use super::picker::dropdown_picker;
+use crate::tags::TAGS;
 
 /// Dynamic prefixes picker (for F95 prefixes) with inline search and dropdown popup.
 /// Returns Some(prefix_id) when user picks a prefix; otherwise None.

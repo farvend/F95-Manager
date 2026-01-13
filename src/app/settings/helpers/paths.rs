@@ -1,7 +1,7 @@
 // Path utilities and folder existence checks.
 
-use std::path::{Path, PathBuf};
 use crate::app::settings::store::APP_SETTINGS;
+use std::path::{Path, PathBuf};
 
 fn to_abs(p: &Path) -> PathBuf {
     if p.is_absolute() {

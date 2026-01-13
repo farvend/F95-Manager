@@ -6,15 +6,15 @@
 
 use eframe::{egui, egui_wgpu::WgpuConfiguration, wgpu::PresentMode};
 
-mod parser;
-mod types;
-mod views;
 mod app;
-mod tags;
-mod logger;
-mod localization;
-mod ui_constants;
 pub mod game_download;
+mod localization;
+mod logger;
+mod parser;
+mod tags;
+mod types;
+mod ui_constants;
+mod views;
 
 //#[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 fn main() -> eframe::Result<()> {

@@ -1,8 +1,8 @@
 use lazy_static::lazy_static;
 use regex::Regex;
 use reqwest::{
-    header::{HeaderMap, HeaderValue},
     Url,
+    header::{HeaderMap, HeaderValue},
 };
 use serde::Deserialize;
 use std::str::FromStr;
@@ -31,7 +31,9 @@ pub async fn resolve_gofile_file(id: &str) -> Option<(Url, HeaderMap<HeaderValue
         .nth(1)
         .filter(|s| !s.is_empty())?;
 
-    let url = format!("https://api.gofile.io/contents/{id}?wt={token}&contentFilter=&page=1&pageSize=1000&sortField=name&sortDirection=1");
+    let url = format!(
+        "https://api.gofile.io/contents/{id}?wt={token}&contentFilter=&page=1&pageSize=1000&sortField=name&sortDirection=1"
+    );
 
     // Create free temp account, extract account token
     let resp_txt = CLIENT

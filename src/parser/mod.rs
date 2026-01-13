@@ -7,7 +7,7 @@
 //
 // Example:
 // let filters = F95Filters::default().with_category("games").with_sort(SortParam::Date);
- // let page = fetch_list_page(1, &filters).await?;
+// let page = fetch_list_page(1, &filters).await?;
 //
 // Endpoint sample:
 // https://f95zone.to/sam/latest_alpha/latest_data.php?cmd=list&cat=games&page=1&sort=date
@@ -16,15 +16,21 @@ use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-use crate::{parser::game_info::{ThreadId, cookies}, types::{DateLimit, Sorting}};
+use crate::{
+    parser::game_info::{ThreadId, cookies},
+    types::{DateLimit, Sorting},
+};
 
 pub const BASE_URL: &str = "https://f95zone.to/sam/latest_alpha/latest_data.php";
 
-lazy_static!(
+lazy_static! {
     static ref CLIENT: reqwest::Client = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:68.0) Gecko/20100101 Firefox/68.0")
-        .build().unwrap();
-);
+        .user_agent(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:68.0) Gecko/20100101 Firefox/68.0"
+        )
+        .build()
+        .unwrap();
+}
 
 pub mod game_info;
 
@@ -121,14 +127,20 @@ pub fn normalize_url(s: &str) -> String {
 }
 
 //// Download an image (cover/screenshot) with Referer and return RGBA8 bytes + size.
-pub async fn fetch_image_f95_with_ref(url: &str, referer: &str) -> Result<(usize, usize, Vec<u8>), String> {
+pub async fn fetch_image_f95_with_ref(
+    url: &str,
+    referer: &str,
+) -> Result<(usize, usize, Vec<u8>), String> {
     let client = &CLIENT;
     log::debug!("fetch_image: GET {} referer={}", url, referer);
 
     let resp = match client
         .get(url)
         .header("Referer", referer)
-        .header("Accept", "image/jpeg,image/png,image/gif,image/webp,image/avif;q=0")
+        .header(
+            "Accept",
+            "image/jpeg,image/png,image/gif,image/webp,image/avif;q=0",
+        )
         .send()
         .await
     {
@@ -204,7 +216,7 @@ pub async fn fetch_image_f95_with_ref(url: &str, referer: &str) -> Result<(usize
                         log::warn!("fetch_image: fallback body read error for {}: {}", alt, e);
                         return Err(format!("fallback body read error for {}: {}", alt, e));
                     }
-                };
+                }
             }
             Err(e) => {
                 log::warn!("fetch_image: fallback request error for {}: {}", alt, e);
@@ -213,7 +225,11 @@ pub async fn fetch_image_f95_with_ref(url: &str, referer: &str) -> Result<(usize
         }
     }
     if content_type.contains("avif") || content_type.contains("webp") {
-        log::info!("fetch_image: content-type={} (modern), url={}", content_type, url);
+        log::info!(
+            "fetch_image: content-type={} (modern), url={}",
+            content_type,
+            url
+        );
     } else {
         log::debug!(
             "fetch_image: {} content-type={} size={}B",
@@ -226,7 +242,10 @@ pub async fn fetch_image_f95_with_ref(url: &str, referer: &str) -> Result<(usize
     let img = match image::load_from_memory(&bytes) {
         Ok(i) => i,
         Err(e) => {
-            let msg = format!("decode error for {}: {} (content-type={})", url, e, content_type);
+            let msg = format!(
+                "decode error for {}: {} (content-type={})",
+                url, e, content_type
+            );
             log::warn!("fetch_image: {}", msg);
             return Err(msg);
         }
@@ -336,7 +355,7 @@ pub async fn fetch_list_page(page: u32, filters: &F95Filters) -> Result<F95Msg, 
         sort: Option<String>,
         search: String,
         #[serde(skip_serializing_if = "Option::is_none")]
-        #[serde(rename = "tags[]")] 
+        #[serde(rename = "tags[]")]
         tags: Option<Vec<u32>>,
         #[serde(skip_serializing_if = "Option::is_none")]
         notags: Option<String>,
@@ -407,7 +426,9 @@ pub async fn fetch_list_page(page: u32, filters: &F95Filters) -> Result<F95Msg, 
             params.push(("noprefixes[]".into(), np.to_string()));
         }
     }
-    if let Some(d) = filters.date_days { params.push(("date".into(), d.to_string())); }
+    if let Some(d) = filters.date_days {
+        params.push(("date".into(), d.to_string()));
+    }
     // cache buster
     params.push(("_".into(), cache_buster.to_string()));
 

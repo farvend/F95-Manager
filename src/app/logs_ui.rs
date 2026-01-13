@@ -52,22 +52,37 @@ pub fn draw_logs_viewport(ctx: &egui::Context) {
             egui::CentralPanel::default().show(ctx, |ui| {
                 // Toolbar
                 ui.horizontal(|ui| {
-                    if ui.button(crate::localization::translate("logs-clear")).clicked() {
+                    if ui
+                        .button(crate::localization::translate("logs-clear"))
+                        .clicked()
+                    {
                         crate::logger::clear();
                     }
-                    if ui.button(crate::localization::translate("logs-copy")).clicked() {
+                    if ui
+                        .button(crate::localization::translate("logs-copy"))
+                        .clicked()
+                    {
                         let text = crate::logger::get_all().join("\n");
                         ui.output_mut(|o| o.copied_text = text);
                     }
                     // Autoscroll toggle
                     let mut autoscroll = AUTOSCROLL.read().map(|g| *g).unwrap_or(true);
-                    if ui.checkbox(&mut autoscroll, crate::localization::translate("logs-autoscroll")).changed() {
+                    if ui
+                        .checkbox(
+                            &mut autoscroll,
+                            crate::localization::translate("logs-autoscroll"),
+                        )
+                        .changed()
+                    {
                         if let Ok(mut w) = AUTOSCROLL.write() {
                             *w = autoscroll;
                         }
                     }
                     ui.separator();
-                    ui.label(crate::localization::translate_with("logs-lines", &[("n", crate::logger::len().to_string())]));
+                    ui.label(crate::localization::translate_with(
+                        "logs-lines",
+                        &[("n", crate::logger::len().to_string())],
+                    ));
                 });
                 ui.separator();
 
@@ -96,7 +111,8 @@ pub fn draw_logs_viewport(ctx: &egui::Context) {
                             (Some(file), None) => format!(" @ {}", file),
                             _ => String::new(),
                         };
-                        let line = format!("[{:>5}] {}{}: {}\n", e.level, e.target, location, e.msg);
+                        let line =
+                            format!("[{:>5}] {}{}: {}\n", e.level, e.target, location, e.msg);
                         job.append(&line, 0.0, fmt);
                     });
                     ui.label(job);

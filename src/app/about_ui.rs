@@ -57,10 +57,7 @@ pub fn draw_about_viewport(ctx: &egui::Context) {
                     "https://github.com/farvend/F95-Manager",
                 );
                 ui.add_space(crate::ui_constants::spacing::MEDIUM);
-                ui.hyperlink_to(
-                    "F95 thread",
-                    "https://f95zone.to/threads/267483/",
-                );
+                ui.hyperlink_to("F95 thread", "https://f95zone.to/threads/267483/");
             });
         },
     );

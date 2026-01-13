@@ -20,13 +20,13 @@ pub const SEARCH_DEBOUNCE_MS: u64 = 300;
 pub mod spacing {
     /// Small spacing (4px)
     pub const SMALL: f32 = 4.0;
-    
+
     /// Medium spacing (8px)
     pub const MEDIUM: f32 = 8.0;
-    
+
     /// Large spacing (16px)
     pub const LARGE: f32 = 16.0;
-    
+
     /// Extra large spacing (24px)
     pub const XLARGE: f32 = 24.0;
 }
@@ -35,19 +35,19 @@ pub mod spacing {
 pub mod card {
     /// Inner margin of card frame (symmetric)
     pub const INNER_MARGIN: f32 = 8.0;
-    
+
     /// Border radius of card corners
     pub const ROUNDING: f32 = 8.0;
-    
+
     /// Space after cover image
     pub const POST_COVER_GAP: f32 = 20.0;
-    
+
     /// Stats plaque rounding
     pub const STATS_ROUNDING: f32 = 6.0;
-    
+
     /// Stats plaque inner margin (horizontal)
     pub const STATS_MARGIN_H: f32 = 8.0;
-    
+
     /// Stats plaque inner margin (vertical)
     pub const STATS_MARGIN_V: f32 = 6.0;
 }
@@ -56,7 +56,7 @@ pub mod card {
 pub mod download {
     /// Weight of download phase in overall progress
     pub const DOWNLOAD_WEIGHT: f32 = 0.75;
-    
+
     /// Weight of unzip phase in overall progress
     pub const UNZIP_WEIGHT: f32 = 0.25;
 }

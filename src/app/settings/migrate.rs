@@ -83,12 +83,12 @@ pub fn migrate_installed_games(
             Ok(_) => {
                 // Adjust exe path if it was under old folder or under old_extract
                 let new_exe = match exe {
-                    Some(ref p) if p.starts_with(&old_folder) => match p.strip_prefix(&old_folder) {
-                        Ok(rel) => Some(new_folder.join(rel)),
-                        Err(_) => Some(
-                            new_folder.join(p.file_name().unwrap_or_default()),
-                        ),
-                    },
+                    Some(ref p) if p.starts_with(&old_folder) => {
+                        match p.strip_prefix(&old_folder) {
+                            Ok(rel) => Some(new_folder.join(rel)),
+                            Err(_) => Some(new_folder.join(p.file_name().unwrap_or_default())),
+                        }
+                    }
                     Some(ref p) if p.starts_with(old_extract) => {
                         match p.strip_prefix(old_extract) {
                             Ok(rel) => Some(new_extract.join(rel)),

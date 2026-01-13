@@ -47,9 +47,9 @@ async fn write_png_file(path: &PathBuf, w: usize, h: usize, rgba: Vec<u8>) -> Re
     // Offload CPU-heavy PNG encoding + file IO to blocking thread pool
     let path2 = path.clone();
     tokio::task::spawn_blocking(move || {
-        use image::codecs::png::PngEncoder;
         use image::ColorType;
         use image::ImageEncoder;
+        use image::codecs::png::PngEncoder;
 
         let mut buf: Vec<u8> = Vec::new();
         {
@@ -74,7 +74,10 @@ pub fn maybe_save_cover_png(thread_id: u64, w: usize, h: usize, rgba: Vec<u8>) {
     let base = { APP_SETTINGS.read().unwrap().cache_dir.clone() };
     let dir = base.join(thread_id.to_string());
     let path = dir.join("cover.png");
-    if std::fs::metadata(&path).map(|m| m.is_file()).unwrap_or(false) {
+    if std::fs::metadata(&path)
+        .map(|m| m.is_file())
+        .unwrap_or(false)
+    {
         return;
     }
     // Ensure dir sync to avoid race; ignore errors
@@ -85,7 +88,11 @@ pub fn maybe_save_cover_png(thread_id: u64, w: usize, h: usize, rgba: Vec<u8>) {
         let _permit = CACHE_CONCURRENCY.acquire().await.unwrap();
         let _ = tokio::fs::create_dir_all(&dir).await;
         if let Err(e) = write_png_file(&path, w, h, rgba).await {
-            log::warn!("cache: write cover opportunistic failed {}: {}", path.to_string_lossy(), e);
+            log::warn!(
+                "cache: write cover opportunistic failed {}: {}",
+                path.to_string_lossy(),
+                e
+            );
         }
     });
 }
@@ -98,7 +105,10 @@ pub fn maybe_save_screen_png(thread_id: u64, idx: usize, w: usize, h: usize, rgb
     let base = { APP_SETTINGS.read().unwrap().cache_dir.clone() };
     let dir = base.join(thread_id.to_string());
     let path = dir.join(format!("screen_{}.png", idx + 1));
-    if std::fs::metadata(&path).map(|m| m.is_file()).unwrap_or(false) {
+    if std::fs::metadata(&path)
+        .map(|m| m.is_file())
+        .unwrap_or(false)
+    {
         return;
     }
     let _ = std::fs::create_dir_all(&dir);
@@ -106,7 +116,11 @@ pub fn maybe_save_screen_png(thread_id: u64, idx: usize, w: usize, h: usize, rgb
         let _permit = CACHE_CONCURRENCY.acquire().await.unwrap();
         let _ = tokio::fs::create_dir_all(&dir).await;
         if let Err(e) = write_png_file(&path, w, h, rgba).await {
-            log::warn!("cache: write screen opportunistic failed {}: {}", path.to_string_lossy(), e);
+            log::warn!(
+                "cache: write screen opportunistic failed {}: {}",
+                path.to_string_lossy(),
+                e
+            );
         }
     });
 }
@@ -196,7 +210,7 @@ pub fn spawn_cache_quick_from(t: &crate::parser::F95Thread) {
 
     crate::app::rt().spawn(async move {
         // Limit global cache tasks concurrency
-let _permit = CACHE_CONCURRENCY.acquire().await.unwrap();
+        let _permit = CACHE_CONCURRENCY.acquire().await.unwrap();
 
         let cache_dir: PathBuf = cache_dir_for(id);
         if let Err(e) = tokio::fs::create_dir_all(&cache_dir).await {
@@ -259,7 +273,7 @@ pub fn spawn_cache_quick(thread_id: u64) {
     }
     crate::app::rt().spawn(async move {
         // Limit global cache tasks concurrency
-let _permit = CACHE_CONCURRENCY.acquire().await.unwrap();
+        let _permit = CACHE_CONCURRENCY.acquire().await.unwrap();
 
         let cache_dir: PathBuf = cache_dir_for(thread_id);
         if let Err(e) = tokio::fs::create_dir_all(&cache_dir).await {
@@ -316,7 +330,11 @@ let _permit = CACHE_CONCURRENCY.acquire().await.unwrap();
                     }
                 }
                 Err(e) => {
-                    log::warn!("cache-quick: fetch cover failed: id={} err={}", thread_id, e);
+                    log::warn!(
+                        "cache-quick: fetch cover failed: id={} err={}",
+                        thread_id,
+                        e
+                    );
                 }
             }
         }
@@ -340,7 +358,7 @@ pub fn spawn_cache_for_thread_from(t: &crate::parser::F95Thread) {
     // Spawn async task on the runtime
     crate::app::rt().spawn(async move {
         // Limit global cache tasks concurrency
-let _permit = CACHE_CONCURRENCY.acquire().await.unwrap();
+        let _permit = CACHE_CONCURRENCY.acquire().await.unwrap();
 
         // Create cache/<thread_id> folder under configured base
         let cache_dir: PathBuf = cache_dir_for(id);

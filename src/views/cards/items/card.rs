@@ -1,11 +1,14 @@
 use eframe::egui::{self, Color32, RichText, Rounding, Stroke};
 
+use crate::app::settings::{
+    delete_downloaded_game, downloaded_game_folder, hide_thread, is_pending_download,
+    is_thread_hidden, open_in_browser, remove_pending_download, reveal_in_file_manager,
+};
 use crate::parser::F95Thread;
-use crate::app::settings::{hide_thread, is_thread_hidden, is_pending_download, remove_pending_download, open_in_browser, delete_downloaded_game, downloaded_game_folder, reveal_in_file_manager};
 // use crate::views::cards::items::cover_hover::CoverHover;
 use super::cover_hover::draw_cover;
-use super::tags_panel::draw_tags_panel;
 use super::meta_row::draw_meta_row;
+use super::tags_panel::draw_tags_panel;
 
 /// Hover info returned by thread_card so the caller can lazy-load screenshots.
 pub struct CardHover {
@@ -72,7 +75,15 @@ pub fn thread_card(
             ui.set_width(inner_w);
 
             // Cover + markers (handles hover index and screenshot swap if available)
-            let cover_hover = draw_cover(ui, t, inner_w, cover_tex, screens, progress.clone(), link_choices);
+            let cover_hover = draw_cover(
+                ui,
+                t,
+                inner_w,
+                cover_tex,
+                screens,
+                progress.clone(),
+                link_choices,
+            );
             hovered_any |= cover_hover.hovered;
             hovered_line = cover_hover.hovered_line;
             download_clicked |= cover_hover.download_clicked;
@@ -85,9 +96,13 @@ pub fn thread_card(
             // Fixed gap after cover; independent of data and width.
             ui.add_space(crate::ui_constants::card::POST_COVER_GAP);
             ui.add(
-                egui::Label::new(RichText::new(&t.title).heading().color(Color32::from_rgb(230, 230, 230)))
-                    //.truncate(true)
-                    .wrap(true),
+                egui::Label::new(
+                    RichText::new(&t.title)
+                        .heading()
+                        .color(Color32::from_rgb(230, 230, 230)),
+                )
+                //.truncate(true)
+                .wrap(true),
             );
 
             // Creator under title (no background) to match main page layout

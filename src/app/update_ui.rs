@@ -183,9 +183,18 @@ fn normalize_version(s: &str) -> String {
 fn parse_tuple(ver: &str) -> (u64, u64, u64) {
     let core = ver.split('-').next().unwrap_or(ver);
     let mut parts = core.split('.');
-    let p1 = parts.next().and_then(|x| x.parse::<u64>().ok()).unwrap_or(0);
-    let p2 = parts.next().and_then(|x| x.parse::<u64>().ok()).unwrap_or(0);
-    let p3 = parts.next().and_then(|x| x.parse::<u64>().ok()).unwrap_or(0);
+    let p1 = parts
+        .next()
+        .and_then(|x| x.parse::<u64>().ok())
+        .unwrap_or(0);
+    let p2 = parts
+        .next()
+        .and_then(|x| x.parse::<u64>().ok())
+        .unwrap_or(0);
+    let p3 = parts
+        .next()
+        .and_then(|x| x.parse::<u64>().ok())
+        .unwrap_or(0);
     (p1, p2, p3)
 }
 

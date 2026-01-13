@@ -11,6 +11,10 @@ pub fn draw_meta_row(ui: &mut egui::Ui, t: &F95Thread) {
         ui.label(RichText::new(format!("🕓 {}", t.date)).small().color(col));
         ui.label(RichText::new(format!("👍 {}", t.likes)).small().color(col));
         ui.label(RichText::new(format!("👀 {}", t.views)).small().color(col));
-        ui.label(RichText::new(format!("⭐ {:.1}", t.rating)).small().color(col));
+        ui.label(
+            RichText::new(format!("⭐ {:.1}", t.rating))
+                .small()
+                .color(col),
+        );
     });
 }

@@ -1,10 +1,9 @@
 use eframe::egui::{
-    self, text::LayoutJob, Color32, FontId, PointerButton, RichText, Sense, TextFormat, Ui,
+    self, Color32, FontId, PointerButton, RichText, Sense, TextFormat, Ui, text::LayoutJob,
 };
 use strum::{EnumCount, IntoEnumIterator};
 
 use crate::views::filters::EnumWithAlternativeNames;
-
 
 pub fn mode_switch_small<T>(ui: &mut Ui, name: &str, current: &T) -> Option<T>
 where
@@ -63,7 +62,11 @@ where
             }
 
             let response = ui
-                .add(egui::Label::new(job).sense(Sense::click()).selectable(false))
+                .add(
+                    egui::Label::new(job)
+                        .sense(Sense::click())
+                        .selectable(false),
+                )
                 .on_hover_cursor(eframe::egui::CursorIcon::PointingHand);
 
             // Click to cycle (primary forward, secondary backward)

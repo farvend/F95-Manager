@@ -3,7 +3,7 @@ use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::sync::RwLock;
 use thiserror::Error;
-use unic_langid::{langid, LanguageIdentifier};
+use unic_langid::{LanguageIdentifier, langid};
 
 type Bundle = FluentBundle<FluentResource>;
 
@@ -69,8 +69,11 @@ pub enum LocalizationError {
 fn make_bundle(lang: SupportedLang) -> Bundle {
     let mut bundle: Bundle = FluentBundle::new(vec![LanguageIdentifier::from(lang)]);
     let res_str = lang.ftl();
-    let res = FluentResource::try_new(res_str.to_string()).expect("Failed to parse embedded FTL resource");
-    bundle.add_resource(res).expect("Failed to add FTL to bundle");
+    let res = FluentResource::try_new(res_str.to_string())
+        .expect("Failed to parse embedded FTL resource");
+    bundle
+        .add_resource(res)
+        .expect("Failed to add FTL to bundle");
     bundle
 }
 
@@ -83,7 +86,9 @@ fn try_format(bundle: &Bundle, id: &str, args: Option<&FluentArgs>) -> Option<St
 }
 
 /// Initialize localization system. If preferred_lang is None, system locale will be used.
-pub fn initialize_localization(preferred_lang: Option<SupportedLang>) -> Result<(), LocalizationError> {
+pub fn initialize_localization(
+    preferred_lang: Option<SupportedLang>,
+) -> Result<(), LocalizationError> {
     match preferred_lang {
         Some(lang) => set_current_language(lang)?,
         None => set_language_auto()?,

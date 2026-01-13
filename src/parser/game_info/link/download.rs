@@ -62,8 +62,10 @@ pub async fn start_download_task(
 
                     // Run potentially heavy extraction on a blocking thread
                     let path = archive_path.clone();
-                    let unzip_res =
-                        tokio::task::spawn_blocking(move || extract_archive(&path, &dest_base, &sd_unzip)).await;
+                    let unzip_res = tokio::task::spawn_blocking(move || {
+                        extract_archive(&path, &dest_base, &sd_unzip)
+                    })
+                    .await;
 
                     match unzip_res {
                         Ok(Ok((dest_dir, exe_path))) => {
@@ -81,9 +83,9 @@ pub async fn start_download_task(
                             let _ = sd.send(GameDownloadStatus::Unzipping(Progress::Error(msg)));
                         }
                         Err(e) => {
-                            let _ = sd.send(GameDownloadStatus::Unzipping(Progress::Error(format!(
-                                "Unzip task join error: {e}"
-                            ))));
+                            let _ = sd.send(GameDownloadStatus::Unzipping(Progress::Error(
+                                format!("Unzip task join error: {e}"),
+                            )));
                         }
                     }
                     log::info!("successfully extracted");

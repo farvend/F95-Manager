@@ -74,22 +74,20 @@ pub fn save_config_to_disk() {
 /// Perform login against f95zone and persist cookies into app_config.json.
 /// On success, APP_CONFIG.cookies will contain a ready-to-use "Cookie" header string.
 pub async fn login_and_store(login: String, password: String) -> Result<(), String> {
-
-
     // Do not follow redirects to ensure we capture Set-Cookie from the login response itself.
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|e| format!("client build error: {e}"))?;
-    
+
     // Fetch CSRF token
     let page_resp = client
         .get("https://f95zone.to/")
         .send()
         .await
         .map_err(|e| format!("failed to fetch login page: {e}"))?;
-        
+
     let html = page_resp
         .text()
         .await
@@ -144,7 +142,10 @@ pub async fn login_and_store(login: String, password: String) -> Result<(), Stri
     }
 
     if !cookie_map.keys().any(|e| e == "xf_session") {
-        return Err("login failed. Server didn't send xf_session. You probably entered wrong credentials".to_string())
+        return Err(
+            "login failed. Server didn't send xf_session. You probably entered wrong credentials"
+                .to_string(),
+        );
     }
 
     if cookie_map.is_empty() {
@@ -174,7 +175,7 @@ pub async fn login_and_store(login: String, password: String) -> Result<(), Stri
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     // В тестах используем путь к временному файлу конфигурации, чтобы не перезаписать рабочий
     // app_config.json. Имя дополнительно содержит PID процесса для уникальности между запусками.
     fn temp_config_path(name: &str) -> String {
@@ -189,15 +190,18 @@ mod tests {
     async fn login_from_env_integration() {
         // Перенаправляем путь конфигурации, чтобы не перетирать рабочий app_config.json
         let cfg_path = temp_config_path("app_config_test_env_ok");
-        unsafe { std::env::set_var("F95_APP_CONFIG_PATH", &cfg_path); }
+        unsafe {
+            std::env::set_var("F95_APP_CONFIG_PATH", &cfg_path);
+        }
 
         // Пытаемся загрузить .env (не ошибка, если файла нет)
         let _ = dotenvy::dotenv();
 
         let login = std::env::var("F95_LOGIN")
             .expect("Отсутствует переменная окружения F95_LOGIN. Укажите её в .env или окружении.");
-        let password = std::env::var("F95_PASSWORD")
-            .expect("Отсутствует переменная окружения F95_PASSWORD. Укажите её в .env или окружении.");
+        let password = std::env::var("F95_PASSWORD").expect(
+            "Отсутствует переменная окружения F95_PASSWORD. Укажите её в .env или окружении.",
+        );
 
         let res = login_and_store(login, password).await;
         assert!(res.is_ok(), "Login failed: {res:?}");
@@ -214,14 +218,18 @@ pub async fn login_from_env_and_store() -> Result<(), String> {
     let login = match std::env::var("F95_LOGIN") {
         Ok(v) => v,
         Err(_) => {
-            log::warn!("Переменная окружения F95_LOGIN не задана. Укажите её в .env или окружении.");
+            log::warn!(
+                "Переменная окружения F95_LOGIN не задана. Укажите её в .env или окружении."
+            );
             return Err("F95_LOGIN not set".to_string());
         }
     };
     let password = match std::env::var("F95_PASSWORD") {
         Ok(v) => v,
         Err(_) => {
-            log::warn!("Переменная окружения F95_PASSWORD не задана. Укажите её в .env или окружении.");
+            log::warn!(
+                "Переменная окружения F95_PASSWORD не задана. Укажите её в .env или окружении."
+            );
             return Err("F95_PASSWORD not set".to_string());
         }
     };

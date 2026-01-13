@@ -17,10 +17,21 @@ where
 {
     // Header: label left, current value right
     ui.horizontal(|ui| {
-        ui.add(eframe::egui::Label::new(RichText::new(crate::localization::translate(name)).weak()).selectable(false));
-        ui.with_layout(eframe::egui::Layout::right_to_left(eframe::egui::Align::Center), |ui| {
-            ui.add(eframe::egui::Label::new(RichText::new(crate::localization::translate(current.loc_key()))).selectable(false));
-        });
+        ui.add(
+            eframe::egui::Label::new(RichText::new(crate::localization::translate(name)).weak())
+                .selectable(false),
+        );
+        ui.with_layout(
+            eframe::egui::Layout::right_to_left(eframe::egui::Align::Center),
+            |ui| {
+                ui.add(
+                    eframe::egui::Label::new(RichText::new(crate::localization::translate(
+                        current.loc_key(),
+                    )))
+                    .selectable(false),
+                );
+            },
+        );
     });
 
     let count = T::COUNT as usize;
@@ -33,8 +44,10 @@ where
     let bg = Color32::from_rgb(30, 30, 30);
     let accent = Color32::from_rgb(210, 85, 85);
 
-    let (container_rect, _) =
-        ui.allocate_exact_size(Vec2::new(available_width, height), eframe::egui::Sense::hover());
+    let (container_rect, _) = ui.allocate_exact_size(
+        Vec2::new(available_width, height),
+        eframe::egui::Sense::hover(),
+    );
     let painter = ui.painter();
     painter.rect(container_rect, rounding, bg, Stroke::new(1.0, border_color));
 

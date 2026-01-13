@@ -1,7 +1,7 @@
 // Settings store: data types, global state, load/save, and records of downloaded games.
 
 use lazy_static::lazy_static;
-use serde::{Deserialize, Serialize, Deserializer, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::path::PathBuf;
 use std::sync::RwLock;
 
@@ -24,7 +24,6 @@ pub enum LoadingAnim {
     #[serde(rename = "circle_bottom_right")]
     CircleBottomRight,
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
@@ -104,10 +103,14 @@ impl Default for AppSettings {
     }
 }
 
-fn default_log_to_file() -> bool { true }
+fn default_log_to_file() -> bool {
+    true
+}
 
 //// Serde helpers for language field to keep backward compatibility with older JSONs.
-fn deserialize_language_opt<'de, D>(deserializer: D) -> Result<Option<crate::localization::SupportedLang>, D::Error>
+fn deserialize_language_opt<'de, D>(
+    deserializer: D,
+) -> Result<Option<crate::localization::SupportedLang>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -227,7 +230,11 @@ pub fn remove_pending_download(thread_id: u64) {
 pub fn record_downloaded_game(thread_id: u64, folder: PathBuf, exe_path: Option<PathBuf>) {
     {
         let mut st = APP_SETTINGS.write().unwrap();
-        if let Some(entry) = st.downloaded_games.iter_mut().find(|e| e.thread_id == thread_id) {
+        if let Some(entry) = st
+            .downloaded_games
+            .iter_mut()
+            .find(|e| e.thread_id == thread_id)
+        {
             entry.folder = folder.clone();
             entry.exe_path = exe_path.clone();
         } else {
@@ -306,7 +313,9 @@ pub fn delete_downloaded_game(thread_id: u64) {
                     // Prevent deleting the extract_dir itself and ensure target is strictly within extract_dir.
                     if target != extract_root && target.strip_prefix(&extract_root).is_ok() {
                         match std::fs::remove_dir_all(&target) {
-                            Ok(_) => log::info!("Deleted game folder: {}", target.to_string_lossy()),
+                            Ok(_) => {
+                                log::info!("Deleted game folder: {}", target.to_string_lossy())
+                            }
                             Err(e) => log::error!(
                                 "Failed to delete game folder {}: {}",
                                 target.to_string_lossy(),

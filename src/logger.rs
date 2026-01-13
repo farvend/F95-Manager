@@ -4,13 +4,13 @@
 
 use lazy_static::lazy_static;
 use log::{Level, LevelFilter, Log, Metadata, Record};
+use std::backtrace::Backtrace;
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Mutex;
 use std::fs::OpenOptions;
 use std::io::Write;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::backtrace::Backtrace;
 
 #[derive(Clone)]
 pub struct LogEntry {
@@ -257,7 +257,9 @@ pub fn take_new_flag() -> bool {
 // --- helpers: persistent log file + panic hook ---
 
 fn timestamp_millis() -> String {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
     let secs = now.as_secs();
     let ms = now.subsec_millis();
     format!("{secs}.{ms:03}")
@@ -297,10 +299,7 @@ fn install_panic_hook() {
         };
 
         let bt = Backtrace::force_capture();
-        let header = format!(
-            "[{}] [ERROR] panic at {loc}: {msg}",
-            timestamp_millis()
-        );
+        let header = format!("[{}] [ERROR] panic at {loc}: {msg}", timestamp_millis());
 
         write_file_line(&header);
         // Write backtrace lines

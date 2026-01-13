@@ -1,6 +1,6 @@
 use reqwest::{
-    header::{HeaderMap, HeaderValue},
     Url,
+    header::{HeaderMap, HeaderValue},
 };
 
 #[derive(Debug)]

@@ -4,7 +4,7 @@ use serde::Deserialize;
 use std::str::FromStr;
 
 use super::link::DownloadLink;
-use super::page::F95Page;
+use super::page::F95PageUrl;
 
 #[derive(Debug, Deserialize, Clone, Hash, Copy, PartialEq, Eq)]
 pub struct ThreadId(pub u64);
@@ -13,9 +13,9 @@ impl ThreadId {
     pub fn get(&self) -> u64 {
         self.0
     }
-    pub fn get_page(&self) -> F95Page {
+    pub fn get_page(&self) -> F95PageUrl {
         let url = format!("https://f95zone.to/threads/{}/", self.0);
-        F95Page(Url::from_str(&url).unwrap())
+        F95PageUrl(Url::from_str(&url).unwrap())
     }
 }
 
@@ -46,7 +46,9 @@ impl From<&str> for Platform {
 
         for token in normalized.split('/') {
             let t = token.trim();
-            if t.is_empty() { continue; }
+            if t.is_empty() {
+                continue;
+            }
 
             if t.contains("win") || t == "pc" {
                 flags |= Platform::WINDOWS;

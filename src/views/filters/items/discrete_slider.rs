@@ -1,4 +1,4 @@
-use eframe::egui::{self, pos2, Color32, Rect, RichText, Rounding, Stroke, Ui, Vec2};
+use eframe::egui::{self, Color32, Rect, RichText, Rounding, Stroke, Ui, Vec2, pos2};
 
 /// Stateless discrete slider that can only take values from a provided list.
 /// Header row: name on the left, active value on the right.
@@ -14,7 +14,12 @@ where
         ui.with_layout(
             eframe::egui::Layout::right_to_left(eframe::egui::Align::Center),
             |ui| {
-                ui.add(egui::Label::new(RichText::new(crate::localization::translate(current.loc_key()))).selectable(false));
+                ui.add(
+                    egui::Label::new(RichText::new(crate::localization::translate(
+                        current.loc_key(),
+                    )))
+                    .selectable(false),
+                );
             },
         );
     });
@@ -37,8 +42,10 @@ where
     let thumb_outline = Color32::from_gray(50);
     let accent = Color32::from_rgb(210, 85, 85);
 
-    let (container_rect, _) =
-        ui.allocate_exact_size(Vec2::new(available_width, height), eframe::egui::Sense::hover());
+    let (container_rect, _) = ui.allocate_exact_size(
+        Vec2::new(available_width, height),
+        eframe::egui::Sense::hover(),
+    );
     let painter = ui.painter();
     painter.rect(
         container_rect,
@@ -81,11 +88,7 @@ where
     // Interact on the whole container (track + thumb) so both drag/click will work
     let id = ui.id().with("discrete_slider").with(name.to_string()); // unique per name
     let response = ui
-        .interact(
-            container_rect,
-            id,
-            eframe::egui::Sense::click_and_drag(),
-        )
+        .interact(container_rect, id, eframe::egui::Sense::click_and_drag())
         .on_hover_cursor(eframe::egui::CursorIcon::PointingHand);
 
     // Compute new value on click/drag
@@ -106,8 +109,10 @@ where
                 changed_to = Some(values[new_idx].clone());
             }
             // Update thumb preview while dragging (visual only this frame)
-            let new_x =
-                egui::lerp(track_rect.left()..=track_rect.right(), new_idx as f32 / (count as f32 - 1.0));
+            let new_x = egui::lerp(
+                track_rect.left()..=track_rect.right(),
+                new_idx as f32 / (count as f32 - 1.0),
+            );
             thumb_rect = Rect::from_center_size(pos2(new_x, thumb_center.y), thumb_size);
         }
     }
@@ -138,8 +143,14 @@ where
     let grip1_x = thumb_rect.center().x - 3.0;
     let grip2_x = thumb_rect.center().x + 3.0;
     let grip_col = Color32::from_gray(80);
-    painter.line_segment([pos2(grip1_x, grip_top), pos2(grip1_x, grip_bottom)], Stroke::new(1.0, grip_col));
-    painter.line_segment([pos2(grip2_x, grip_top), pos2(grip2_x, grip_bottom)], Stroke::new(1.0, grip_col));
+    painter.line_segment(
+        [pos2(grip1_x, grip_top), pos2(grip1_x, grip_bottom)],
+        Stroke::new(1.0, grip_col),
+    );
+    painter.line_segment(
+        [pos2(grip2_x, grip_top), pos2(grip2_x, grip_bottom)],
+        Stroke::new(1.0, grip_col),
+    );
 
     // Optional: small ticks for steps (subtle)
     if count > 1 {

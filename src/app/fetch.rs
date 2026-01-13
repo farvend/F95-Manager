@@ -1,5 +1,5 @@
-use eframe::egui;
 use crate::parser::game_info::ThreadId;
+use eframe::egui;
 
 use super::rt;
 mod helpers;
@@ -97,9 +97,9 @@ impl super::NoLagApp {
                 if let Ok((id, res)) = joined {
                     match res {
                         Ok(meta) => {
-                            if let Some(th) = all_found.iter_mut().find(|t| t.thread_id.get() == id) {
-                                let (sc_len, tg_len) =
-                                    helpers::apply_meta(th, meta);
+                            if let Some(th) = all_found.iter_mut().find(|t| t.thread_id.get() == id)
+                            {
+                                let (sc_len, tg_len) = helpers::apply_meta(th, meta);
                                 log::info!(
                                     "Prefetch meta for {id}: screens={sc_len} tags={tg_len}"
                                 );
@@ -115,7 +115,6 @@ impl super::NoLagApp {
                         }
                     }
                 }
-                    
             }
         });
     }
@@ -163,8 +162,7 @@ impl super::NoLagApp {
                 match crate::parser::game_info::thread_meta::fetch_thread_meta(id).await {
                     Ok(meta) => {
                         if let Some(th) = all_found.iter_mut().find(|t| t.thread_id.get() == id) {
-                            let (sc_len, tg_len) =
-                                helpers::apply_meta(th, meta);
+                            let (sc_len, tg_len) = helpers::apply_meta(th, meta);
                             log::info!(
                                 "Direct meta fetched for {id}: screens={sc_len} tags={tg_len}"
                             );
@@ -247,8 +245,7 @@ impl super::NoLagApp {
         );
 
         // Snapshot current results (prefer existing lib_result) so we don't re-fetch if a card is already filled
-        let existing_map =
-            self.build_existing_map_for_refresh();
+        let existing_map = self.build_existing_map_for_refresh();
 
         self.spawn_lib_pipeline_sequential_with_req(ctx, req_id, installs, targets, existing_map);
 
@@ -313,24 +310,48 @@ impl super::NoLagApp {
 
                 // Attempt to load from cache first (cover.png or screen_1.png if we fell back)
                 let cache_path = {
-                    let base = crate::app::settings::APP_SETTINGS.read().unwrap().cache_dir.clone();
-                    let file = if is_cover_choice { "cover.png".to_string() } else { "screen_1.png".to_string() };
+                    let base = crate::app::settings::APP_SETTINGS
+                        .read()
+                        .unwrap()
+                        .cache_dir
+                        .clone();
+                    let file = if is_cover_choice {
+                        "cover.png".to_string()
+                    } else {
+                        "screen_1.png".to_string()
+                    };
                     base.join(id.to_string()).join(file)
                 };
 
-                log::info!("cover schedule: id={} url={} cache_path={}", id, url, cache_path.to_string_lossy());
+                log::info!(
+                    "cover schedule: id={} url={} cache_path={}",
+                    id,
+                    url,
+                    cache_path.to_string_lossy()
+                );
                 super::rt().spawn(async move {
                     let mut served_from_cache = false;
                     if tokio::fs::metadata(&cache_path).await.is_ok() {
-                        match tokio::task::spawn_blocking(move || -> Result<(usize, usize, Vec<u8>), String> {
-                            let bytes = std::fs::read(&cache_path).map_err(|e| format!("read cache error: {}", e))?;
-                            let img = image::load_from_memory(&bytes).map_err(|e| format!("decode cache error: {}", e))?;
-                            let rgba = img.to_rgba8();
-                            let (w, h) = rgba.dimensions();
-                            Ok((w as usize, h as usize, rgba.into_vec()))
-                        }).await {
+                        match tokio::task::spawn_blocking(
+                            move || -> Result<(usize, usize, Vec<u8>), String> {
+                                let bytes = std::fs::read(&cache_path)
+                                    .map_err(|e| format!("read cache error: {}", e))?;
+                                let img = image::load_from_memory(&bytes)
+                                    .map_err(|e| format!("decode cache error: {}", e))?;
+                                let rgba = img.to_rgba8();
+                                let (w, h) = rgba.dimensions();
+                                Ok((w as usize, h as usize, rgba.into_vec()))
+                            },
+                        )
+                        .await
+                        {
                             Ok(Ok((w, h, rgba))) => {
-                                let _ = tx.send(CoverMsg::Ok { thread_id, w, h, rgba });
+                                let _ = tx.send(CoverMsg::Ok {
+                                    thread_id,
+                                    w,
+                                    h,
+                                    rgba,
+                                });
                                 served_from_cache = true;
                             }
                             Ok(Err(e)) => {
@@ -345,7 +366,12 @@ impl super::NoLagApp {
                     if !served_from_cache {
                         let result = crate::parser::fetch_image_f95(&url).await;
                         let _ = tx.send(match result {
-                            Ok((w, h, rgba)) => CoverMsg::Ok { thread_id, w, h, rgba },
+                            Ok((w, h, rgba)) => CoverMsg::Ok {
+                                thread_id,
+                                w,
+                                h,
+                                rgba,
+                            },
                             Err(err) => {
                                 log::warn!("cover fetch failed: id={} err={} url={}", id, err, url);
                                 CoverMsg::Err { thread_id: id }
@@ -418,7 +444,12 @@ impl super::NoLagApp {
         // Images (covers/screens)
         while let Ok(msg) = self.images.cover_rx.try_recv() {
             match msg {
-                CoverMsg::Ok { thread_id, w, h, rgba } => {
+                CoverMsg::Ok {
+                    thread_id,
+                    w,
+                    h,
+                    rgba,
+                } => {
                     let thread_id = thread_id.get();
                     // Opportunistic cache save (if enabled)
                     super::cache::maybe_save_cover_png(thread_id, w, h, rgba.clone());
@@ -435,7 +466,13 @@ impl super::NoLagApp {
                 CoverMsg::Err { thread_id } => {
                     self.images.covers_loading.remove(&thread_id);
                 }
-                CoverMsg::ScreenOk { thread_id, idx, w, h, rgba } => {
+                CoverMsg::ScreenOk {
+                    thread_id,
+                    idx,
+                    w,
+                    h,
+                    rgba,
+                } => {
                     // Opportunistic cache save (if enabled)
                     super::cache::maybe_save_screen_png(thread_id, idx, w, h, rgba.clone());
                     let image = egui::ColorImage::from_rgba_unmultiplied([w, h], &rgba);
@@ -444,7 +481,11 @@ impl super::NoLagApp {
                         image,
                         egui::TextureOptions::default(),
                     );
-                    let entry = self.images.screens.entry(thread_id).or_insert_with(|| Vec::new());
+                    let entry = self
+                        .images
+                        .screens
+                        .entry(thread_id)
+                        .or_insert_with(|| Vec::new());
                     if entry.len() < idx + 1 {
                         entry.resize_with(idx + 1, || None);
                     }

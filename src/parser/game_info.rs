@@ -11,14 +11,14 @@ pub fn cookies() -> String {
     String::new()
 }
 
-pub mod types;
 pub mod hosting;
 pub mod link;
 pub mod page;
 pub mod thread_meta;
+pub mod types;
 
 // Re-exports to keep external API unchanged
-pub use types::{ThreadId, Platform, PlatformDownloads};
 pub use hosting::{Hosting, HostingSubset};
-pub use page::{F95Page, GetLinksError};
-pub use link::{DownloadLink, DirectDownloadLink, DownloadLinkInfo};
+pub use link::{DirectDownloadLink, DownloadLink, DownloadLinkInfo};
+pub use page::{F95PageUrl, GetLinksError};
+pub use types::{Platform, PlatformDownloads, ThreadId};

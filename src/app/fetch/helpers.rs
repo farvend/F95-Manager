@@ -120,9 +120,7 @@ pub fn fill_threads_from_targets(
 }
 
 /// Build F95Msg from a set of threads as a single-page result.
-pub fn make_msg_from_threads(
-    data: Vec<crate::parser::F95Thread>,
-) -> crate::parser::F95Msg {
+pub fn make_msg_from_threads(data: Vec<crate::parser::F95Thread>) -> crate::parser::F95Msg {
     let count = data.len() as u64;
     crate::parser::F95Msg {
         data,
@@ -151,7 +149,7 @@ pub fn apply_meta(
     th.screens = meta.screens;
     th.creator = meta.creator;
     th.version = meta.version;
-    
+
     if tags_len > 0 && th.tags.is_empty() {
         th.tags = meta.tag_ids;
     }

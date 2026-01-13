@@ -1,7 +1,7 @@
 use eframe::egui::Ui;
 
-use crate::tags::TAGS;
 use super::picker::dropdown_picker;
+use crate::tags::TAGS;
 
 /// Dynamic tags picker with inline search and dropdown popup.
 /// Returns Some(tag_id) when user picks a tag; otherwise None.

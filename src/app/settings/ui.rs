@@ -1,15 +1,14 @@
 // Settings UI: egui viewport window and separate eframe App, plus UI state.
 
-use eframe::{egui, App};
+use eframe::{App, egui};
 use lazy_static::lazy_static;
 use std::path::PathBuf;
-use std::sync::{mpsc, RwLock};
+use std::sync::{RwLock, mpsc};
 
 use super::helpers::move_directory;
-use super::store::{save_settings_to_disk, APP_SETTINGS};
-use crate::views::filters::items::{tags_menu::tags_picker, prefixes_menu::prefixes_picker};
 use super::migrate;
-
+use super::store::{APP_SETTINGS, save_settings_to_disk};
+use crate::views::filters::items::{prefixes_menu::prefixes_picker, tags_menu::tags_picker};
 
 lazy_static! {
     pub static ref SETTINGS_OPEN: RwLock<bool> = RwLock::new(false);
@@ -47,7 +46,10 @@ lazy_static! {
 
 #[derive(Debug, Clone)]
 pub enum SettingsMsg {
-    Update { temp_dir: String, extract_dir: String },
+    Update {
+        temp_dir: String,
+        extract_dir: String,
+    },
 }
 
 pub fn open_settings() {
@@ -652,46 +654,52 @@ pub struct SettingsApp {
 
 impl SettingsApp {
     pub fn new(tx: mpsc::Sender<SettingsMsg>, temp_dir: String, extract_dir: String) -> Self {
-        Self { tx, temp_dir, extract_dir }
+        Self {
+            tx,
+            temp_dir,
+            extract_dir,
+        }
     }
 }
 
 impl App for SettingsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
-                ui.heading("Settings");
-            ui.separator();
+            egui::ScrollArea::vertical()
+                .auto_shrink([false; 2])
+                .show(ui, |ui| {
+                    ui.heading("Settings");
+                    ui.separator();
 
-            ui.horizontal(|ui| {
-                ui.label("Temp folder:");
-                ui.text_edit_singleline(&mut self.temp_dir);
-            });
-
-            ui.horizontal(|ui| {
-                ui.label("Extract-to folder:");
-                ui.text_edit_singleline(&mut self.extract_dir);
-            });
-
-            ui.add_space(crate::ui_constants::spacing::MEDIUM);
-            ui.separator();
-
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("Save").clicked() {
-                    let _ = self.tx.send(SettingsMsg::Update {
-                        temp_dir: self.temp_dir.clone(),
-                        extract_dir: self.extract_dir.clone(),
+                    ui.horizontal(|ui| {
+                        ui.label("Temp folder:");
+                        ui.text_edit_singleline(&mut self.temp_dir);
                     });
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                }
 
-                if ui.button("Cancel").clicked() {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                }
+                    ui.horizontal(|ui| {
+                        ui.label("Extract-to folder:");
+                        ui.text_edit_singleline(&mut self.extract_dir);
+                    });
 
-                ui.add_space(crate::ui_constants::spacing::MEDIUM);
-            });
-            });
+                    ui.add_space(crate::ui_constants::spacing::MEDIUM);
+                    ui.separator();
+
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button("Save").clicked() {
+                            let _ = self.tx.send(SettingsMsg::Update {
+                                temp_dir: self.temp_dir.clone(),
+                                extract_dir: self.extract_dir.clone(),
+                            });
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+
+                        if ui.button("Cancel").clicked() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+
+                        ui.add_space(crate::ui_constants::spacing::MEDIUM);
+                    });
+                });
         });
     }
 }

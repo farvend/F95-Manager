@@ -5,8 +5,8 @@ use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
 use std::time::Instant;
 
-use crate::types::{DateLimit, SearchMode, Sorting, TagLogic};
 use super::fetch::CoverMsg;
+use crate::types::{DateLimit, SearchMode, Sorting, TagLogic};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Screen {
@@ -42,10 +42,18 @@ impl Default for FiltersState {
             )
         });
         let max = crate::ui_constants::MAX_FILTER_ITEMS;
-        if inc.len() > max { inc.truncate(max); }
-        if exc.len() > max { exc.truncate(max); }
-        if pref.len() > max { pref.truncate(max); }
-        if nopref.len() > max { nopref.truncate(max); }
+        if inc.len() > max {
+            inc.truncate(max);
+        }
+        if exc.len() > max {
+            exc.truncate(max);
+        }
+        if pref.len() > max {
+            pref.truncate(max);
+        }
+        if nopref.len() > max {
+            nopref.truncate(max);
+        }
 
         Self {
             sort: Sorting::default(),

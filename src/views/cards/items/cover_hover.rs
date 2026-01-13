@@ -1,9 +1,9 @@
-use eframe::egui::{self, Color32, Label, RichText, Rounding, Sense, Stroke, Vec2};
 use eframe::egui::epaint::{Mesh, Vertex};
+use eframe::egui::{self, Color32, Label, RichText, Rounding, Sense, Stroke, Vec2};
 
-use crate::{parser::F95Thread, views::cards::items::card::CardHover};
-use crate::parser::game_info::link::DownloadLink;
 use crate::app::settings as app_settings;
+use crate::parser::game_info::link::DownloadLink;
+use crate::{parser::F95Thread, views::cards::items::card::CardHover};
 
 fn draw_badge_with_overlay(
     ui: &mut egui::Ui,
@@ -32,10 +32,14 @@ fn draw_badge_with_overlay(
 
     ui.expand_to_include_rect(rect);
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, Rounding::same(crate::ui_constants::card::STATS_ROUNDING), bg_color);
+    painter.rect_filled(
+        rect,
+        Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
+        bg_color,
+    );
     painter.rect_stroke(
         rect,
-    Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
+        Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
         Stroke::new(1.0, Color32::from_gray(40)),
     );
     ui.allocate_ui_at_rect(rect, |ui| {
@@ -140,7 +144,11 @@ pub fn draw_cover(
         if let Some(tex) = cover {
             p.image(tex.id(), cover_rect, uv, Color32::WHITE);
         } else {
-            p.rect_filled(cover_rect, Rounding::same(crate::ui_constants::card::ROUNDING), Color32::from_rgb(58, 58, 58));
+            p.rect_filled(
+                cover_rect,
+                Rounding::same(crate::ui_constants::card::ROUNDING),
+                Color32::from_rgb(58, 58, 58),
+            );
         }
     }
 
@@ -179,7 +187,7 @@ pub fn draw_cover(
             );
         });
     });
- 
+
     // Engine badge (bottom-left) and warnings counter (red square)
     let pad = 8.0;
     let badge_h = 18.0;
@@ -193,17 +201,25 @@ pub fn draw_cover(
         let font_id = egui::TextStyle::Small.resolve(ui.style()).clone();
         let text_color = Color32::from_rgb(200, 200, 200);
         let text_w = ui.fonts(|f| {
-            f.layout_no_wrap(name.clone(), font_id.clone(), text_color).rect.width()
+            f.layout_no_wrap(name.clone(), font_id.clone(), text_color)
+                .rect
+                .width()
         });
         let pad_x = 8.0f32;
         let w = text_w + pad_x * 2.0;
-        let engine_rect = egui::Rect::from_min_max(
-            egui::pos2(next_x, y0),
-            egui::pos2(next_x + w, y0 + badge_h),
-        );
+        let engine_rect =
+            egui::Rect::from_min_max(egui::pos2(next_x, y0), egui::pos2(next_x + w, y0 + badge_h));
         let painter = ui.painter_at(engine_rect);
-    painter.rect_filled(engine_rect, Rounding::same(crate::ui_constants::card::STATS_ROUNDING), Color32::from_rgb(54, 54, 54));
-    painter.rect_stroke(engine_rect, Rounding::same(crate::ui_constants::card::STATS_ROUNDING), Stroke::new(1.0, Color32::from_gray(60)));
+        painter.rect_filled(
+            engine_rect,
+            Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
+            Color32::from_rgb(54, 54, 54),
+        );
+        painter.rect_stroke(
+            engine_rect,
+            Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
+            Stroke::new(1.0, Color32::from_gray(60)),
+        );
         ui.allocate_ui_at_rect(engine_rect, |ui| {
             ui.centered_and_justified(|ui| {
                 ui.add(
@@ -213,19 +229,18 @@ pub fn draw_cover(
                 );
             });
         });
-    next_x = engine_rect.max.x + crate::ui_constants::card::STATS_MARGIN_V;
+        next_x = engine_rect.max.x + crate::ui_constants::card::STATS_MARGIN_V;
     } else {
         //ui.allocate_space(Vec2 { x: next_x, y: cover_h - 30. });
         let w = text_w + pad_x * 2.0;
-        let engine_rect = egui::Rect::from_min_max(
-            egui::pos2(next_x, y0),
-            egui::pos2(w, y0 + badge_h),
-        );
+        let engine_rect =
+            egui::Rect::from_min_max(egui::pos2(next_x, y0), egui::pos2(w, y0 + badge_h));
         ui.allocate_rect(engine_rect, Sense::hover());
     }
 
     // Collect warnings (tags + prefixes) and show counter if any
-    let (warn_tag_names, warn_pref_names) = crate::views::cards::items::cover_helpers::collect_warnings(thread);
+    let (warn_tag_names, warn_pref_names) =
+        crate::views::cards::items::cover_helpers::collect_warnings(thread);
     let warn_count = warn_tag_names.len() + warn_pref_names.len();
     if warn_count > 0 {
         let size = egui::vec2(badge_h, badge_h);
@@ -238,9 +253,17 @@ pub fn draw_cover(
                 Sense::hover(),
             )
             .on_hover_cursor(eframe::egui::CursorIcon::PointingHand);
-    let painter = ui.painter_at(warn_rect);
-    painter.rect_filled(warn_rect, Rounding::same(crate::ui_constants::card::STATS_ROUNDING), Color32::from_rgb(170, 40, 40));
-    painter.rect_stroke(warn_rect, Rounding::same(crate::ui_constants::card::STATS_ROUNDING), Stroke::new(1.0, Color32::from_gray(40)));
+        let painter = ui.painter_at(warn_rect);
+        painter.rect_filled(
+            warn_rect,
+            Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
+            Color32::from_rgb(170, 40, 40),
+        );
+        painter.rect_stroke(
+            warn_rect,
+            Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
+            Stroke::new(1.0, Color32::from_gray(40)),
+        );
         painter.text(
             warn_rect.center(),
             eframe::egui::Align2::CENTER_CENTER,
@@ -258,7 +281,9 @@ pub fn draw_cover(
             }
         }
         if !warn_pref_names.is_empty() {
-            if !lines.is_empty() { lines.push("".into()); }
+            if !lines.is_empty() {
+                lines.push("".into());
+            }
             lines.push("Prefixes:".to_string());
             for n in &warn_pref_names {
                 lines.push(format!(" • {}", n));
@@ -344,10 +369,22 @@ pub fn draw_cover(
     let icon = if is_downloaded { "▶" } else { "⬇" };
 
     if over_cover || resp.hovered() {
-    let p = ui.painter_at(btn_rect);
-        let bg = if resp.hovered() { Color32::from_gray(72) } else { Color32::from_gray(60) };
-    p.rect_filled(btn_rect, Rounding::same(crate::ui_constants::card::STATS_ROUNDING), bg);
-    p.rect_stroke(btn_rect, Rounding::same(crate::ui_constants::card::STATS_ROUNDING), Stroke::new(1.0, Color32::from_gray(100)));
+        let p = ui.painter_at(btn_rect);
+        let bg = if resp.hovered() {
+            Color32::from_gray(72)
+        } else {
+            Color32::from_gray(60)
+        };
+        p.rect_filled(
+            btn_rect,
+            Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
+            bg,
+        );
+        p.rect_stroke(
+            btn_rect,
+            Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
+            Stroke::new(1.0, Color32::from_gray(100)),
+        );
         p.text(
             btn_rect.center(),
             eframe::egui::Align2::CENTER_CENTER,
@@ -368,10 +405,15 @@ pub fn draw_cover(
         // manual fallback in case interact misses the click due to overlapping paints
         let manual_click = ui.input(|i| {
             i.pointer.primary_clicked()
-                && i.pointer.hover_pos().map_or(false, |pos| btn_rect.contains(pos))
+                && i.pointer
+                    .hover_pos()
+                    .map_or(false, |pos| btn_rect.contains(pos))
         });
         if manual_click {
-            log::info!("manual cover button click for thread {}", thread.thread_id.get());
+            log::info!(
+                "manual cover button click for thread {}",
+                thread.thread_id.get()
+            );
             if is_downloaded {
                 app_settings::run_downloaded_game(thread.thread_id.get());
             } else {
@@ -401,7 +443,8 @@ pub fn draw_cover(
                 for link in links.iter() {
                     let label = match link {
                         crate::parser::game_info::link::DownloadLink::Direct(d) => {
-                            let last = d.path
+                            let last = d
+                                .path
                                 .iter()
                                 .intersperse(&"/".to_string())
                                 .cloned()
@@ -413,19 +456,22 @@ pub fn draw_cover(
                         }
                     };
                     ui.horizontal(|ui| {
-                        if ui.add(
-                            Label::new(RichText::new(label))
-                                .truncate(true)
-                                .selectable(true)
-                                .sense(Sense::click())
-                                .selectable(false)
-                        ).on_hover_cursor(egui::CursorIcon::PointingHand)
-                        .clicked() {
+                        if ui
+                            .add(
+                                Label::new(RichText::new(label))
+                                    .truncate(true)
+                                    .selectable(true)
+                                    .sense(Sense::click())
+                                    .selectable(false),
+                            )
+                            .on_hover_cursor(egui::CursorIcon::PointingHand)
+                            .clicked()
+                        {
                             selected_link = Some(link.clone());
                         }
                     });
                 }
-            }
+            },
         );
     }
 
@@ -440,15 +486,20 @@ pub fn draw_cover(
             Color32::from_rgb(170, 40, 40),
             |ui| {
                 ui.add(
-                    egui::Label::new(RichText::new(err).color(Color32::from_gray(220)))
-                        .wrap(true),
+                    egui::Label::new(RichText::new(err).color(Color32::from_gray(220))).wrap(true),
                 );
-            }
+            },
         );
     }
 
     // Thin download progress line at the very bottom of the cover image
-    let anim_pref = { crate::app::settings::APP_SETTINGS.read().unwrap().loading_anim.clone() };
+    let anim_pref = {
+        crate::app::settings::APP_SETTINGS
+            .read()
+            .unwrap()
+            .loading_anim
+            .clone()
+    };
     match progress {
         Some(crate::game_download::Progress::Pending(mut dp)) => {
             dp = dp.clamp(0.0, 1.0);
@@ -464,8 +515,10 @@ pub fn draw_cover(
                     let x1 = x0 + cover_rect.width() * dp;
                     let y1 = cover_rect.max.y;
                     let y0 = y1 - thickness;
-                    let line_rect = egui::Rect::from_min_max(egui::pos2(x0, y0), egui::pos2(x1, y1));
-                    ui.painter_at(cover_rect).rect_filled(line_rect, Rounding::same(0.0), color);
+                    let line_rect =
+                        egui::Rect::from_min_max(egui::pos2(x0, y0), egui::pos2(x1, y1));
+                    ui.painter_at(cover_rect)
+                        .rect_filled(line_rect, Rounding::same(0.0), color);
                 }
                 crate::app::settings::store::LoadingAnim::CircleBottomRight => {
                     draw_circular_progress_bottom_right(ui, cover_rect, dp, color);
@@ -487,7 +540,12 @@ pub fn draw_cover(
         _ => {}
     }
 
-    CardHover { hovered, hovered_line, download_clicked, selected_link }
+    CardHover {
+        hovered,
+        hovered_line,
+        download_clicked,
+        selected_link,
+    }
 }
 
 fn draw_unknown_progress_bar(ui: &mut egui::Ui, cover_rect: egui::Rect) {
@@ -501,7 +559,8 @@ fn draw_unknown_progress_bar(ui: &mut egui::Ui, cover_rect: egui::Rect) {
     );
 
     // Ensure continuous animation
-    ui.ctx().request_repaint_after(std::time::Duration::from_millis(16));
+    ui.ctx()
+        .request_repaint_after(std::time::Duration::from_millis(16));
 
     let painter = ui.painter_at(cover_rect);
 
@@ -524,15 +583,27 @@ fn draw_unknown_progress_bar(ui: &mut egui::Ui, cover_rect: egui::Rect) {
     painter.rect_filled(line_rect, Rounding::same(0.0), color);
 }
 
-fn draw_circular_progress_bottom_right(ui: &mut egui::Ui, cover_rect: egui::Rect, dp: f32, color: Color32) {
+fn draw_circular_progress_bottom_right(
+    ui: &mut egui::Ui,
+    cover_rect: egui::Rect,
+    dp: f32,
+    color: Color32,
+) {
     let margin = crate::ui_constants::spacing::MEDIUM;
     let radius = 10.0;
-    let center = egui::pos2(cover_rect.max.x - margin - radius, cover_rect.max.y - margin - radius);
+    let center = egui::pos2(
+        cover_rect.max.x - margin - radius,
+        cover_rect.max.y - margin - radius,
+    );
 
     let painter = ui.painter_at(cover_rect);
 
     // Background circle
-    painter.circle_filled(center, radius, Color32::from_rgba_premultiplied(0, 0, 0, 120));
+    painter.circle_filled(
+        center,
+        radius,
+        Color32::from_rgba_premultiplied(0, 0, 0, 120),
+    );
     painter.circle_stroke(center, radius, Stroke::new(1.0, Color32::from_gray(80)));
 
     if dp <= 0.0 {
@@ -552,24 +623,48 @@ fn draw_circular_progress_bottom_right(ui: &mut egui::Ui, cover_rect: egui::Rect
         let p0 = egui::pos2(center.x + radius * a0.cos(), center.y + radius * a0.sin());
         let p1 = egui::pos2(center.x + radius * a1.cos(), center.y + radius * a1.sin());
         let start = mesh.vertices.len() as u32;
-        mesh.vertices.push(Vertex { pos: center, uv: egui::pos2(0.0, 0.0), color });
-        mesh.vertices.push(Vertex { pos: p0, uv: egui::pos2(0.0, 0.0), color });
-        mesh.vertices.push(Vertex { pos: p1, uv: egui::pos2(0.0, 0.0), color });
+        mesh.vertices.push(Vertex {
+            pos: center,
+            uv: egui::pos2(0.0, 0.0),
+            color,
+        });
+        mesh.vertices.push(Vertex {
+            pos: p0,
+            uv: egui::pos2(0.0, 0.0),
+            color,
+        });
+        mesh.vertices.push(Vertex {
+            pos: p1,
+            uv: egui::pos2(0.0, 0.0),
+            color,
+        });
         mesh.add_triangle(start, start + 1, start + 2);
     }
     painter.add(eframe::egui::Shape::mesh(mesh));
 }
 
-fn draw_indeterminate_circular_bottom_right(ui: &mut egui::Ui, cover_rect: egui::Rect, color: Color32) {
+fn draw_indeterminate_circular_bottom_right(
+    ui: &mut egui::Ui,
+    cover_rect: egui::Rect,
+    color: Color32,
+) {
     // Keep animation running
-    ui.ctx().request_repaint_after(std::time::Duration::from_millis(16));
+    ui.ctx()
+        .request_repaint_after(std::time::Duration::from_millis(16));
 
     let margin = crate::ui_constants::spacing::MEDIUM;
     let radius = 10.0;
-    let center = egui::pos2(cover_rect.max.x - margin - radius, cover_rect.max.y - margin - radius);
+    let center = egui::pos2(
+        cover_rect.max.x - margin - radius,
+        cover_rect.max.y - margin - radius,
+    );
 
     let painter = ui.painter_at(cover_rect);
-    painter.circle_filled(center, radius, Color32::from_rgba_premultiplied(0, 0, 0, 120));
+    painter.circle_filled(
+        center,
+        radius,
+        Color32::from_rgba_premultiplied(0, 0, 0, 120),
+    );
     painter.circle_stroke(center, radius, Stroke::new(1.0, Color32::from_gray(80)));
 
     let t: f32 = ui.input(|i| i.time) as f32;
@@ -587,9 +682,21 @@ fn draw_indeterminate_circular_bottom_right(ui: &mut egui::Ui, cover_rect: egui:
         let p0 = egui::pos2(center.x + radius * a0.cos(), center.y + radius * a0.sin());
         let p1 = egui::pos2(center.x + radius * a1.cos(), center.y + radius * a1.sin());
         let start = mesh.vertices.len() as u32;
-        mesh.vertices.push(Vertex { pos: center, uv: egui::pos2(0.0, 0.0), color });
-        mesh.vertices.push(Vertex { pos: p0, uv: egui::pos2(0.0, 0.0), color });
-        mesh.vertices.push(Vertex { pos: p1, uv: egui::pos2(0.0, 0.0), color });
+        mesh.vertices.push(Vertex {
+            pos: center,
+            uv: egui::pos2(0.0, 0.0),
+            color,
+        });
+        mesh.vertices.push(Vertex {
+            pos: p0,
+            uv: egui::pos2(0.0, 0.0),
+            color,
+        });
+        mesh.vertices.push(Vertex {
+            pos: p1,
+            uv: egui::pos2(0.0, 0.0),
+            color,
+        });
         mesh.add_triangle(start, start + 1, start + 2);
     }
     painter.add(eframe::egui::Shape::mesh(mesh));

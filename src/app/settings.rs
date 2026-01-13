@@ -1,46 +1,27 @@
 // Settings module split: store (data & persistence), helpers (fs/OS utils), ui (egui windows).
 // This file aggregates submodules and re-exports public API to preserve existing imports.
 
-pub mod store;
 pub mod helpers;
-pub mod ui;
 pub mod migrate;
+pub mod store;
+pub mod ui;
 
 // Store: data types, global state, persistence, and records management
 pub use store::{
-    AppSettings,
-    DownloadedGame,
-    APP_SETTINGS,
-    load_settings_from_disk,
-    save_settings_to_disk,
-    record_downloaded_game,
-    record_pending_download,
-    remove_pending_download,
-    hide_thread,
-    is_thread_hidden,
-    is_pending_download,
-    downloaded_game_folder,
-    downloaded_game_exe,
-    delete_downloaded_game,
+    APP_SETTINGS, AppSettings, DownloadedGame, delete_downloaded_game, downloaded_game_exe,
+    downloaded_game_folder, hide_thread, is_pending_download, is_thread_hidden,
+    load_settings_from_disk, record_downloaded_game, record_pending_download,
+    remove_pending_download, save_settings_to_disk,
 };
 
 // Helpers: filesystem utilities, launching games, and convenience funcs
 pub use helpers::{
-    open_in_browser,
-    reveal_in_file_manager,
-    game_folder_exists,
+    copy_dir_all, game_folder_exists, move_directory, open_in_browser, reveal_in_file_manager,
     run_downloaded_game,
-    move_directory,
-    copy_dir_all,
 };
 
 // UI: egui viewport window for settings and separate eframe App
-pub use ui::{
-    open_settings,
-    draw_settings_viewport,
-    SettingsMsg,
-    SettingsApp,
-};
+pub use ui::{SettingsApp, SettingsMsg, draw_settings_viewport, open_settings};
 
 /// Helper function to read settings with a closure.
 /// DRY principle: Reduces boilerplate of `.read().unwrap()` pattern.

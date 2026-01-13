@@ -1,47 +1,68 @@
 use eframe::egui;
 
-use crate::views::cards::thread_card;
 use crate::game_download;
+use crate::views::cards::thread_card;
 
 /// Grid rendering and on-demand screenshot downloading logic split from app.rs.
 impl super::NoLagApp {
-    fn spawn_screen_download(
-        &self,
-        ctx: &egui::Context,
-        thread_id: u64,
-        idx: usize,
-        url: String,
-    ) {
+    fn spawn_screen_download(&self, ctx: &egui::Context, thread_id: u64, idx: usize, url: String) {
         let tx = self.images.cover_tx.clone();
         let ctx2 = ctx.clone();
         let url_cloned = url.clone();
 
         // Try cached file first: cache/<thread_id>/screen_<idx+1>.png
         let cache_path = {
-            let base = crate::app::settings::APP_SETTINGS.read().unwrap().cache_dir.clone();
-            base.join(thread_id.to_string()).join(format!("screen_{}.png", idx + 1))
+            let base = crate::app::settings::APP_SETTINGS
+                .read()
+                .unwrap()
+                .cache_dir
+                .clone();
+            base.join(thread_id.to_string())
+                .join(format!("screen_{}.png", idx + 1))
         };
 
         super::rt().spawn(async move {
             let mut served_from_cache = false;
             if tokio::fs::metadata(&cache_path).await.is_ok() {
-                match tokio::task::spawn_blocking(move || -> Result<(usize, usize, Vec<u8>), String> {
-                    let bytes = std::fs::read(&cache_path).map_err(|e| format!("read cache error: {}", e))?;
-                    let img = image::load_from_memory(&bytes).map_err(|e| format!("decode cache error: {}", e))?;
-                    let rgba = img.to_rgba8();
-                    let (w, h) = rgba.dimensions();
-                    Ok((w as usize, h as usize, rgba.into_vec()))
-                }).await {
+                match tokio::task::spawn_blocking(
+                    move || -> Result<(usize, usize, Vec<u8>), String> {
+                        let bytes = std::fs::read(&cache_path)
+                            .map_err(|e| format!("read cache error: {}", e))?;
+                        let img = image::load_from_memory(&bytes)
+                            .map_err(|e| format!("decode cache error: {}", e))?;
+                        let rgba = img.to_rgba8();
+                        let (w, h) = rgba.dimensions();
+                        Ok((w as usize, h as usize, rgba.into_vec()))
+                    },
+                )
+                .await
+                {
                     Ok(Ok((w, h, rgba))) => {
                         log::info!("screen cache hit: id={} idx={}", thread_id, idx);
-                        let _ = tx.send(super::CoverMsg::ScreenOk { thread_id, idx, w, h, rgba });
+                        let _ = tx.send(super::CoverMsg::ScreenOk {
+                            thread_id,
+                            idx,
+                            w,
+                            h,
+                            rgba,
+                        });
                         served_from_cache = true;
                     }
                     Ok(Err(e)) => {
-                        log::warn!("screen cache decode failed: id={} idx={} err={}", thread_id, idx, e);
+                        log::warn!(
+                            "screen cache decode failed: id={} idx={} err={}",
+                            thread_id,
+                            idx,
+                            e
+                        );
                     }
                     Err(e) => {
-                        log::warn!("screen cache task join failed: id={} idx={} err={}", thread_id, idx, e);
+                        log::warn!(
+                            "screen cache task join failed: id={} idx={} err={}",
+                            thread_id,
+                            idx,
+                            e
+                        );
                     }
                 }
             }
@@ -59,7 +80,13 @@ impl super::NoLagApp {
                             h,
                             url_cloned
                         );
-                        super::CoverMsg::ScreenOk { thread_id, idx, w, h, rgba }
+                        super::CoverMsg::ScreenOk {
+                            thread_id,
+                            idx,
+                            w,
+                            h,
+                            rgba,
+                        }
                     }
                     Err(err) => {
                         log::warn!(
@@ -99,7 +126,10 @@ impl super::NoLagApp {
                 let cover = self.images.covers.get(&id);
                 let screens_slice = self.images.screens.get(&id).map(|v| v.as_slice());
                 let progress = self.downloads.get(&id).and_then(|s| s.progress.clone());
-                let link_choices = self.downloads.get(&id).and_then(|s| s.link_choices.as_ref().map(|v| v.as_slice()));
+                let link_choices = self
+                    .downloads
+                    .get(&id)
+                    .and_then(|s| s.link_choices.as_ref().map(|v| v.as_slice()));
                 thread_card(ui, t, card_w, cover, screens_slice, progress, link_choices)
             };
 
@@ -109,7 +139,8 @@ impl super::NoLagApp {
                 let mut to_download: Vec<(usize, String)> = Vec::new();
                 {
                     let entry = self
-                        .images.screens
+                        .images
+                        .screens
                         .entry(id)
                         .or_insert_with(|| vec![None; t.screens.len()]);
                     if entry.len() < t.screens.len() {
@@ -135,7 +166,8 @@ impl super::NoLagApp {
                 let mut maybe_url: Option<String> = None;
                 {
                     let entry = self
-                        .images.screens
+                        .images
+                        .screens
                         .entry(id)
                         .or_insert_with(|| vec![None; t.screens.len()]);
                     if idx < entry.len() && entry[idx].is_none() {
@@ -162,11 +194,14 @@ impl super::NoLagApp {
                     st.progress = Some(crate::game_download::Progress::Unknown);
                     st.link_choices = None;
                 } else {
-                    self.downloads.insert(id, super::downloads::DownloadState {
-                        rx: rx_new,
-                        progress: Some(crate::game_download::Progress::Unknown),
-                        link_choices: None,
-                    });
+                    self.downloads.insert(
+                        id,
+                        super::downloads::DownloadState {
+                            rx: rx_new,
+                            progress: Some(crate::game_download::Progress::Unknown),
+                            link_choices: None,
+                        },
+                    );
                 }
                 super::settings::record_pending_download(id);
                 // Keep Library in sync immediately
@@ -178,7 +213,9 @@ impl super::NoLagApp {
                 // Allow restart if previous attempt failed
                 let should_start = match self.downloads.get(&id) {
                     None => true,
-                    Some(st) => matches!(st.progress, Some(crate::game_download::Progress::Error(_))),
+                    Some(st) => {
+                        matches!(st.progress, Some(crate::game_download::Progress::Error(_)))
+                    }
                 };
                 if should_start {
                     // Drop previous errored state if present
@@ -187,18 +224,20 @@ impl super::NoLagApp {
                     super::settings::record_pending_download(id);
                     super::cache::spawn_cache_for_thread_from(t);
                     let rx = game_download::create_download_task(t.thread_id.get_page());
-                    self.downloads.insert(id, super::downloads::DownloadState {
-                        rx,
-                        progress: Some(crate::game_download::Progress::Unknown),
-                        link_choices: None,
-                    });
+                    self.downloads.insert(
+                        id,
+                        super::downloads::DownloadState {
+                            rx,
+                            progress: Some(crate::game_download::Progress::Unknown),
+                            link_choices: None,
+                        },
+                    );
                     // Update background Library snapshot to include this downloading thread immediately
                     self.refresh_prefetch_library(ctx);
                     // Library view will update from prefetch immediately via lib_rx; no direct fetch needed here
                     ctx.request_repaint();
                 }
             }
-
         });
         if c + 1 < cols {
             ui.add_space(gap);
@@ -239,8 +278,7 @@ impl super::NoLagApp {
         let inner_w = (card_w - 2.0 * crate::ui_constants::card::INNER_MARGIN).max(1.0);
         let cover_h = inner_w * 9.0 / 16.0;
         let markers_h = 12.0; // keep as-is for now
-        let card_h =
-            2.0 * crate::ui_constants::card::INNER_MARGIN
+        let card_h = 2.0 * crate::ui_constants::card::INNER_MARGIN
             + cover_h
             + markers_h
             + crate::ui_constants::card::POST_COVER_GAP

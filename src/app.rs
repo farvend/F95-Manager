@@ -1,32 +1,32 @@
 // Логика приложения вынесена из main.rs, чтобы убрать глубокую вложенность в конце main.
 // Рефакторинг: крупные группы полей вынесены в отдельные структуры в app/state.rs.
 
-use eframe::{egui, App};
+use eframe::{App, egui};
 use std::collections::HashMap;
 
-mod grid;
-pub mod settings;
-pub mod config;
-mod logs_ui;
 mod about_ui;
+pub mod config;
 mod errors_ui;
+mod grid;
+mod logs_ui;
+pub mod settings;
 mod update_ui;
 
 // Вынесено: tokio runtime и вся логика получения данных
-mod runtime;
-mod fetch;
-mod downloads;
 mod cache;
+mod downloads;
+mod fetch;
+mod runtime;
 mod state;
 
 // UI под разные состояния приложения
 mod auth_screen;
 mod main_screen;
 
-pub use runtime::rt;
-pub use runtime::RUNTIME;
-pub use fetch::CoverMsg;
 use downloads::DownloadState;
+pub use fetch::CoverMsg;
+pub use runtime::RUNTIME;
+pub use runtime::rt;
 use state::{AuthState, FiltersState, ImagesState, NetState, Screen};
 
 pub struct NoLagApp {
@@ -54,7 +54,11 @@ impl Default for NoLagApp {
                 .map(|s| s.trim().is_empty())
                 .unwrap_or(true)
         };
-        let screen = if need_auth { Screen::AuthLogin } else { Screen::Main };
+        let screen = if need_auth {
+            Screen::AuthLogin
+        } else {
+            Screen::Main
+        };
 
         Self {
             page: 1,

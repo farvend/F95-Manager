@@ -3,10 +3,10 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::app::settings::store::{
-    downloaded_game_exe, downloaded_game_folder, record_downloaded_game, APP_SETTINGS,
-};
 use super::open::reveal_in_file_manager;
+use crate::app::settings::store::{
+    APP_SETTINGS, downloaded_game_exe, downloaded_game_folder, record_downloaded_game,
+};
 
 #[cfg(target_os = "windows")]
 fn run_executable(path: &Path) {
@@ -23,10 +23,13 @@ fn run_executable(path: &Path) {
 
     // Try custom launch template if provided (uses {{path}} placeholder)
     {
-        let template = APP_SETTINGS.read().map(|s| s.custom_launch.clone()).unwrap_or_default();
+        let template = APP_SETTINGS
+            .read()
+            .map(|s| s.custom_launch.clone())
+            .unwrap_or_default();
         if !template.trim().is_empty() {
             let path_s = abs_exe.to_string_lossy().to_string();
-            
+
             let cmdline = template.replace("{{path}}", &format!("\"{}\"", path_s));
 
             // Split command line into program and args respecting quotes (simple parser)
@@ -194,7 +197,7 @@ fn pick_best_exe(exes: &[PathBuf]) -> Option<PathBuf> {
         "unitycrashhandler",
         "python",
         "IconUpdater",
-        "WindowsIconUpdater"
+        "WindowsIconUpdater",
     ];
     let filtered: Vec<&PathBuf> = exes
         .iter()
@@ -246,11 +249,7 @@ pub fn run_downloaded_game(thread_id: u64) {
             (Some(r), Some(b)) => {
                 let rd = depth_from(&folder, &r).unwrap_or(usize::MAX);
                 let bd = depth_from(&folder, &b).unwrap_or(usize::MAX);
-                if bd < rd {
-                    b
-                } else {
-                    r
-                }
+                if bd < rd { b } else { r }
             }
             (Some(r), None) => r,
             (None, Some(b)) => b,

@@ -1,7 +1,7 @@
 use std::fmt;
 
-use strum::EnumString;
 use reqwest::Url;
+use strum::EnumString;
 
 // Macro to define an enum with a "subset" companion enum and conversions
 macro_rules! define_subset {
@@ -101,14 +101,15 @@ impl Hosting {
 #[derive(Debug)]
 pub enum HostingError {
     NotDomain,
-    UnknownDomain
+    UnknownDomain,
 }
 
 impl TryFrom<Url> for Hosting {
     type Error = HostingError;
     fn try_from(value: Url) -> Result<Self, HostingError> {
         let sec = value
-            .domain().ok_or(HostingError::NotDomain)?
+            .domain()
+            .ok_or(HostingError::NotDomain)?
             .split('.')
             .rev()
             .nth(1)
@@ -124,7 +125,7 @@ impl TryFrom<Url> for Hosting {
 #[derive(Debug)]
 pub enum HostingSubsetError {
     HostingError(HostingError),
-    UnsopportedHosting
+    UnsopportedHosting,
 }
 
 impl TryFrom<Url> for HostingSubset {
@@ -133,11 +134,11 @@ impl TryFrom<Url> for HostingSubset {
         let hosting: Hosting = value
             .try_into()
             .map_err(|e| HostingSubsetError::HostingError(e))?;
-        hosting.
-            try_into()
+        hosting
+            .try_into()
             .map_err(|_| HostingSubsetError::UnsopportedHosting)
     }
-    
+
     // fn from(value: Url) -> Self {
     //     let hosting: Hosting = value.into();
     //     hosting.as_subset().unwrap()

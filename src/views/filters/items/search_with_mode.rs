@@ -6,7 +6,8 @@ pub fn search_with_mode(ui: &mut Ui, text: &mut String) -> bool {
     let w = ui.available_width();
     let resp = ui.add_sized(
         [w, 0.0],
-        TextEdit::singleline(text).hint_text(crate::localization::translate("filters-search-placeholder")),
+        TextEdit::singleline(text)
+            .hint_text(crate::localization::translate("filters-search-placeholder")),
     );
     resp.changed()
 }

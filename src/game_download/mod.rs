@@ -1,64 +1,58 @@
-use std::sync::mpsc;
 use std::path::PathBuf;
+use std::sync::mpsc;
 
-use crate::parser::{game_info::{F95Page, Platform, PlatformDownloads, ThreadId}, F95Thread};
 use crate::parser::game_info::link::DownloadLink;
+use crate::parser::{
+    F95Thread,
+    game_info::{F95PageUrl, Platform, PlatformDownloads, ThreadId},
+};
 
 #[derive(Debug, Clone)]
 pub enum Progress {
     Pending(f32),
     Paused,
     Error(String),
-    Unknown
+    Unknown,
 }
 pub enum GameDownloadStatus {
     Downloading(Progress),
     // Signal UI to select a link (no platform parsed)
     SelectLinks(Vec<DownloadLink>),
     Unzipping(Progress),
-    Completed { dest_dir: PathBuf, exe_path: Option<PathBuf> },
+    Completed {
+        dest_dir: PathBuf,
+        exe_path: Option<PathBuf>,
+    },
 }
 
-pub fn create_download_task(page: F95Page) -> mpsc::Receiver<GameDownloadStatus> {
+pub fn create_download_task(page: F95PageUrl) -> mpsc::Receiver<GameDownloadStatus> {
     let rt = crate::app::RUNTIME.get().unwrap();
-    
+
     // Создаем канал для передачи статусов загрузки
     let (tx, rx) = mpsc::channel();
-    
+
     rt.spawn(async move {
-        let downloads = match page.get_download_links().await {
-            Ok(b) => b,
-            Err(crate::parser::game_info::page::GetLinksError::PlatformNameMissing) => {
-                // Fallback: parse links without platform grouping and ask user to select
-                match page.get_download_links_flat().await {
-                    Ok(links) if !links.is_empty() => {
-                        let _ = tx.send(GameDownloadStatus::SelectLinks(links));
-                        return;
-                    }
-                    Ok(_) | Err(_) => {
-                        let msg = "Platform name missing and no links found".to_string();
-                        log::error!("err getting links: {msg}");
-                        let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(msg)));
-                        return;
-                    }
+        let downloads = match page.get_page().await {
+            Ok(b) => match b.get_download_links() {
+                Ok(links) => links,
+                Err(err) => {
+                    log::error!("err getting links: {err}");
+                    let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(
+                        err.to_string(),
+                    )));
+                    return;
                 }
-            }
+            },
             Err(err) => {
-                let msg = match err {
-                    crate::parser::game_info::page::GetLinksError::BuildClient => "Failed to build HTTP client".to_string(),
-                    crate::parser::game_info::page::GetLinksError::Request(e) => format!("Request error: {e}"),
-                    crate::parser::game_info::page::GetLinksError::ReadText(e) => format!("Response read error: {e}"),
-                    crate::parser::game_info::page::GetLinksError::NoDownloadsBlock => "Downloads block not found on page".to_string(),
-                    crate::parser::game_info::page::GetLinksError::PlatformLineFormat => "Platform line parse error".to_string(),
-                    crate::parser::game_info::page::GetLinksError::PlatformNameMissing => "Platform name missing".to_string(),
-                    crate::parser::game_info::page::GetLinksError::NoPlatformLinks => "No platform links found".to_string(),
-                };
-                log::error!("err getting links: {msg}");
-                let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(msg)));
+                log::error!("err getting links: {err}");
+                let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(
+                    err.to_string(),
+                )));
                 return;
             }
         };
-        
+        dbg!(&downloads);
+
         // Auto-select platform based on host OS; fall back to any available platform with links
         let preferred_platform = if cfg!(target_os = "windows") {
             Platform::WINDOWS
@@ -80,12 +74,15 @@ pub fn create_download_task(page: F95Page) -> mpsc::Receiver<GameDownloadStatus>
         let links = match selected {
             Some(pd) if !pd.links().is_empty() => pd.links(),
             _ => {
-                let message = format!("No suitable platform downloads found. Available: {:?}", downloads.iter().map(|e| e.platform()).collect::<Vec<_>>());
+                let message = format!(
+                    "No suitable platform downloads found. Available: {:?}",
+                    downloads.iter().map(|e| e.platform()).collect::<Vec<_>>()
+                );
                 let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(message)));
                 return;
             }
         };
-        
+
         let mut errors = vec![];
         for link in links {
             match link.download().await {
@@ -95,30 +92,16 @@ pub fn create_download_task(page: F95Page) -> mpsc::Receiver<GameDownloadStatus>
                             return; // Получатель отключился
                         }
                     }
-                    return 
-                },
+                    return;
+                }
                 Err(err) => {
                     log::error!("Error downloading: {err:?}");
                     let err = format!("{err:?}");
                     errors.push(err);
-                    //let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(err)));
-
-                    // im lazyy
-                    // struct Result {
-                    //     should_return: bool,
-                    //     error: String
-                    // }
-                    // use crate::parser::game_info::link::DownloadError;
-                    // let result = match err {
-                    //     DownloadError::Captcha => {
-                    //         let error = ""
-                    //     },
-                    // }
-                    // let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(err)));
-                },
+                }
             }
         }
-        
+
         // Если ни одна ссылка не сработала
         let error_text = if errors.len() == 0 {
             "For some reason no download links was found".to_string()
@@ -127,7 +110,7 @@ pub fn create_download_task(page: F95Page) -> mpsc::Receiver<GameDownloadStatus>
         };
         let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(error_text)));
     });
-    
+
     rx
 }
 
@@ -145,7 +128,9 @@ pub fn create_download_from_link(link: DownloadLink) -> mpsc::Receiver<GameDownl
                 }
             }
             Err(err) => {
-                let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(format!("{err:?}"))));
+                let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(format!(
+                    "{err:?}"
+                ))));
             }
         }
     });

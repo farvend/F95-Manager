@@ -1,5 +1,5 @@
-pub mod render;
 pub mod items;
+pub mod render;
 pub use render::draw_filters_panel;
 
 pub trait EnumWithAlternativeNames {

@@ -1,11 +1,11 @@
 use reqwest::{
-    header::{HeaderMap, HeaderValue},
     Url,
+    header::{HeaderMap, HeaderValue},
 };
 use std::str::FromStr;
 
-use crate::parser::game_info::{hosting::HostingSubset, Hosting};
 use super::{gofile::resolve_gofile_file, info::DirectRequest};
+use crate::parser::game_info::{Hosting, hosting::HostingSubset};
 
 #[derive(Debug, Clone)]
 pub struct DirectDownloadLink {
@@ -34,8 +34,12 @@ impl DirectDownloadLink {
                 Some(DirectRequest::Http(request))
             }
             HostingSubset::Catbox => {
-                let url = self.hosting.base().to_string() + &self.hosting.to_string() + "/" + &self.path[0];
-                let mut request = reqwest::Request::new(reqwest::Method::GET, Url::from_str(&url).unwrap());
+                let url = self.hosting.base().to_string()
+                    + &self.hosting.to_string()
+                    + "/"
+                    + &self.path[0];
+                let mut request =
+                    reqwest::Request::new(reqwest::Method::GET, Url::from_str(&url).unwrap());
                 let mut headers = HeaderMap::new();
                 let value = HeaderValue::try_from("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0) Gecko/20100101 Firefox/142.0").unwrap();
                 headers.insert("User-Agent", value);
@@ -55,16 +59,12 @@ impl DirectDownloadLink {
 
     // Visible to parent module (link) so it can construct DirectDownloadLink
     pub(super) fn new(value: Url) -> Option<DirectDownloadLink> {
-        let hosting: HostingSubset = value.clone()
-            .try_into()
-            .ok()?;
+        let hosting: HostingSubset = value.clone().try_into().ok()?;
 
         let path_segments = value.path_segments()?;
-        let mut path = path_segments
-            .map(|e| e.to_owned())
-            .collect::<Vec<String>>();
+        let mut path = path_segments.map(|e| e.to_owned()).collect::<Vec<String>>();
         value.fragment().inspect(|e| path.push(e.to_string()));
-        
+
         Some(DirectDownloadLink { hosting, path })
     }
 }

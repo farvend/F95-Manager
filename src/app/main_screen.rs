@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use eframe::egui;
 
-use super::{about_ui, errors_ui, logs_ui, settings, update_ui, NoLagApp};
+use super::{NoLagApp, about_ui, errors_ui, logs_ui, settings, update_ui};
 use crate::types::TagLogic;
 use crate::views::filters::draw_filters_panel;
 
@@ -188,44 +188,46 @@ pub(super) fn update_main(app: &mut NoLagApp, ctx: &egui::Context) {
                         msg.data.clone()
                     };
                     // Build a set of hidden thread_ids and filter them out from rendering
-                    let hidden: std::collections::HashSet<u64> = settings::with_settings(|st| {
-                        st.hidden_threads.iter().copied().collect()
-                    });
+                    let hidden: std::collections::HashSet<u64> =
+                        settings::with_settings(|st| st.hidden_threads.iter().copied().collect());
 
                     // When Library mode is ON, show downloaded AND in-progress games; always ignore hidden ones
-                    let mut display_data: Vec<crate::parser::F95Thread> = if app.filters.library_only {
-                        // Persisted completed downloads
-                        let downloaded_ids: std::collections::HashSet<u64> = settings::with_settings(|st| {
-                            st.downloaded_games
-                                .iter()
-                                .filter(|g| settings::game_folder_exists(&g.folder))
-                                .map(|g| g.thread_id)
-                                .collect()
-                        });
-                        // In-progress downloads (runtime-only)
-                        let downloading_ids: std::collections::HashSet<u64> =
-                            app.downloads.keys().copied().collect();
-                        // Persisted pending/incomplete downloads (from previous sessions or failed attempts)
-                        let pending_ids: std::collections::HashSet<u64> = settings::with_settings(|st| {
-                            st.pending_downloads.iter().copied().collect()
-                        });
-                        let in_library = |id: u64| {
-                            downloaded_ids.contains(&id)
-                                || downloading_ids.contains(&id)
-                                || pending_ids.contains(&id)
-                        };
+                    let mut display_data: Vec<crate::parser::F95Thread> =
+                        if app.filters.library_only {
+                            // Persisted completed downloads
+                            let downloaded_ids: std::collections::HashSet<u64> =
+                                settings::with_settings(|st| {
+                                    st.downloaded_games
+                                        .iter()
+                                        .filter(|g| settings::game_folder_exists(&g.folder))
+                                        .map(|g| g.thread_id)
+                                        .collect()
+                                });
+                            // In-progress downloads (runtime-only)
+                            let downloading_ids: std::collections::HashSet<u64> =
+                                app.downloads.keys().copied().collect();
+                            // Persisted pending/incomplete downloads (from previous sessions or failed attempts)
+                            let pending_ids: std::collections::HashSet<u64> =
+                                settings::with_settings(|st| {
+                                    st.pending_downloads.iter().copied().collect()
+                                });
+                            let in_library = |id: u64| {
+                                downloaded_ids.contains(&id)
+                                    || downloading_ids.contains(&id)
+                                    || pending_ids.contains(&id)
+                            };
 
-                        data_cloned
-                            .into_iter()
-                            .filter(|t| in_library(t.thread_id.get()))
-                            .filter(|t| !hidden.contains(&t.thread_id.get()))
-                            .collect()
-                    } else {
-                        data_cloned
-                            .into_iter()
-                            .filter(|t| !hidden.contains(&t.thread_id.get()))
-                            .collect()
-                    };
+                            data_cloned
+                                .into_iter()
+                                .filter(|t| in_library(t.thread_id.get()))
+                                .filter(|t| !hidden.contains(&t.thread_id.get()))
+                                .collect()
+                        } else {
+                            data_cloned
+                                .into_iter()
+                                .filter(|t| !hidden.contains(&t.thread_id.get()))
+                                .collect()
+                        };
 
                     // Apply client-side filters and sorting in Library mode
                     if app.filters.library_only {
@@ -294,7 +296,10 @@ pub(super) fn update_main(app: &mut NoLagApp, ctx: &egui::Context) {
                             };
                             ui.horizontal(|ui| {
                                 let prev_enabled = cur > 1;
-                                if ui.add_enabled(prev_enabled, egui::Button::new("◀")).clicked() {
+                                if ui
+                                    .add_enabled(prev_enabled, egui::Button::new("◀"))
+                                    .clicked()
+                                {
                                     app.page = cur.saturating_sub(1);
                                     app.start_fetch(ctx);
                                 }
@@ -303,7 +308,10 @@ pub(super) fn update_main(app: &mut NoLagApp, ctx: &egui::Context) {
                                     &[("cur", cur.to_string()), ("total", total.to_string())],
                                 ));
                                 let next_enabled = cur < total;
-                                if ui.add_enabled(next_enabled, egui::Button::new("▶")).clicked() {
+                                if ui
+                                    .add_enabled(next_enabled, egui::Button::new("▶"))
+                                    .clicked()
+                                {
                                     app.page = cur + 1;
                                     app.start_fetch(ctx);
                                 }

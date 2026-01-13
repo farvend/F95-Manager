@@ -1,9 +1,9 @@
 use eframe::egui::{self, RichText};
 
-use super::{about_ui, errors_ui, logs_ui, settings, update_ui, NoLagApp};
+use super::state::Screen;
+use super::{NoLagApp, about_ui, errors_ui, logs_ui, settings, update_ui};
 use crate::app::config as app_config;
-use crate::app::rt;
-use super::state::Screen; // состояние экрана из модуля app::state
+use crate::app::rt; // состояние экрана из модуля app::state
 
 pub(super) fn update_auth(app: &mut NoLagApp, ctx: &egui::Context) {
     egui::CentralPanel::default().show(ctx, |ui| {
@@ -20,7 +20,8 @@ pub(super) fn update_auth(app: &mut NoLagApp, ctx: &egui::Context) {
                 });
                 ui.horizontal(|ui| {
                     ui.label(crate::localization::translate("auth-password"));
-                    let te = egui::TextEdit::singleline(&mut app.auth.login_password).password(true);
+                    let te =
+                        egui::TextEdit::singleline(&mut app.auth.login_password).password(true);
                     ui.add(te);
                 });
                 if let Some(err) = &app.auth.login_error {
@@ -41,7 +42,8 @@ pub(super) fn update_auth(app: &mut NoLagApp, ctx: &egui::Context) {
                 if login_clicked {
                     app.auth.login_error = None;
                     app.auth.login_in_progress = true;
-                    let has_manual = !app.auth.login_username.trim().is_empty() && !app.auth.login_password.is_empty();
+                    let has_manual = !app.auth.login_username.trim().is_empty()
+                        && !app.auth.login_password.is_empty();
                     let tx = app.auth.auth_tx.clone();
                     let ctx2 = ctx.clone();
                     if has_manual {
@@ -67,7 +69,8 @@ pub(super) fn update_auth(app: &mut NoLagApp, ctx: &egui::Context) {
                 ui.separator();
                 ui.add_space(crate::ui_constants::spacing::MEDIUM);
                 ui.label(crate::localization::translate("auth-or-paste-cookies"));
-                let te2 = egui::TextEdit::multiline(&mut app.auth.login_cookies_input).desired_rows(3);
+                let te2 =
+                    egui::TextEdit::multiline(&mut app.auth.login_cookies_input).desired_rows(3);
                 ui.add(te2);
                 ui.add_space(crate::ui_constants::spacing::SMALL);
                 let use_clicked = ui

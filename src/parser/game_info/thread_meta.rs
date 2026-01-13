@@ -1,6 +1,6 @@
+use lazy_static::lazy_static;
 use regex::Regex;
 use reqwest::{Client, StatusCode};
-use lazy_static::lazy_static;
 
 use super::cookies;
 use crate::tags::TAGS;
@@ -38,7 +38,9 @@ impl fmt::Display for FetchThreadMetaError {
             FetchThreadMetaError::TitleMissing => write!(f, "thread title missing"),
             FetchThreadMetaError::VersionMissing => write!(f, "thread version missing"),
             FetchThreadMetaError::AuthorMissing => write!(f, "thread author missing"),
-            FetchThreadMetaError::CoverMissing => write!(f, "cover not found (no cover or screenshots)"),
+            FetchThreadMetaError::CoverMissing => {
+                write!(f, "cover not found (no cover or screenshots)")
+            }
         }
     }
 }
@@ -77,22 +79,16 @@ pub async fn fetch_thread_meta(thread_id: u64) -> Result<ThreadMeta, FetchThread
 
     if resp.status() == StatusCode::TOO_MANY_REQUESTS {
         tokio::time::sleep(Duration::from_secs(1)).await;
-        return Box::pin(fetch_thread_meta(thread_id)).await
+        return Box::pin(fetch_thread_meta(thread_id)).await;
     }
 
-    let text = resp
-        .text()
-        .await
-        .map_err(FetchThreadMetaError::ReadText)?;
-
-    
+    let text = resp.text().await.map_err(FetchThreadMetaError::ReadText)?;
 
     let full_title_html = RE_OG_TITLE
         .captures(&text)
         .and_then(|cap| cap.get(0))
         .map(|m| m.as_str().to_string())
-        .ok_or(FetchThreadMetaError::OgTitleMissing)
-        .inspect_err(|e| {dbg!(&text);})?;
+        .ok_or(FetchThreadMetaError::OgTitleMissing)?;
 
     let full_title = full_title_html
         .rsplit_once("</span>")
@@ -165,7 +161,12 @@ pub async fn fetch_thread_meta(thread_id: u64) -> Result<ThreadMeta, FetchThread
         }
 
         for tcap in RE_TAG_TEXT.captures_iter(block) {
-            let name = tcap.get(1).map(|m| m.as_str()).unwrap_or("").trim().to_string();
+            let name = tcap
+                .get(1)
+                .map(|m| m.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
             if name.is_empty() {
                 continue;
             }
@@ -178,5 +179,12 @@ pub async fn fetch_thread_meta(thread_id: u64) -> Result<ThreadMeta, FetchThread
         }
     }
 
-    Ok(ThreadMeta { title, cover, screens, tag_ids, version, creator })
+    Ok(ThreadMeta {
+        title,
+        cover,
+        screens,
+        tag_ids,
+        version,
+        creator,
+    })
 }

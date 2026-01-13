@@ -62,10 +62,26 @@ impl super::NoLagApp {
                         ctx.request_repaint();
                     }
                     GameDownloadStatus::Downloading(progress) => {
-                        handle_progress(state, progress, ctx, *id, 0.0, DOWNLOAD_WEIGHT, "Download");
+                        handle_progress(
+                            state,
+                            progress,
+                            ctx,
+                            *id,
+                            0.0,
+                            DOWNLOAD_WEIGHT,
+                            "Download",
+                        );
                     }
                     GameDownloadStatus::Unzipping(progress) => {
-                        handle_progress(state, progress, ctx, *id, DOWNLOAD_WEIGHT, UNZIP_WEIGHT, "Unzip");
+                        handle_progress(
+                            state,
+                            progress,
+                            ctx,
+                            *id,
+                            DOWNLOAD_WEIGHT,
+                            UNZIP_WEIGHT,
+                            "Unzip",
+                        );
                     }
                     GameDownloadStatus::Completed { dest_dir, exe_path } => {
                         state.progress = None;

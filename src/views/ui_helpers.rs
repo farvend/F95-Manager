@@ -78,10 +78,7 @@ where
         })
 }
 
-pub fn clicked_outside(
-    ui: &egui::Ui,
-    avoid_rects: &[egui::Rect],
-) -> bool {
+pub fn clicked_outside(ui: &egui::Ui, avoid_rects: &[egui::Rect]) -> bool {
     ui.input(|i| {
         i.pointer.any_click()
             && i.pointer

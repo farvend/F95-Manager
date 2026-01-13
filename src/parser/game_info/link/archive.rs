@@ -1,3 +1,4 @@
+use sevenz_rust;
 use std::{
     collections::HashSet,
     fs,
@@ -6,9 +7,8 @@ use std::{
     path::{Path, PathBuf},
 };
 use tokio::sync::mpsc::UnboundedSender;
-use zip::ZipArchive;
-use sevenz_rust;
 use unrar;
+use zip::ZipArchive;
 
 use crate::game_download::{GameDownloadStatus, Progress};
 
@@ -17,9 +17,28 @@ fn sanitize_relative_path(name: &str, strip_prefix: Option<&str>) -> Option<Path
     fn is_windows_reserved(stem_upper: &str) -> bool {
         matches!(
             stem_upper,
-            "CON" | "PRN" | "AUX" | "NUL" |
-            "COM1" | "COM2" | "COM3" | "COM4" | "COM5" | "COM6" | "COM7" | "COM8" | "COM9" |
-            "LPT1" | "LPT2" | "LPT3" | "LPT4" | "LPT5" | "LPT6" | "LPT7" | "LPT8" | "LPT9"
+            "CON"
+                | "PRN"
+                | "AUX"
+                | "NUL"
+                | "COM1"
+                | "COM2"
+                | "COM3"
+                | "COM4"
+                | "COM5"
+                | "COM6"
+                | "COM7"
+                | "COM8"
+                | "COM9"
+                | "LPT1"
+                | "LPT2"
+                | "LPT3"
+                | "LPT4"
+                | "LPT5"
+                | "LPT6"
+                | "LPT7"
+                | "LPT8"
+                | "LPT9"
         )
     }
     fn sanitize_component_str(s: &str) -> Option<String> {
@@ -102,7 +121,12 @@ fn find_first_exe(dir: &Path) -> Option<PathBuf> {
                     .map(|s| s.to_ascii_lowercase());
                 let is_blacklisted = name_lc
                     .as_deref()
-                    .map(|n| n.contains("unitycrashhandler") || n.contains("unitycrash") || n.contains("python") || n.contains("WindowsIconUpdater"))
+                    .map(|n| {
+                        n.contains("unitycrashhandler")
+                            || n.contains("unitycrash")
+                            || n.contains("python")
+                            || n.contains("WindowsIconUpdater")
+                    })
                     .unwrap_or(false);
                 if is_blacklisted {
                     continue;
@@ -233,10 +257,7 @@ fn unzip_streaming(
         let mut rel_key = rel.to_string_lossy().to_ascii_lowercase();
         if used_rel_lower.contains(&rel_key) {
             // Append (2), (3)... before extension
-            let file_name = rel
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("file");
+            let file_name = rel.file_name().and_then(|s| s.to_str()).unwrap_or("file");
             let (stem, ext_opt) = match file_name.rsplit_once('.') {
                 Some((st, ex)) if !st.is_empty() => (st.to_string(), Some(ex.to_string())),
                 _ => (file_name.to_string(), None),
@@ -345,7 +366,9 @@ fn extract_with_sevenz(
         Err(e) => {
             let msg = e.to_string();
             if is_memory_alloc_failure(&msg) {
-                Err(format!("7z decompress failed due to insufficient memory: {msg}"))
+                Err(format!(
+                    "7z decompress failed due to insufficient memory: {msg}"
+                ))
             } else {
                 Err(format!("7z decompress (pure Rust) failed: {msg}"))
             }
