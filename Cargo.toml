@@ -19,7 +19,7 @@ derive-getters = "0.5.0"
 crossbeam-channel = "0.5.15"
 log = "0.4"
 env_logger = "0.11"
-zip = { version = "0.6", default-features = false, features = ["deflate"] }
+zip = { version = "7.0.0", default-features = false, features = ["deflate"] }
 threadpool = "1.8"
 bitflags = "2.6"
 rfd = "0.14"
