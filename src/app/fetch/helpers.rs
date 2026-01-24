@@ -270,3 +270,130 @@ pub fn save_to_cache(cache_dir: &Path, thread_id: u64, thread: &F95Thread) -> st
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn create_test_thread(id: u64) -> F95Thread {
+        F95Thread {
+            thread_id: ThreadId(id),
+            title: "Test Game".to_string(),
+            creator: "Test Creator".to_string(),
+            version: "v1.0".to_string(),
+            views: 1000,
+            likes: 500,
+            prefixes: vec![1, 2],
+            tags: vec![10, 20, 30],
+            rating: 4.5,
+            cover: "https://example.com/cover.jpg".to_string(),
+            screens: vec![
+                "https://example.com/screen1.jpg".to_string(),
+                "https://example.com/screen2.jpg".to_string(),
+            ],
+            date: "2024-01-01".to_string(),
+            watched: false,
+            ignored: false,
+            is_new: false,
+            ts: 1234567890,
+        }
+    }
+
+    #[test]
+    fn test_save_and_load_cache_success() {
+        let temp_dir = std::env::temp_dir().join("f95_test_cache_success");
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let thread_id = 12345u64;
+        let thread = create_test_thread(thread_id);
+
+        let result = save_to_cache(&temp_dir, thread_id, &thread);
+        assert!(result.is_ok(), "Save should succeed");
+
+        let meta_path = cache_meta_path(&temp_dir, thread_id);
+        assert!(meta_path.exists(), "Cache file should exist");
+
+        let loaded = load_from_cache(&temp_dir, thread_id);
+        assert!(loaded.is_some(), "Load should return Some");
+
+        let loaded_thread = loaded.unwrap();
+        assert_eq!(loaded_thread.thread_id.get(), thread_id);
+        assert_eq!(loaded_thread.title, "Test Game");
+        assert_eq!(loaded_thread.creator, "Test Creator");
+        assert_eq!(loaded_thread.version, "v1.0");
+        assert_eq!(loaded_thread.cover, "https://example.com/cover.jpg");
+        assert_eq!(loaded_thread.screens.len(), 2);
+        assert_eq!(loaded_thread.tags, vec![10, 20, 30]);
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_load_cache_missing_file() {
+        let temp_dir = std::env::temp_dir().join("f95_test_cache_missing");
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let thread_id = 99999u64;
+        let loaded = load_from_cache(&temp_dir, thread_id);
+        assert!(loaded.is_none(), "Load should return None for missing file");
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_load_cache_corrupted_json() {
+        let temp_dir = std::env::temp_dir().join("f95_test_cache_corrupted");
+        let _ = fs::remove_dir_all(&temp_dir);
+
+        let thread_id = 54321u64;
+        let cache_dir_for_thread = temp_dir.join(thread_id.to_string());
+        fs::create_dir_all(&cache_dir_for_thread).unwrap();
+
+        let meta_path = cache_meta_path(&temp_dir, thread_id);
+        fs::write(&meta_path, "{ invalid json }").unwrap();
+
+        let loaded = load_from_cache(&temp_dir, thread_id);
+        assert!(
+            loaded.is_none(),
+            "Load should return None for corrupted JSON"
+        );
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_save_creates_directory() {
+        let temp_dir = std::env::temp_dir().join("f95_test_cache_create_dir");
+        let _ = fs::remove_dir_all(&temp_dir);
+
+        let thread_id = 11111u64;
+        let thread = create_test_thread(thread_id);
+
+        let result = save_to_cache(&temp_dir, thread_id, &thread);
+        assert!(result.is_ok(), "Save should create directory and succeed");
+
+        let cache_dir_for_thread = temp_dir.join(thread_id.to_string());
+        assert!(
+            cache_dir_for_thread.exists(),
+            "Thread cache directory should be created"
+        );
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_cache_meta_path() {
+        let cache_dir = Path::new("/test/cache");
+        let thread_id = 123u64;
+        let path = cache_meta_path(cache_dir, thread_id);
+
+        assert_eq!(
+            path,
+            Path::new("/test/cache/123/meta.json"),
+            "Cache path should be cache_dir/thread_id/meta.json"
+        );
+    }
+}
