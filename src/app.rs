@@ -57,6 +57,17 @@ impl Default for NoLagApp {
         };
 
         let cache_dir = settings::APP_SETTINGS.read().unwrap().cache_dir.clone();
+        let cache_dir = if cache_dir.is_relative() {
+            std::env::current_exe()
+                .ok()
+                .and_then(|exe| exe.parent().map(|p| p.to_path_buf()))
+                .map(|exe_dir| exe_dir.join(&cache_dir))
+                .unwrap_or(cache_dir)
+        } else {
+            cache_dir
+        };
+        log::info!("Using cache directory: {:?}", cache_dir);
+        
         let provider = std::sync::Arc::new(library::CachingProvider::new(
             library::NetworkProvider::new(),
             cache_dir,
