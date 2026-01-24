@@ -1,13 +1,13 @@
 // Settings UI: egui viewport window and separate eframe App, plus UI state.
 
-use eframe::{App, egui};
+use eframe::{egui, App};
 use lazy_static::lazy_static;
 use std::path::PathBuf;
-use std::sync::{RwLock, mpsc};
+use std::sync::{mpsc, RwLock};
 
 use super::helpers::move_directory;
 use super::migrate;
-use super::store::{APP_SETTINGS, save_settings_to_disk};
+use super::store::{save_settings_to_disk, APP_SETTINGS};
 use crate::views::filters::items::{prefixes_menu::prefixes_picker, tags_menu::tags_picker};
 
 lazy_static! {
@@ -24,6 +24,8 @@ lazy_static! {
     static ref LOADING_ANIM_INPUT: RwLock<crate::app::settings::store::LoadingAnim> = RwLock::new(crate::app::settings::store::LoadingAnim::BottomBar);
     // New: Toggle file logging (warn+ to log.txt)
     static ref LOG_TO_FILE_INPUT: RwLock<bool> = RwLock::new(true);
+    // Update check frequency
+    static ref UPDATE_FREQ_INPUT: RwLock<crate::app::settings::store::UpdateCheckFrequency> = RwLock::new(crate::app::settings::store::UpdateCheckFrequency::Manual);
     // State for extract-dir change confirmation and migration
     static ref MOVE_CONFIRM_OPEN: RwLock<bool> = RwLock::new(false);
     static ref PENDING_TEMP_DIR: RwLock<String> = RwLock::new(String::new());
@@ -109,6 +111,10 @@ pub fn open_settings() {
     {
         let mut b = LOG_TO_FILE_INPUT.write().unwrap();
         *b = s.log_to_file;
+    }
+    {
+        let mut f = UPDATE_FREQ_INPUT.write().unwrap();
+        *f = s.update_check_frequency.clone();
     }
     *SETTINGS_OPEN.write().unwrap() = true;
 }
@@ -225,6 +231,52 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                         *LOADING_ANIM_INPUT.write().unwrap() = anim_val;
                     }
                 }
+
+                ui.separator();
+
+                // Update check frequency selection
+                {
+                    let mut freq_val = UPDATE_FREQ_INPUT.read().unwrap().clone();
+                    let selected_text = match &freq_val {
+                        crate::app::settings::store::UpdateCheckFrequency::Manual => "Manual only".to_string(),
+                        crate::app::settings::store::UpdateCheckFrequency::OnStartup => "On startup".to_string(),
+                        crate::app::settings::store::UpdateCheckFrequency::EveryNDays(n) => format!("Every {} days", n),
+                    };
+                    ui.horizontal(|ui| {
+                        ui.label("Update check frequency");
+                        egui::ComboBox::from_id_source("settings_update_freq_combo")
+                            .selected_text(selected_text)
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut freq_val, crate::app::settings::store::UpdateCheckFrequency::Manual, "Manual only");
+                                ui.selectable_value(&mut freq_val, crate::app::settings::store::UpdateCheckFrequency::OnStartup, "On startup");
+                                ui.selectable_value(&mut freq_val, crate::app::settings::store::UpdateCheckFrequency::EveryNDays(7), "Every 7 days");
+                            });
+                    });
+                    if freq_val != *UPDATE_FREQ_INPUT.read().unwrap() {
+                        *UPDATE_FREQ_INPUT.write().unwrap() = freq_val;
+                    }
+                }
+
+                // Check Updates button
+                ui.horizontal(|ui| {
+                    if ui.button("Check Updates").clicked() {
+                        crate::app::game_updates::ui::trigger_update_check(ctx);
+                    }
+
+                    let updates_available = {
+                        if let Ok(games) = crate::app::game_updates::ui::GAMES_WITH_UPDATES.read() {
+                            !games.is_empty()
+                        } else {
+                            false
+                        }
+                    };
+
+                    if updates_available {
+                        if ui.button("Update All").clicked() {
+                            // TODO: Implement Update All in Task 6
+                        }
+                    }
+                });
  
                 // New: File logging toggle
                 ui.horizontal(|ui| {
@@ -469,6 +521,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                                 let startup_prefixes = STARTUP_PREFIXES_INPUT.read().unwrap().clone();
                                 let startup_exclude_prefixes = STARTUP_EXCLUDE_PREFIXES_INPUT.read().unwrap().clone();
                                 let log_to_file = *LOG_TO_FILE_INPUT.read().unwrap();
+                                let update_freq = UPDATE_FREQ_INPUT.read().unwrap().clone();
                                 let mut st = APP_SETTINGS.write().unwrap();
                                 st.temp_dir = std::path::PathBuf::from(temp_val);
                                 st.extract_dir = new_extract_pb;
@@ -483,6 +536,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                                 st.cache_dir = std::path::PathBuf::from(cache_dir_str);
                                 st.loading_anim = loading_anim;
                                 st.log_to_file = log_to_file;
+                                st.update_check_frequency = update_freq;
                                 // Store language selection
                                 st.language = *LANGUAGE_INPUT.read().unwrap();
                             } // drop write lock before saving to avoid deadlock
