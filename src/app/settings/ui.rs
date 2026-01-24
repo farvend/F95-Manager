@@ -238,18 +238,18 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                 {
                     let mut freq_val = UPDATE_FREQ_INPUT.read().unwrap().clone();
                     let selected_text = match &freq_val {
-                        crate::app::settings::store::UpdateCheckFrequency::Manual => "Manual only".to_string(),
-                        crate::app::settings::store::UpdateCheckFrequency::OnStartup => "On startup".to_string(),
-                        crate::app::settings::store::UpdateCheckFrequency::EveryNDays(n) => format!("Every {} days", n),
+                        crate::app::settings::store::UpdateCheckFrequency::Manual => crate::localization::translate("settings-update-manual"),
+                        crate::app::settings::store::UpdateCheckFrequency::OnStartup => crate::localization::translate("settings-update-on-startup"),
+                        crate::app::settings::store::UpdateCheckFrequency::EveryNDays(n) => crate::localization::translate_with("settings-update-every-n-days", &[("days", n.to_string())]),
                     };
                     ui.horizontal(|ui| {
-                        ui.label("Update check frequency");
+                        ui.label(crate::localization::translate("settings-update-frequency"));
                         egui::ComboBox::from_id_source("settings_update_freq_combo")
                             .selected_text(selected_text)
                             .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut freq_val, crate::app::settings::store::UpdateCheckFrequency::Manual, "Manual only");
-                                ui.selectable_value(&mut freq_val, crate::app::settings::store::UpdateCheckFrequency::OnStartup, "On startup");
-                                ui.selectable_value(&mut freq_val, crate::app::settings::store::UpdateCheckFrequency::EveryNDays(7), "Every 7 days");
+                                ui.selectable_value(&mut freq_val, crate::app::settings::store::UpdateCheckFrequency::Manual, crate::localization::translate("settings-update-manual"));
+                                ui.selectable_value(&mut freq_val, crate::app::settings::store::UpdateCheckFrequency::OnStartup, crate::localization::translate("settings-update-on-startup"));
+                                ui.selectable_value(&mut freq_val, crate::app::settings::store::UpdateCheckFrequency::EveryNDays(7), crate::localization::translate_with("settings-update-every-n-days", &[("days", "7".to_string())]));
                             });
                     });
                     if freq_val != *UPDATE_FREQ_INPUT.read().unwrap() {
@@ -259,7 +259,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
 
                 // Check Updates button
                 ui.horizontal(|ui| {
-                    if ui.button("Check Updates").clicked() {
+                    if ui.button(crate::localization::translate("settings-check-updates")).clicked() {
                         crate::app::game_updates::ui::trigger_update_check(ctx);
                     }
 
@@ -272,7 +272,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     };
 
                     if updates_available {
-                        if ui.button("Update All").clicked() {
+                        if ui.button(crate::localization::translate("settings-update-all")).clicked() {
                             crate::app::game_updates::ui::trigger_update_all();
                             ctx.request_repaint();
                         }

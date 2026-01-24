@@ -106,3 +106,14 @@ settings-move-confirm-text = Installed games detected. All games will be moved t
 settings-move-confirm-move = Move
 settings-move-progress-title = Moving installed games
 settings-move-progress-text = Moving games… Do not close the app.
+
+# Game updates
+settings-check-updates = Check Updates
+settings-update-all = Update All
+settings-update-frequency = Update check frequency
+settings-update-manual = Manual only
+settings-update-on-startup = On startup
+settings-update-every-n-days = Every { $days } days
+settings-checking-updates = Checking updates...
+card-update-available = UPDATE
+

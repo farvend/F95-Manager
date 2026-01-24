@@ -106,3 +106,14 @@ settings-move-confirm-text = Обнаружены установленные и�
 settings-move-confirm-move = Перенести
 settings-move-progress-title = Перенос установленных игр
 settings-move-progress-text = Переносим игры… Не закрывайте приложение.
+
+# Обновления игр
+settings-check-updates = Проверить обновления
+settings-update-all = Обновить все
+settings-update-frequency = Частота проверки обновлений
+settings-update-manual = Только вручную
+settings-update-on-startup = При запуске
+settings-update-every-n-days = Каждые { $days } дней
+settings-checking-updates = Проверка обновлений...
+card-update-available = ОБНОВИТЬ
+

@@ -71,7 +71,7 @@ fn draw_badge_with_overlay(
 }
 
 fn draw_clickable_update_badge(ui: &mut egui::Ui, thread_id: u64, cover_rect: egui::Rect) -> bool {
-    let label = "UPDATE";
+    let label = crate::localization::translate("card-update-available");
     let bg_color = Color32::from_rgb(60, 160, 60);
     let font_id = egui::TextStyle::Small.resolve(ui.style()).clone();
     let text_color = Color32::WHITE;
