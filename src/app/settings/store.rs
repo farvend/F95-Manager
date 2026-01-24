@@ -25,6 +25,22 @@ pub enum LoadingAnim {
     CircleBottomRight,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum UpdateCheckFrequency {
+    #[serde(rename = "manual")]
+    Manual,
+    #[serde(rename = "on_startup")]
+    OnStartup,
+    #[serde(rename = "every_n_days")]
+    EveryNDays(u32),
+}
+
+impl Default for UpdateCheckFrequency {
+    fn default() -> Self {
+        Self::Manual
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     pub temp_dir: PathBuf,
@@ -73,9 +89,12 @@ pub struct AppSettings {
     // Whether to persist logs to a file (warn and error only). Default: true for backward compatibility
     #[serde(default = "default_log_to_file")]
     pub log_to_file: bool,
-    // Auto-save selected include/exclude tags to startup settings when filters change
     #[serde(default)]
     pub autosave_selected_tags: bool,
+    #[serde(default)]
+    pub update_check_frequency: UpdateCheckFrequency,
+    #[serde(default)]
+    pub last_update_check: Option<i64>,
 }
 
 impl Default for AppSettings {
@@ -99,6 +118,8 @@ impl Default for AppSettings {
             language: None,
             log_to_file: default_log_to_file(),
             autosave_selected_tags: false,
+            update_check_frequency: UpdateCheckFrequency::default(),
+            last_update_check: None,
         }
     }
 }
