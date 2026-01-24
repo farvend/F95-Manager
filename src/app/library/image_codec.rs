@@ -50,7 +50,7 @@ impl ImageCodec for RealImageCodec {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
 
     #[derive(Clone)]
