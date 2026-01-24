@@ -12,3 +12,4 @@ log.txt
 src/parser/game_info/page/pages/*
 scrape_pages.py
 nul
+.sisyphus/*
