@@ -117,25 +117,49 @@ impl<P: CardImageProvider, FS: FileSystem, IC: ImageCodec> CachingProvider<P, FS
     }
 
     fn cover_path(&self, card: &LibraryCard) -> PathBuf {
-        self.cache_dir
+        let path = self
+            .cache_dir
             .join(card.thread_id.to_string())
-            .join("cover.png")
+            .join("cover.png");
+        log::trace!("Generated cover path for thread {}: {:?}", card.thread_id, path);
+        path
     }
 
     fn screen_path(&self, card: &LibraryCard, idx: usize) -> PathBuf {
-        self.cache_dir
+        let path = self
+            .cache_dir
             .join(card.thread_id.to_string())
-            .join(format!("screen_{}.png", idx + 1))
+            .join(format!("screen_{}.png", idx + 1));
+        log::trace!("Generated screen path for thread {} idx {}: {:?}", card.thread_id, idx, path);
+        path
     }
 
     async fn load_from_cache(&self, path: &Path) -> Option<ImageData> {
+        log::debug!("Cache check: {:?}", path);
+        
         if !self.fs.exists(path).await {
+            log::debug!("Cache miss (not exists): {:?}", path);
             return None;
         }
 
-        let bytes = self.fs.read(path).await.ok()?;
-        let data = self.codec.decode(&bytes).ok()?;
-        Some(data)
+        let bytes = match self.fs.read(path).await {
+            Ok(b) => b,
+            Err(e) => {
+                log::warn!("Cache read error: {:?}: {}", path, e);
+                return None;
+            }
+        };
+        
+        match self.codec.decode(&bytes) {
+            Ok(data) => {
+                log::debug!("Cache hit: {:?}", path);
+                Some(data)
+            }
+            Err(e) => {
+                log::warn!("Cache decode error: {:?}: {}", path, e);
+                None
+            }
+        }
     }
 
     async fn save_to_cache(&self, path: &Path, data: &ImageData) -> Result<(), CacheError> {
@@ -686,6 +710,51 @@ mod tests {
             let path2 = PathBuf::from("cache/222/cover.png");
             assert!(mock_fs.get_file(&path1).is_some());
             assert!(mock_fs.get_file(&path2).is_some());
+        }
+
+        /// Integration test: Verify RealFileSystem and RealImageCodec work with actual cache files
+        #[tokio::test]
+        #[ignore] // Run manually with: cargo test real_cache_verification --ignored -- --nocapture
+        async fn real_cache_verification() {
+            use crate::app::library::fs::RealFileSystem;
+            use crate::app::library::image_codec::RealImageCodec;
+            
+            // This test verifies the entire cache loading pipeline works with real files
+            let cache_dir = PathBuf::from("cache");
+            let test_thread_id = 100153; // Known cache directory
+            
+            let fs = RealFileSystem;
+            let codec = RealImageCodec;
+            
+            // Test 1: Verify cache directory exists
+            let thread_cache_dir = cache_dir.join(test_thread_id.to_string());
+            println!("Checking cache directory: {:?}", thread_cache_dir);
+            assert!(
+                fs.exists(&thread_cache_dir).await,
+                "Cache directory should exist: {:?}",
+                thread_cache_dir
+            );
+            
+            // Test 2: Verify cover.png exists
+            let cover_path = thread_cache_dir.join("cover.png");
+            println!("Checking cover path: {:?}", cover_path);
+            let exists = fs.exists(&cover_path).await;
+            println!("Cover exists: {}", exists);
+            assert!(exists, "Cover should exist: {:?}", cover_path);
+            
+            // Test 3: Try to read the file
+            println!("Reading cover file...");
+            let bytes = fs.read(&cover_path).await.expect("Should read cover file");
+            println!("Read {} bytes", bytes.len());
+            assert!(bytes.len() > 0, "Cover file should not be empty");
+            
+            // Test 4: Try to decode the image
+            println!("Decoding image...");
+            let image_data = codec.decode(&bytes).expect("Should decode PNG");
+            println!("Decoded image: {}x{}", image_data.width, image_data.height);
+            assert!(image_data.width > 0 && image_data.height > 0, "Image should have valid dimensions");
+            
+            println!("✓ All checks passed! Cache loading works correctly.");
         }
     }
 }
