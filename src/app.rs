@@ -60,6 +60,8 @@ impl Default for NoLagApp {
         let provider = std::sync::Arc::new(library::CachingProvider::new(
             library::NetworkProvider::new(),
             cache_dir,
+            library::RealFileSystem,
+            library::RealImageCodec,
         ));
 
         Self {

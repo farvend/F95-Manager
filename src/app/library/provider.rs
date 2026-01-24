@@ -1,8 +1,8 @@
 use async_trait::async_trait;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use url::Url;
 
-use super::{ImageData, LibraryCard, ProviderError};
+use super::{FileSystem, ImageCodec, ImageData, LibraryCard, ProviderError};
 
 #[async_trait]
 pub trait CardImageProvider: Send + Sync {
@@ -56,14 +56,21 @@ impl CardImageProvider for NetworkProvider {
     }
 }
 
-pub struct CachingProvider<P: CardImageProvider> {
+pub struct CachingProvider<P, FS, IC> {
     inner: P,
     cache_dir: PathBuf,
+    fs: FS,
+    codec: IC,
 }
 
-impl<P: CardImageProvider> CachingProvider<P> {
-    pub fn new(inner: P, cache_dir: PathBuf) -> Self {
-        Self { inner, cache_dir }
+impl<P: CardImageProvider, FS: FileSystem, IC: ImageCodec> CachingProvider<P, FS, IC> {
+    pub fn new(inner: P, cache_dir: PathBuf, fs: FS, codec: IC) -> Self {
+        Self {
+            inner,
+            cache_dir,
+            fs,
+            codec,
+        }
     }
 
     fn cover_path(&self, card: &LibraryCard) -> PathBuf {
@@ -78,45 +85,31 @@ impl<P: CardImageProvider> CachingProvider<P> {
             .join(format!("screen_{}.png", idx + 1))
     }
 
-    async fn load_from_cache(&self, path: &PathBuf) -> Option<ImageData> {
-        if tokio::fs::metadata(path).await.is_err() {
+    async fn load_from_cache(&self, path: &Path) -> Option<ImageData> {
+        if !self.fs.exists(path).await {
             return None;
         }
 
-        let path_clone = path.clone();
-        let result = tokio::task::spawn_blocking(move || {
-            let bytes = std::fs::read(&path_clone).ok()?;
-            let img = image::load_from_memory(&bytes).ok()?;
-            let rgba = img.to_rgba8();
-            let (w, h) = rgba.dimensions();
-            Some(ImageData::new(w, h, rgba.into_vec()))
-        })
-        .await
-        .ok()
-        .flatten();
-
-        result
+        let bytes = self.fs.read(path).await.ok()?;
+        let data = self.codec.decode(&bytes).ok()?;
+        Some(data)
     }
 
-    async fn save_to_cache(&self, path: &PathBuf, data: &ImageData) {
+    async fn save_to_cache(&self, path: &Path, data: &ImageData) {
         if let Some(parent) = path.parent() {
-            let _ = tokio::fs::create_dir_all(parent).await;
+            let _ = self.fs.create_dir_all(parent).await;
         }
 
-        let path_clone = path.clone();
-        let width = data.width;
-        let height = data.height;
-        let rgba = data.rgba.clone();
-
-        let _ = tokio::task::spawn_blocking(move || {
-            image::save_buffer(&path_clone, &rgba, width, height, image::ColorType::Rgba8)
-        })
-        .await;
+        if let Ok(bytes) = self.codec.encode(data) {
+            let _ = self.fs.write(path, &bytes).await;
+        }
     }
 }
 
 #[async_trait]
-impl<P: CardImageProvider> CardImageProvider for CachingProvider<P> {
+impl<P: CardImageProvider, FS: FileSystem, IC: ImageCodec> CardImageProvider
+    for CachingProvider<P, FS, IC>
+{
     async fn fetch_cover(&self, card: &LibraryCard) -> Result<ImageData, ProviderError> {
         let path = self.cover_path(card);
 
@@ -146,7 +139,9 @@ impl<P: CardImageProvider> CardImageProvider for CachingProvider<P> {
     }
 }
 
-impl<P: CardImageProvider> std::fmt::Debug for CachingProvider<P> {
+impl<P: CardImageProvider, FS: FileSystem, IC: ImageCodec> std::fmt::Debug
+    for CachingProvider<P, FS, IC>
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CachingProvider")
             .field("cache_dir", &self.cache_dir)
