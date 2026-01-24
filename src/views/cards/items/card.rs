@@ -17,6 +17,7 @@ pub struct CardHover {
     pub download_clicked: bool,
     pub selected_link: Option<crate::parser::game_info::link::DownloadLink>,
     pub refresh_clicked: bool,
+    pub update_clicked: bool,
 }
 
 /// Fixed-width card resembling F95 tiles.
@@ -62,6 +63,7 @@ pub fn thread_card(
     let mut download_clicked = false;
     // Will be set by draw_cover() if user picks a link from the overlay
     let mut selected_link_local: Option<crate::parser::game_info::link::DownloadLink> = None;
+    let mut update_clicked_local = false;
 
     let frame_out = egui::Frame::none()
         .fill(fill)
@@ -91,6 +93,7 @@ pub fn thread_card(
             download_clicked |= cover_hover.download_clicked;
             // capture selected link to return outside the closure
             selected_link_local = cover_hover.selected_link;
+            update_clicked_local |= cover_hover.update_clicked;
 
             // Title (after cover and markers)
             // Use a fixed post-cover gap to avoid data-driven layout hacks.
@@ -211,5 +214,6 @@ pub fn thread_card(
         download_clicked,
         selected_link: selected_link_local,
         refresh_clicked,
+        update_clicked: update_clicked_local,
     }
 }

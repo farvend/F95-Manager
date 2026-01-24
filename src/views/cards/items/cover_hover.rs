@@ -70,12 +70,57 @@ fn draw_badge_with_overlay(
     );
 }
 
-/// Hover info for the cover area (image + markers).
-// pub struct CoverHover {
-//     pub hovered: bool,
-//     pub hovered_line: Option<usize>,
-//     pub download_clicked: bool,
-// }
+fn draw_clickable_update_badge(ui: &mut egui::Ui, thread_id: u64, cover_rect: egui::Rect) -> bool {
+    let label = "UPDATE";
+    let bg_color = Color32::from_rgb(60, 160, 60);
+    let font_id = egui::TextStyle::Small.resolve(ui.style()).clone();
+    let text_color = Color32::WHITE;
+    let text_w = ui.fonts(|f| {
+        f.layout_no_wrap(label.to_string(), font_id.clone(), text_color)
+            .rect
+            .width()
+    });
+    let badge_h = 18.0f32;
+    let pad_x = 12.0f32;
+    let w = text_w + pad_x * 2.0;
+    let pad = crate::ui_constants::spacing::MEDIUM;
+    let rect = egui::Rect::from_min_max(
+        egui::pos2(cover_rect.max.x - pad - w, cover_rect.max.y - pad - badge_h),
+        egui::pos2(cover_rect.max.x - pad, cover_rect.max.y - pad),
+    );
+
+    ui.expand_to_include_rect(rect);
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(
+        rect,
+        Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
+        bg_color,
+    );
+    painter.rect_stroke(
+        rect,
+        Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
+        Stroke::new(1.0, Color32::from_gray(40)),
+    );
+    ui.allocate_ui_at_rect(rect, |ui| {
+        ui.centered_and_justified(|ui| {
+            ui.add(
+                egui::Label::new(RichText::new(label).color(text_color))
+                    .truncate(true)
+                    .wrap(false),
+            );
+        });
+    });
+
+    let resp = ui
+        .interact(
+            rect,
+            ui.id().with(("update_badge", thread_id)),
+            Sense::click(),
+        )
+        .on_hover_cursor(eframe::egui::CursorIcon::PointingHand);
+
+    resp.clicked()
+}
 
 /// Draws the cover image with 16:9 ratio across `inner_w` width,
 /// shows a version badge, and renders hover markers under the image.
@@ -422,6 +467,15 @@ pub fn draw_cover(
         }
     }
 
+    let mut update_clicked = false;
+    if crate::app::game_updates::ui::is_update_available(thread.thread_id.get()) {
+        let update_badge_clicked =
+            draw_clickable_update_badge(ui, thread.thread_id.get(), cover_rect);
+        if update_badge_clicked {
+            update_clicked = true;
+        }
+    }
+
     // Resolve progress error (if any) to show error badge
     let mut selected_link: Option<DownloadLink> = None;
     let download_error: Option<&str> = match &progress {
@@ -546,6 +600,7 @@ pub fn draw_cover(
         download_clicked,
         selected_link,
         refresh_clicked: false,
+        update_clicked,
     }
 }
 

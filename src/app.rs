@@ -7,7 +7,7 @@ use std::collections::HashMap;
 mod about_ui;
 pub mod config;
 mod errors_ui;
-mod game_updates;
+pub mod game_updates;
 mod grid;
 pub mod library;
 mod logs_ui;
