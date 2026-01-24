@@ -190,6 +190,65 @@ impl super::NoLagApp {
                     ctx.request_repaint();
                 }
             }
+
+            if hover.refresh_clicked {
+                let thread_id = id;
+                let ctx_clone = ctx.clone();
+                
+                log::info!("Refresh button clicked for thread {}", thread_id);
+                
+                super::rt().spawn(async move {
+                    match crate::parser::game_info::thread_meta::fetch_thread_meta(thread_id).await
+                    {
+                        Ok(meta) => {
+                            log::info!("Refresh: fetched metadata for thread {}", thread_id);
+                            
+                            let cache_dir = {
+                                crate::app::settings::APP_SETTINGS
+                                    .read()
+                                    .unwrap()
+                                    .cache_dir
+                                    .clone()
+                            };
+                            
+                            let thread = crate::parser::F95Thread {
+                                thread_id: crate::parser::game_info::ThreadId(thread_id),
+                                title: meta.title,
+                                creator: meta.creator,
+                                version: meta.version,
+                                cover: meta.cover,
+                                screens: meta.screens,
+                                tags: meta.tag_ids,
+                                views: 0,
+                                likes: 0,
+                                prefixes: vec![],
+                                rating: 0.0,
+                                date: String::new(),
+                                watched: false,
+                                ignored: false,
+                                is_new: false,
+                                ts: 0,
+                            };
+                            
+                            match super::fetch::helpers::save_to_cache(&cache_dir, thread_id, &thread) {
+                                Ok(_) => {
+                                    log::info!("Refresh: saved cache for thread {}", thread_id);
+                                },
+                                Err(e) => {
+                                    log::warn!("Failed to save refreshed cache for {}: {}", thread_id, e);
+                                }
+                            }
+                            
+                            ctx_clone.request_repaint();
+                        }
+                        Err(e) => {
+                            log::error!("Refresh failed for thread {}: {}", thread_id, e);
+                        }
+                    }
+                });
+                
+                self.refresh_prefetch_library(ctx);
+            }
         });
         if c + 1 < cols {
             ui.add_space(gap);

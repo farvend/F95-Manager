@@ -16,6 +16,7 @@ pub struct CardHover {
     pub hovered_line: Option<usize>,
     pub download_clicked: bool,
     pub selected_link: Option<crate::parser::game_info::link::DownloadLink>,
+    pub refresh_clicked: bool,
 }
 
 /// Fixed-width card resembling F95 tiles.
@@ -40,6 +41,7 @@ pub fn thread_card(
 
     let mut hovered_line: Option<usize> = None;
     let mut hovered_any = false;
+    let mut refresh_clicked = false;
 
     // If tags panel was open on previous frame, make bottom corners square to merge seamlessly.
     let open_id = egui::Id::new(("card_tags_open", t.thread_id));
@@ -163,6 +165,14 @@ pub fn thread_card(
             ui.close_menu();
         }
 
+        // Refresh metadata from network (for library games)
+        if is_downloaded {
+            if ui.button("🔄 Refresh").clicked() {
+                refresh_clicked = true;
+                ui.close_menu();
+            }
+        }
+
         // Remove pending entry (not downloading, not downloaded)
         if is_pending && !is_downloading && !is_downloaded {
             if ui.button("Remove from Library").clicked() {
@@ -200,5 +210,6 @@ pub fn thread_card(
         hovered_line,
         download_clicked,
         selected_link: selected_link_local,
+        refresh_clicked,
     }
 }

@@ -2,7 +2,7 @@ use crate::parser::game_info::ThreadId;
 use eframe::egui;
 
 use super::rt;
-mod helpers;
+pub(super) mod helpers;
 
 /// Messages for cover and screenshot loading.
 pub enum CoverMsg {

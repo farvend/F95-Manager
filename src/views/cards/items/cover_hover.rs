@@ -545,6 +545,7 @@ pub fn draw_cover(
         hovered_line,
         download_clicked,
         selected_link,
+        refresh_clicked: false,
     }
 }
 
