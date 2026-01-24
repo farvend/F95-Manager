@@ -148,3 +148,99 @@ impl<P: CardImageProvider, FS: FileSystem, IC: ImageCodec> std::fmt::Debug
             .finish()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    pub fn test_card(thread_id: u64) -> LibraryCard {
+        LibraryCard {
+            thread_id,
+            title: format!("Test Game {}", thread_id),
+            creator: "Test Creator".to_string(),
+            version: "1.0".to_string(),
+            cover_url: Some(Url::parse("https://example.com/cover.png").unwrap()),
+            screen_urls: vec![
+                Url::parse("https://example.com/screen1.png").unwrap(),
+                Url::parse("https://example.com/screen2.png").unwrap(),
+            ],
+            tags: vec![1, 2, 3],
+            prefixes: vec![4, 5],
+        }
+    }
+
+    pub fn test_image_data(width: u32, height: u32) -> ImageData {
+        let rgba = vec![255u8; (width * height * 4) as usize];
+        ImageData::new(width, height, rgba)
+    }
+
+    #[derive(Clone)]
+    pub struct MockCardImageProvider {
+        covers: Arc<HashMap<u64, ImageData>>,
+        screens: Arc<HashMap<(u64, usize), ImageData>>,
+        call_count: Arc<AtomicUsize>,
+        should_fail: bool,
+    }
+
+    impl MockCardImageProvider {
+        pub fn new() -> Self {
+            Self {
+                covers: Arc::new(HashMap::new()),
+                screens: Arc::new(HashMap::new()),
+                call_count: Arc::new(AtomicUsize::new(0)),
+                should_fail: false,
+            }
+        }
+
+        pub fn with_cover(thread_id: u64, data: ImageData) -> Self {
+            let mut covers = HashMap::new();
+            covers.insert(thread_id, data);
+            Self {
+                covers: Arc::new(covers),
+                screens: Arc::new(HashMap::new()),
+                call_count: Arc::new(AtomicUsize::new(0)),
+                should_fail: false,
+            }
+        }
+
+        pub fn call_count(&self) -> usize {
+            self.call_count.load(Ordering::SeqCst)
+        }
+    }
+
+    #[async_trait]
+    impl CardImageProvider for MockCardImageProvider {
+        async fn fetch_cover(&self, card: &LibraryCard) -> Result<ImageData, ProviderError> {
+            self.call_count.fetch_add(1, Ordering::SeqCst);
+            
+            if self.should_fail {
+                return Err(ProviderError::Network("Mock failure".to_string()));
+            }
+
+            self.covers
+                .get(&card.thread_id)
+                .cloned()
+                .ok_or_else(|| ProviderError::Network("Cover not found".to_string()))
+        }
+
+        async fn fetch_screen(
+            &self,
+            card: &LibraryCard,
+            idx: usize,
+        ) -> Result<ImageData, ProviderError> {
+            self.call_count.fetch_add(1, Ordering::SeqCst);
+            
+            if self.should_fail {
+                return Err(ProviderError::Network("Mock failure".to_string()));
+            }
+
+            self.screens
+                .get(&(card.thread_id, idx))
+                .cloned()
+                .ok_or_else(|| ProviderError::Network("Screen not found".to_string()))
+        }
+    }
+}
