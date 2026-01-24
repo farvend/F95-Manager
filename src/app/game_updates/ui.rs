@@ -44,3 +44,24 @@ pub fn trigger_update_check(ctx: &egui::Context) {
         ctx_clone.request_repaint();
     });
 }
+
+pub fn trigger_update_all() {
+    let thread_ids: Vec<u64> = {
+        if let Ok(games) = GAMES_WITH_UPDATES.read() {
+            games.iter().map(|g| g.thread_id).collect()
+        } else {
+            return;
+        }
+    };
+
+    for thread_id in thread_ids {
+        let tid = crate::parser::game_info::types::ThreadId(thread_id);
+        let page = tid.get_page();
+        let _rx = crate::game_download::create_download_task(page);
+        crate::app::settings::record_pending_download(thread_id);
+    }
+
+    if let Ok(mut games) = GAMES_WITH_UPDATES.write() {
+        games.clear();
+    }
+}

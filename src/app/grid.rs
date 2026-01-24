@@ -191,6 +191,34 @@ impl super::NoLagApp {
                 }
             }
 
+            if hover.update_clicked {
+                if let Ok(mut games) = crate::app::game_updates::ui::GAMES_WITH_UPDATES.write() {
+                    games.retain(|g| g.thread_id != id);
+                }
+
+                let should_start = match self.downloads.get(&id) {
+                    None => true,
+                    Some(st) => {
+                        matches!(st.progress, Some(crate::game_download::Progress::Error(_)))
+                    }
+                };
+                if should_start {
+                    self.downloads.remove(&id);
+                    super::settings::record_pending_download(id);
+                    let rx = game_download::create_download_task(t.thread_id.get_page());
+                    self.downloads.insert(
+                        id,
+                        super::downloads::DownloadState {
+                            rx,
+                            progress: Some(crate::game_download::Progress::Unknown),
+                            link_choices: None,
+                        },
+                    );
+                    self.refresh_prefetch_library(ctx);
+                    ctx.request_repaint();
+                }
+            }
+
             if hover.refresh_clicked {
                 let thread_id = id;
                 let ctx_clone = ctx.clone();

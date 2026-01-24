@@ -273,7 +273,8 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
 
                     if updates_available {
                         if ui.button("Update All").clicked() {
-                            // TODO: Implement Update All in Task 6
+                            crate::app::game_updates::ui::trigger_update_all();
+                            ctx.request_repaint();
                         }
                     }
                 });
