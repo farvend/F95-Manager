@@ -2,7 +2,34 @@ use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use url::Url;
 
-use super::{FileSystem, ImageCodec, ImageData, LibraryCard, ProviderError};
+use super::{FileSystem, ImageCodec, ImageCodecError, ImageData, LibraryCard, ProviderError};
+
+#[derive(Debug)]
+pub enum CacheError {
+    CreateDirFailed(std::io::Error),
+    EncodeFailed(ImageCodecError),
+    WriteFailed(std::io::Error),
+}
+
+impl std::fmt::Display for CacheError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CacheError::CreateDirFailed(e) => write!(f, "Failed to create cache directory: {}", e),
+            CacheError::EncodeFailed(e) => write!(f, "Failed to encode image: {}", e),
+            CacheError::WriteFailed(e) => write!(f, "Failed to write to cache: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for CacheError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            CacheError::CreateDirFailed(e) => Some(e),
+            CacheError::EncodeFailed(e) => Some(e),
+            CacheError::WriteFailed(e) => Some(e),
+        }
+    }
+}
 
 #[async_trait]
 pub trait CardImageProvider: Send + Sync {
@@ -106,14 +133,20 @@ impl<P: CardImageProvider, FS: FileSystem, IC: ImageCodec> CachingProvider<P, FS
         Some(data)
     }
 
-    async fn save_to_cache(&self, path: &Path, data: &ImageData) {
+    async fn save_to_cache(&self, path: &Path, data: &ImageData) -> Result<(), CacheError> {
         if let Some(parent) = path.parent() {
-            let _ = self.fs.create_dir_all(parent).await;
+            self.fs
+                .create_dir_all(parent)
+                .await
+                .map_err(CacheError::CreateDirFailed)?;
         }
 
-        if let Ok(bytes) = self.codec.encode(data) {
-            let _ = self.fs.write(path, &bytes).await;
-        }
+        let bytes = self.codec.encode(data).map_err(CacheError::EncodeFailed)?;
+        self.fs
+            .write(path, &bytes)
+            .await
+            .map_err(CacheError::WriteFailed)?;
+        Ok(())
     }
 }
 
@@ -129,7 +162,13 @@ impl<P: CardImageProvider, FS: FileSystem, IC: ImageCodec> CardImageProvider
         }
 
         let data = self.inner.fetch_cover(card).await?;
-        self.save_to_cache(&path, &data).await;
+        if let Err(e) = self.save_to_cache(&path, &data).await {
+            log::warn!(
+                "Failed to save cover to cache for thread {}: {}",
+                card.thread_id,
+                e
+            );
+        }
         Ok(data)
     }
 
@@ -145,7 +184,14 @@ impl<P: CardImageProvider, FS: FileSystem, IC: ImageCodec> CardImageProvider
         }
 
         let data = self.inner.fetch_screen(card, idx).await?;
-        self.save_to_cache(&path, &data).await;
+        if let Err(e) = self.save_to_cache(&path, &data).await {
+            log::warn!(
+                "Failed to save screen {} to cache for thread {}: {}",
+                idx,
+                card.thread_id,
+                e
+            );
+        }
         Ok(data)
     }
 }
