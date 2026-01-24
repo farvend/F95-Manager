@@ -6,6 +6,7 @@ mod tests {
     use crate::parser::game_info::page::F95Page;
 
     #[test]
+    #[ignore = "Requires big HTML files with potentially sensitive data"]
     fn test_all_pages() {
         let pages_dir =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("src/parser/game_info/page/pages");

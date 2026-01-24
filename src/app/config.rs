@@ -187,6 +187,7 @@ mod tests {
     // Интеграционный тест: использует реальные F95_LOGIN и F95_PASSWORD из .env или переменных окружения.
     // Если переменных нет — тест ПАДАЕТ с понятным сообщением (чтобы не "пропускался").
     #[tokio::test]
+    #[ignore = "Requires sensetive data in env"]
     async fn login_from_env_integration() {
         // Перенаправляем путь конфигурации, чтобы не перетирать рабочий app_config.json
         let cfg_path = temp_config_path("app_config_test_env_ok");
