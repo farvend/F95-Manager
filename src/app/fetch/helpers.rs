@@ -1,7 +1,8 @@
-use crate::parser::F95Thread;
 use crate::parser::game_info::ThreadId;
+use crate::parser::F95Thread;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Select preferred image URL for a thread:
 /// - Prefer the cover if present
@@ -139,8 +140,6 @@ pub fn apply_meta(
     th: &mut crate::parser::F95Thread,
     meta: crate::parser::game_info::thread_meta::ThreadMeta,
 ) -> (usize, usize) {
-    let id = th.thread_id.get();
-
     let screens_len = meta.screens.len();
     let tags_len = meta.tag_ids.len();
 
@@ -155,4 +154,103 @@ pub fn apply_meta(
     }
 
     (screens_len, tags_len)
+}
+
+// ============================================================================
+// Cache functions for thread metadata
+// ============================================================================
+
+/// Cached metadata structure matching the JSON format in cache/<id>/meta.json
+#[derive(Serialize, Deserialize, Debug)]
+struct CachedThreadMeta {
+    thread_id: u64,
+    title: String,
+    creator: String,
+    version: String,
+    cover_url: String,
+    screens: Vec<String>,
+    tag_ids: Vec<u32>,
+}
+
+/// Get the path to the meta.json file for a thread
+pub fn cache_meta_path(cache_dir: &Path, thread_id: u64) -> PathBuf {
+    cache_dir.join(thread_id.to_string()).join("meta.json")
+}
+
+/// Load cached metadata from disk for a thread
+/// Returns None if the cache doesn't exist or can't be read/parsed
+pub fn load_from_cache(cache_dir: &Path, thread_id: u64) -> Option<F95Thread> {
+    let path = cache_meta_path(cache_dir, thread_id);
+
+    // Read the file
+    let data = match std::fs::read_to_string(&path) {
+        Ok(d) => d,
+        Err(e) => {
+            // Don't warn on file not found - that's expected for uncached items
+            if e.kind() != std::io::ErrorKind::NotFound {
+                log::warn!("Failed to read cache for thread {}: {}", thread_id, e);
+            }
+            return None;
+        }
+    };
+
+    // Parse JSON
+    let cached: CachedThreadMeta = match serde_json::from_str(&data) {
+        Ok(c) => c,
+        Err(e) => {
+            log::warn!("Failed to parse cache for thread {}: {}", thread_id, e);
+            return None;
+        }
+    };
+
+    // Convert to F95Thread
+    Some(F95Thread {
+        thread_id: ThreadId(cached.thread_id),
+        title: cached.title,
+        creator: cached.creator,
+        version: cached.version,
+        views: 0,
+        likes: 0,
+        prefixes: Vec::new(),
+        tags: cached.tag_ids,
+        rating: 0.0,
+        cover: cached.cover_url,
+        screens: cached.screens,
+        date: String::new(),
+        watched: false,
+        ignored: false,
+        is_new: false,
+        ts: 0,
+    })
+}
+
+/// Save thread metadata to cache
+pub fn save_to_cache(cache_dir: &Path, thread_id: u64, thread: &F95Thread) -> std::io::Result<()> {
+    let cache_thread_dir = cache_dir.join(thread_id.to_string());
+
+    // Create directory if it doesn't exist
+    std::fs::create_dir_all(&cache_thread_dir)?;
+
+    // Build cached structure
+    let cached = CachedThreadMeta {
+        thread_id,
+        title: thread.title.clone(),
+        creator: thread.creator.clone(),
+        version: thread.version.clone(),
+        cover_url: thread.cover.clone(),
+        screens: thread.screens.clone(),
+        tag_ids: thread.tags.clone(),
+    };
+
+    // Serialize to JSON
+    let json = serde_json::to_string_pretty(&cached)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+    // Write to file
+    let path = cache_meta_path(cache_dir, thread_id);
+    std::fs::write(&path, json)?;
+
+    log::debug!("Saved cache for thread {} to {}", thread_id, path.display());
+
+    Ok(())
 }
