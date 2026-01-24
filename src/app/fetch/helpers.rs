@@ -104,16 +104,32 @@ pub fn placeholder_thread(
 }
 
 /// Merge targets with the existing cache, creating placeholder cards when needed.
+/// Tries to load from disk cache first, falls back to placeholder if not available.
 pub fn fill_threads_from_targets(
     targets: &[u64],
     existing_map: &HashMap<u64, crate::parser::F95Thread>,
     install_map: &HashMap<u64, PathBuf>,
 ) -> Vec<crate::parser::F95Thread> {
+    let cache_dir = {
+        crate::app::settings::APP_SETTINGS
+            .read()
+            .unwrap()
+            .cache_dir
+            .clone()
+    };
+
     let mut out = Vec::with_capacity(targets.len());
     for id in targets {
         if let Some(ex) = existing_map.get(id) {
+            // Already have data in memory
             out.push(ex.clone());
+        } else if let Some(cached) = load_from_cache(&cache_dir, *id) {
+            // Load from disk cache
+            log::info!("Cache hit for thread {}", id);
+            out.push(cached);
         } else {
+            // No cache, create placeholder
+            log::debug!("Cache miss for thread {}", id);
             out.push(placeholder_thread(*id, install_map));
         }
     }
