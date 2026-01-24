@@ -63,6 +63,17 @@ pub struct CachingProvider<P, FS, IC> {
     codec: IC,
 }
 
+impl<P: Clone, FS: Clone, IC: Clone> Clone for CachingProvider<P, FS, IC> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            cache_dir: self.cache_dir.clone(),
+            fs: self.fs.clone(),
+            codec: self.codec.clone(),
+        }
+    }
+}
+
 impl<P: CardImageProvider, FS: FileSystem, IC: ImageCodec> CachingProvider<P, FS, IC> {
     pub fn new(inner: P, cache_dir: PathBuf, fs: FS, codec: IC) -> Self {
         Self {
@@ -363,6 +374,267 @@ mod tests {
             
             let cache_path = PathBuf::from("cache/12345/screen_1.png");
             assert!(mock_fs.get_file(&cache_path).is_some());
+        }
+
+        #[tokio::test]
+        async fn corrupted_cache_invalid_format_fetches_from_inner() {
+            let card = test_card(12345);
+            let test_data = test_image_data(100, 100);
+            
+            let cache_path = PathBuf::from("cache/12345/cover.png");
+            let mock_fs = MockFileSystem::with_file(&cache_path, b"not a valid image");
+            
+            let mut codec = MockImageCodec::new();
+            codec.should_fail_decode = true;
+            
+            let mock_provider = MockCardImageProvider::with_cover(12345, test_data.clone());
+            let caching: CachingProvider<MockCardImageProvider, MockFileSystem, MockImageCodec> = 
+                CachingProvider::new(
+                    mock_provider.clone(),
+                    PathBuf::from("cache"),
+                    mock_fs,
+                    codec,
+                );
+
+            let result = caching.fetch_cover(&card).await.unwrap();
+            
+            assert_eq!(result.width, test_data.width);
+            assert_eq!(mock_provider.call_count(), 1);
+        }
+
+        #[tokio::test]
+        async fn corrupted_cache_truncated_file() {
+            let card = test_card(12345);
+            let test_data = test_image_data(100, 100);
+            
+            let cache_path = PathBuf::from("cache/12345/cover.png");
+            let mock_fs = MockFileSystem::with_file(&cache_path, &[1, 2, 3]);
+            
+            let codec = MockImageCodec::new();
+            let mock_provider = MockCardImageProvider::with_cover(12345, test_data.clone());
+            
+            let caching: CachingProvider<MockCardImageProvider, MockFileSystem, MockImageCodec> = 
+                CachingProvider::new(
+                    mock_provider.clone(),
+                    PathBuf::from("cache"),
+                    mock_fs,
+                    codec,
+                );
+
+            let result = caching.fetch_cover(&card).await.unwrap();
+            
+            assert_eq!(result.width, test_data.width);
+            assert_eq!(mock_provider.call_count(), 1);
+        }
+
+        #[tokio::test]
+        async fn corrupted_cache_wrong_dimensions() {
+            let card = test_card(12345);
+            let expected_data = test_image_data(100, 100);
+            let wrong_data = test_image_data(50, 50);
+            
+            let codec = MockImageCodec::new();
+            let encoded_wrong = codec.encode(&wrong_data).unwrap();
+            
+            let cache_path = PathBuf::from("cache/12345/cover.png");
+            let mock_fs = MockFileSystem::with_file(&cache_path, &encoded_wrong);
+            
+            let mock_provider = MockCardImageProvider::with_cover(12345, expected_data.clone());
+            let caching: CachingProvider<MockCardImageProvider, MockFileSystem, MockImageCodec> = 
+                CachingProvider::new(
+                    mock_provider.clone(),
+                    PathBuf::from("cache"),
+                    mock_fs,
+                    codec,
+                );
+
+            let result = caching.fetch_cover(&card).await.unwrap();
+            
+            assert_eq!(result.width, 50);
+            assert_eq!(mock_provider.call_count(), 0);
+        }
+
+        #[tokio::test]
+        async fn fs_read_error_fetches_from_inner() {
+            let card = test_card(12345);
+            let test_data = test_image_data(100, 100);
+            
+            let cache_path = PathBuf::from("cache/12345/cover.png");
+            let mock_fs = MockFileSystem::new();
+            mock_fs.set_error(&cache_path, std::io::ErrorKind::PermissionDenied);
+            
+            let codec = MockImageCodec::new();
+            let mock_provider = MockCardImageProvider::with_cover(12345, test_data.clone());
+            
+            let caching: CachingProvider<MockCardImageProvider, MockFileSystem, MockImageCodec> = 
+                CachingProvider::new(
+                    mock_provider.clone(),
+                    PathBuf::from("cache"),
+                    mock_fs,
+                    codec,
+                );
+
+            let result = caching.fetch_cover(&card).await.unwrap();
+            
+            assert_eq!(result.width, test_data.width);
+            assert_eq!(mock_provider.call_count(), 1);
+        }
+
+        #[tokio::test]
+        async fn fs_write_error_still_returns_data() {
+            let card = test_card(12345);
+            let test_data = test_image_data(100, 100);
+            
+            let cache_path = PathBuf::from("cache/12345/cover.png");
+            let mock_fs = MockFileSystem::new();
+            mock_fs.set_error(&cache_path, std::io::ErrorKind::Other);
+            
+            let codec = MockImageCodec::new();
+            let mock_provider = MockCardImageProvider::with_cover(12345, test_data.clone());
+            
+            let caching: CachingProvider<MockCardImageProvider, MockFileSystem, MockImageCodec> = 
+                CachingProvider::new(
+                    mock_provider.clone(),
+                    PathBuf::from("cache"),
+                    mock_fs.clone(),
+                    codec,
+                );
+
+            let result = caching.fetch_cover(&card).await.unwrap();
+            
+            assert_eq!(result.width, test_data.width);
+            assert!(mock_fs.get_file(&cache_path).is_none());
+        }
+
+        #[tokio::test]
+        async fn fs_create_dir_error() {
+            let card = test_card(12345);
+            let test_data = test_image_data(100, 100);
+            
+            let dir_path = PathBuf::from("cache/12345");
+            let mock_fs = MockFileSystem::new();
+            mock_fs.set_error(&dir_path, std::io::ErrorKind::PermissionDenied);
+            
+            let codec = MockImageCodec::new();
+            let mock_provider = MockCardImageProvider::with_cover(12345, test_data.clone());
+            
+            let caching: CachingProvider<MockCardImageProvider, MockFileSystem, MockImageCodec> = 
+                CachingProvider::new(
+                    mock_provider.clone(),
+                    PathBuf::from("cache"),
+                    mock_fs,
+                    codec,
+                );
+
+            let result = caching.fetch_cover(&card).await;
+            
+            assert!(result.is_ok());
+        }
+
+        #[tokio::test]
+        async fn concurrent_reads_same_file() {
+            let card = test_card(12345);
+            let test_data = test_image_data(100, 100);
+            let codec = MockImageCodec::new();
+            
+            let encoded = codec.encode(&test_data).unwrap();
+            let cache_path = PathBuf::from("cache/12345/cover.png");
+            let mock_fs = MockFileSystem::with_file(&cache_path, &encoded);
+            
+            let mock_provider = MockCardImageProvider::new();
+            let caching: CachingProvider<MockCardImageProvider, MockFileSystem, MockImageCodec> = 
+                CachingProvider::new(
+                    mock_provider.clone(),
+                    PathBuf::from("cache"),
+                    mock_fs.clone(),
+                    MockImageCodec::new(),
+                );
+
+            let card_clone = card.clone();
+            let caching_clone = caching.clone();
+            
+            let (result1, result2) = tokio::join!(
+                caching.fetch_cover(&card),
+                caching_clone.fetch_cover(&card_clone)
+            );
+            
+            assert!(result1.is_ok());
+            assert!(result2.is_ok());
+            assert_eq!(result1.unwrap().width, test_data.width);
+            assert_eq!(result2.unwrap().width, test_data.width);
+        }
+
+        #[tokio::test]
+        async fn concurrent_read_and_write() {
+            let card = test_card(12345);
+            let test_data = test_image_data(100, 100);
+            
+            let mock_fs = MockFileSystem::new();
+            let codec = MockImageCodec::new();
+            let mock_provider = MockCardImageProvider::with_cover(12345, test_data.clone());
+            
+            let caching: CachingProvider<MockCardImageProvider, MockFileSystem, MockImageCodec> = 
+                CachingProvider::new(
+                    mock_provider.clone(),
+                    PathBuf::from("cache"),
+                    mock_fs.clone(),
+                    codec,
+                );
+
+            let card_clone = card.clone();
+            let caching_clone = caching.clone();
+            
+            let (result1, result2) = tokio::join!(
+                caching.fetch_cover(&card),
+                caching_clone.fetch_cover(&card_clone)
+            );
+            
+            assert!(result1.is_ok());
+            assert!(result2.is_ok());
+        }
+
+        #[tokio::test]
+        async fn concurrent_writes() {
+            let card1 = test_card(111);
+            let card2 = test_card(222);
+            let test_data1 = test_image_data(100, 100);
+            let test_data2 = test_image_data(200, 200);
+            
+            let mock_fs = MockFileSystem::new();
+            let codec = MockImageCodec::new();
+            
+            let mut covers = HashMap::new();
+            covers.insert(111, test_data1.clone());
+            covers.insert(222, test_data2.clone());
+            let mock_provider = MockCardImageProvider {
+                covers: Arc::new(covers),
+                screens: Arc::new(HashMap::new()),
+                call_count: Arc::new(AtomicUsize::new(0)),
+                should_fail: false,
+            };
+            
+            let caching: CachingProvider<MockCardImageProvider, MockFileSystem, MockImageCodec> = 
+                CachingProvider::new(
+                    mock_provider.clone(),
+                    PathBuf::from("cache"),
+                    mock_fs.clone(),
+                    codec,
+                );
+
+            let caching_clone = caching.clone();
+            
+            let (result1, result2) = tokio::join!(
+                caching.fetch_cover(&card1),
+                caching_clone.fetch_cover(&card2)
+            );
+            
+            assert!(result1.is_ok());
+            assert!(result2.is_ok());
+            
+            let path1 = PathBuf::from("cache/111/cover.png");
+            let path2 = PathBuf::from("cache/222/cover.png");
+            assert!(mock_fs.get_file(&path1).is_some());
+            assert!(mock_fs.get_file(&path2).is_some());
         }
     }
 }
