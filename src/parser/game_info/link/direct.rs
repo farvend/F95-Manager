@@ -47,10 +47,23 @@ impl DirectDownloadLink {
                 Some(DirectRequest::Http(request))
             }
             HostingSubset::Mega => {
-                let mut path = self.path[1].clone();
-                path = path[1..].replace('!', "#");
+                // MEGA URL formats:
+                // OLD: mega.nz/#!{id}!{key} -> path = ["", "!{id}!{key}"]
+                // NEW: mega.nz/file/{id}#{key} -> path = ["file", "{id}", "{key}"]
                 let hosting = self.hosting.base().to_string() + &self.hosting.to_string();
-                let url = hosting + "/file/" + &path;
+                
+                let url = if self.path.first().map(|s| s.as_str()) == Some("file")
+                    || self.path.first().map(|s| s.as_str()) == Some("folder")
+                {
+                    let file_type = &self.path[0];
+                    let node_id = &self.path[1];
+                    let node_key = self.path.get(2).map(|s| s.as_str()).unwrap_or("");
+                    format!("{hosting}/{file_type}/{node_id}#{node_key}")
+                } else {
+                    let fragment = &self.path[1][1..];
+                    let url_path = fragment.replace('!', "#");
+                    format!("{hosting}/file/{url_path}")
+                };
 
                 Some(DirectRequest::MegaPublicUrl(Url::from_str(&url).unwrap()))
             }
