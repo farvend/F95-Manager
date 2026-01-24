@@ -103,6 +103,21 @@ impl super::NoLagApp {
                                 log::info!(
                                     "Prefetch meta for {id}: screens={sc_len} tags={tg_len}"
                                 );
+
+                                // Save to cache asynchronously
+                                let th_clone = th.clone();
+                                let cache_dir = {
+                                    crate::app::settings::APP_SETTINGS
+                                        .read()
+                                        .unwrap()
+                                        .cache_dir
+                                        .clone()
+                                };
+                                tokio::spawn(async move {
+                                    if let Err(e) = helpers::save_to_cache(&cache_dir, id, &th_clone) {
+                                        log::warn!("Failed to save cache for thread {}: {}", id, e);
+                                    }
+                                });
                             }
 
                             // Push incremental update
@@ -166,6 +181,21 @@ impl super::NoLagApp {
                             log::info!(
                                 "Direct meta fetched for {id}: screens={sc_len} tags={tg_len}"
                             );
+
+                            // Save to cache asynchronously
+                            let th_clone = th.clone();
+                            let cache_dir = {
+                                crate::app::settings::APP_SETTINGS
+                                    .read()
+                                    .unwrap()
+                                    .cache_dir
+                                    .clone()
+                            };
+                            tokio::spawn(async move {
+                                if let Err(e) = helpers::save_to_cache(&cache_dir, id, &th_clone) {
+                                    log::warn!("Failed to save cache for thread {}: {}", id, e);
+                                }
+                            });
                         }
 
                         // Push incremental update
