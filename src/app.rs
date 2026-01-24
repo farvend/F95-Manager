@@ -39,6 +39,9 @@ pub struct NoLagApp {
     downloads: HashMap<u64, DownloadState>,
 
     library_manager: library::LibraryCardManager,
+    
+    startup_time: std::time::Instant,
+    auto_update_check_triggered: bool,
 }
 
 impl Default for NoLagApp {
@@ -84,6 +87,9 @@ impl Default for NoLagApp {
             auth: AuthState::new(screen),
             downloads: HashMap::new(),
             library_manager: library::LibraryCardManager::new(provider),
+            
+            startup_time: std::time::Instant::now(),
+            auto_update_check_triggered: false,
         }
     }
 }
@@ -119,6 +125,45 @@ impl App for NoLagApp {
         if self.auth.screen != Screen::Main {
             auth_screen::update_auth(self, ctx);
             return;
+        }
+
+        // Auto-check for game updates on startup (after 5 seconds)
+        if !self.auto_update_check_triggered && self.startup_time.elapsed().as_secs() >= 5 {
+            self.auto_update_check_triggered = true;
+            
+            let should_check = {
+                let settings = settings::APP_SETTINGS.read().unwrap();
+                match settings.update_check_frequency {
+                    settings::store::UpdateCheckFrequency::Manual => false,
+                    settings::store::UpdateCheckFrequency::OnStartup => true,
+                    settings::store::UpdateCheckFrequency::EveryNDays(n) => {
+                        if let Some(last_check) = settings.last_update_check {
+                            let now = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap()
+                                .as_secs() as i64;
+                            let days_elapsed = (now - last_check) / 86400;
+                            days_elapsed >= n as i64
+                        } else {
+                            true
+                        }
+                    }
+                }
+            };
+
+            if should_check {
+                game_updates::ui::trigger_update_check(ctx);
+                
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs() as i64;
+                {
+                    let mut settings = settings::APP_SETTINGS.write().unwrap();
+                    settings.last_update_check = Some(now);
+                }
+                settings::save_settings_to_disk();
+            }
         }
 
         // Основной экран приложения
