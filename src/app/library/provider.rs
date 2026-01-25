@@ -190,6 +190,8 @@ impl<P: CardImageProvider, FS: FileSystem, IC: ImageCodec> CardImageProvider
             return Ok(cached);
         }
 
+        log::warn!("Cache miss for thread {}: cover", card.thread_id);
+
         let data = self.inner.fetch_cover(card).await?;
         if let Err(e) = self.save_to_cache(&path, &data).await {
             log::warn!(
@@ -211,6 +213,8 @@ impl<P: CardImageProvider, FS: FileSystem, IC: ImageCodec> CardImageProvider
         if let Some(cached) = self.load_from_cache(&path).await {
             return Ok(cached);
         }
+
+        log::warn!("Cache miss for thread {}: screen_{}", card.thread_id, idx + 1);
 
         let data = self.inner.fetch_screen(card, idx).await?;
         if let Err(e) = self.save_to_cache(&path, &data).await {
