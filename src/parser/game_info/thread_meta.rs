@@ -127,11 +127,19 @@ pub async fn fetch_thread_meta(thread_id: u64) -> Result<ThreadMeta, FetchThread
 
     // Screenshots: https://attachments.f95zone.to/2025/08/5195249_1755719682348.png
     // Allow optional query string; accept [A-Za-z0-9_\-] in filename.
+    // Filter to only include image files (exclude .zip, .rar, etc.)
+    let image_extensions = ["png", "jpg", "jpeg", "gif", "webp", "bmp"];
     let mut screens: Vec<String> = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for cap in RE_ATTACH.captures_iter(&text) {
         let s = cap.get(1).unwrap().as_str().to_string();
-        if seen.insert(s.clone()) {
+        // Extract extension (handle query strings like "image.png?hash=123")
+        let ext = s.split('?').next().unwrap_or(&s)
+            .rsplit('.')
+            .next()
+            .unwrap_or("")
+            .to_lowercase();
+        if image_extensions.contains(&ext.as_str()) && seen.insert(s.clone()) {
             screens.push(s);
         }
     }
