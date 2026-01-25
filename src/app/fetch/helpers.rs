@@ -219,6 +219,24 @@ pub fn load_from_cache(cache_dir: &Path, thread_id: u64) -> Option<F95Thread> {
         }
     };
 
+    // Filter screens to only include image files (handle legacy cache with .zip etc)
+    let image_extensions = ["png", "jpg", "jpeg", "gif", "webp", "bmp"];
+    let filtered_screens: Vec<String> = cached
+        .screens
+        .into_iter()
+        .filter(|s| {
+            let ext = s
+                .split('?')
+                .next()
+                .unwrap_or(s)
+                .rsplit('.')
+                .next()
+                .unwrap_or("")
+                .to_lowercase();
+            image_extensions.contains(&ext.as_str())
+        })
+        .collect();
+
     // Convert to F95Thread
     Some(F95Thread {
         thread_id: ThreadId(cached.thread_id),
@@ -231,7 +249,7 @@ pub fn load_from_cache(cache_dir: &Path, thread_id: u64) -> Option<F95Thread> {
         tags: cached.tag_ids,
         rating: 0.0,
         cover: cached.cover_url,
-        screens: cached.screens,
+        screens: filtered_screens,
         date: String::new(),
         watched: false,
         ignored: false,
