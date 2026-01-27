@@ -77,6 +77,7 @@ impl Default for NoLagApp {
             cache_dir,
             library::RealFileSystem,
             library::RealImageCodec,
+            library::RealMetadataCodec,
         ));
 
         Self {
