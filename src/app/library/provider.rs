@@ -585,6 +585,7 @@ mod tests {
                     PathBuf::from("cache"),
                     mock_fs,
                     codec,
+                    MockMetadataCodec::new(),
                 );
 
             let result = caching.fetch_cover(&card).await.unwrap();
@@ -610,6 +611,7 @@ mod tests {
                     PathBuf::from("cache"),
                     mock_fs,
                     codec,
+                    MockMetadataCodec::new(),
                 );
 
             let result = caching.fetch_cover(&card).await.unwrap();
@@ -637,6 +639,7 @@ mod tests {
                     PathBuf::from("cache"),
                     mock_fs,
                     codec,
+                    MockMetadataCodec::new(),
                 );
 
             let result = caching.fetch_cover(&card).await.unwrap();
@@ -663,6 +666,7 @@ mod tests {
                     PathBuf::from("cache"),
                     mock_fs,
                     codec,
+                    MockMetadataCodec::new(),
                 );
 
             let result = caching.fetch_cover(&card).await.unwrap();
@@ -716,6 +720,7 @@ mod tests {
                     PathBuf::from("cache"),
                     mock_fs,
                     codec,
+                    MockMetadataCodec::new(),
                 );
 
             let result = caching.fetch_cover(&card).await;
@@ -740,6 +745,7 @@ mod tests {
                     PathBuf::from("cache"),
                     mock_fs.clone(),
                     MockImageCodec::new(),
+                    MockMetadataCodec::new(),
                 );
 
             let card_clone = card.clone();
