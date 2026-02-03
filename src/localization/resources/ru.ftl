@@ -61,6 +61,10 @@ sorting-views = Просмотры
 sorting-title = Название
 sorting-rating = Рейтинг
 
+view-mode-header = РЕЖИМ
+view-mode-catalog = Каталог
+view-mode-downloaded = Скаченные
+
 date-limit-anytime = ЛЮБОЕ ВРЕМЯ
 date-limit-today = СЕГОДНЯ
 date-limit-days3 = ПОСЛЕДНИЕ 3 ДНЯ

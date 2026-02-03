@@ -61,6 +61,10 @@ sorting-views = Views
 sorting-title = Title
 sorting-rating = Rating
 
+view-mode-header = MODE
+view-mode-catalog = Catalog
+view-mode-downloaded = Downloaded
+
 date-limit-anytime = ANYTIME
 date-limit-today = TODAY
 date-limit-days3 = LAST 3 DAYS
