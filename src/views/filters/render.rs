@@ -207,6 +207,19 @@ pub fn draw_filters_panel(
                 changed_now = true;
             }
 
+            if *library_only {
+                ui.separator();
+                if ui
+                    .checkbox(
+                        unplayed_only,
+                        crate::localization::translate("filters-unplayed"),
+                    )
+                    .changed()
+                {
+                    changed_now = true;
+                }
+            }
+
             ui.add_space(crate::ui_constants::spacing::MEDIUM);
             ui.with_layout(Layout::bottom_up(egui::Align::LEFT), |ui| {
                 if ui
@@ -235,17 +248,6 @@ pub fn draw_filters_panel(
                 };
                 if ui.button(label).clicked() {
                     *library_only = !*library_only;
-                }
-
-                if *library_only {
-                    let unplayed_label = if *unplayed_only {
-                        crate::localization::translate("filters-unplayed-on")
-                    } else {
-                        crate::localization::translate("filters-unplayed")
-                    };
-                    if ui.button(unplayed_label).clicked() {
-                        *unplayed_only = !*unplayed_only;
-                    }
                 }
             });
         });
