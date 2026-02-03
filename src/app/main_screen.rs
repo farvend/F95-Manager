@@ -134,6 +134,19 @@ fn apply_library_filters(app: &NoLagApp, display_data: &mut Vec<F95Thread>) {
             return false;
         }
 
+        if app.filters.unplayed_only {
+            let is_unplayed = settings::with_settings(|st| {
+                st.downloaded_games
+                    .iter()
+                    .find(|g| g.thread_id == t.thread_id.get())
+                    .map(|g| !g.has_been_launched)
+                    .unwrap_or(true)
+            });
+            if !is_unplayed {
+                return false;
+            }
+        }
+
         true
     });
 }
