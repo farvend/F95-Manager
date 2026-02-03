@@ -1,6 +1,7 @@
 use eframe::egui::{self, Layout, RichText};
 use strum::IntoEnumIterator;
 
+use crate::types::ViewMode;
 use crate::types::*;
 use crate::views::filters::items::{
     discrete_slider::discrete_slider, mode_switch::mode_switch_small,
@@ -240,14 +241,14 @@ pub fn draw_filters_panel(
                 {
                     settings_clicked = true;
                 }
-                // Library toggle above Settings
-                let label = if *library_only {
-                    crate::localization::translate("filters-library-on")
+                // ViewMode segmented tabs
+                let mut view_mode = if *library_only {
+                    ViewMode::Downloaded
                 } else {
-                    crate::localization::translate("filters-library")
+                    ViewMode::Catalog
                 };
-                if ui.button(label).clicked() {
-                    *library_only = !*library_only;
+                if segmented_panel(ui, "view-mode-header", &mut view_mode) {
+                    *library_only = matches!(view_mode, ViewMode::Downloaded);
                 }
             });
         });
