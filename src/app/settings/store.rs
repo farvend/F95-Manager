@@ -14,6 +14,8 @@ pub struct DownloadedGame {
     pub thread_id: u64,
     pub folder: PathBuf,
     pub exe_path: Option<PathBuf>,
+    #[serde(default)]
+    pub has_been_launched: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -263,6 +265,7 @@ pub fn record_downloaded_game(thread_id: u64, folder: PathBuf, exe_path: Option<
                 thread_id,
                 folder: folder.clone(),
                 exe_path: exe_path.clone(),
+                has_been_launched: false,
             });
         }
         // Also clear any pending entry for this thread
