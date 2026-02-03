@@ -46,6 +46,7 @@ pub fn draw_filters_panel(
     search_mode: &mut SearchMode,
     query: &mut String,
     library_only: &mut bool,
+    unplayed_only: &mut bool,
 ) -> (bool, bool, bool, bool) {
     let mut changed_now: bool = false;
     let mut settings_clicked: bool = false;
@@ -234,6 +235,17 @@ pub fn draw_filters_panel(
                 };
                 if ui.button(label).clicked() {
                     *library_only = !*library_only;
+                }
+
+                if *library_only {
+                    let unplayed_label = if *unplayed_only {
+                        crate::localization::translate("filters-unplayed-on")
+                    } else {
+                        crate::localization::translate("filters-unplayed")
+                    };
+                    if ui.button(unplayed_label).clicked() {
+                        *unplayed_only = !*unplayed_only;
+                    }
                 }
             });
         });

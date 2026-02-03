@@ -289,6 +289,7 @@ fn draw_filters(app: &mut NoLagApp, ctx: &egui::Context) -> FiltersPanelResult {
         &mut app.filters.search_mode,
         &mut app.filters.query,
         &mut app.filters.library_only,
+        &mut app.filters.unplayed_only,
     );
     FiltersPanelResult {
         apply,

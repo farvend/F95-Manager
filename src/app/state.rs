@@ -28,6 +28,7 @@ pub struct FiltersState {
     pub query: String,
     pub library_only: bool,
     pub last_library_only: bool,
+    pub unplayed_only: bool,
     pub search_due_at: Option<Instant>,
 }
 
@@ -68,6 +69,7 @@ impl Default for FiltersState {
             query: String::new(),
             library_only: false,
             last_library_only: false,
+            unplayed_only: false,
             search_due_at: None,
         }
     }
