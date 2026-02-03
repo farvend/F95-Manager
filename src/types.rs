@@ -82,7 +82,7 @@ impl EnumWithAlternativeNames for TagLogic {
 }
 
 // Search mode for header switcher
-#[derive(strum::EnumCount, strum::EnumIter, PartialEq, Clone, Default)]
+#[derive(strum::EnumCount, strum::EnumIter, PartialEq, Clone, strum::Display, Default, Debug)]
 pub enum SearchMode {
     Creator,
     #[default]
@@ -94,6 +94,22 @@ impl EnumWithAlternativeNames for SearchMode {
         match self {
             SearchMode::Creator => "CREATOR",
             SearchMode::Title => "TITLE",
+        }
+    }
+}
+
+#[derive(strum::EnumCount, strum::EnumIter, PartialEq, Clone, strum::Display, Default, Debug)]
+pub enum ViewMode {
+    #[default]
+    Catalog,
+    Downloaded,
+}
+
+impl EnumWithAlternativeNames for ViewMode {
+    fn alternative_name(&self) -> &'static str {
+        match self {
+            ViewMode::Catalog => "🔍",
+            ViewMode::Downloaded => "📥",
         }
     }
 }
@@ -141,6 +157,15 @@ impl crate::views::filters::LocalizableName for SearchMode {
         match self {
             SearchMode::Creator => "search-mode-creator",
             SearchMode::Title => "search-mode-title",
+        }
+    }
+}
+
+impl crate::views::filters::LocalizableName for ViewMode {
+    fn loc_key(&self) -> &'static str {
+        match self {
+            ViewMode::Catalog => "view-mode-catalog",
+            ViewMode::Downloaded => "view-mode-downloaded",
         }
     }
 }
