@@ -16,6 +16,8 @@ settings-cache-on-download = Cache metadata and images on download
 settings-save = Save
 settings-cancel = Cancel
 settings-log-to-file = Write logs to file (warn and error)
+settings-show-unplayed-badge = Show unplayed games badge
+
 
 auth-login-title = Login
 auth-username = Username:
@@ -48,6 +50,8 @@ filters-select-prefix-include = Select a prefix to filter...
 filters-select-prefix-exclude = Select a prefix to exclude...
 filters-library = Library
 filters-library-on = Library (ON)
+filters-unplayed = Unplayed
+filters-unplayed-on = Unplayed (ON)
 filters-search-placeholder = Search...
 
 # Enum localized names

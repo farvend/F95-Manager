@@ -16,6 +16,8 @@ settings-cache-on-download = Кешировать метаданные и изо
 settings-save = Сохранить
 settings-cancel = Отмена
 settings-log-to-file = Писать логи в файл (предупреждения и ошибки)
+settings-show-unplayed-badge = Показывать бейдж не запущенных игр
+
 
 auth-login-title = Вход
 auth-username = Имя пользователя:
@@ -48,6 +50,8 @@ filters-select-prefix-include = Выберите префикс для филь�
 filters-select-prefix-exclude = Выберите префикс для исключения...
 filters-library = Библиотека
 filters-library-on = Библиотека (ВКЛ)
+filters-unplayed = Не запущенные
+filters-unplayed-on = Не запущенные (ВКЛ)
 filters-search-placeholder = Поиск...
 
 # Локализованные имена перечислений

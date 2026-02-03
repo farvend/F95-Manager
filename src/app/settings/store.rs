@@ -97,6 +97,8 @@ pub struct AppSettings {
     pub update_check_frequency: UpdateCheckFrequency,
     #[serde(default)]
     pub last_update_check: Option<i64>,
+    #[serde(default)]
+    pub show_unplayed_badge: bool,
 }
 
 impl Default for AppSettings {
@@ -122,6 +124,7 @@ impl Default for AppSettings {
             autosave_selected_tags: false,
             update_check_frequency: UpdateCheckFrequency::default(),
             last_update_check: None,
+            show_unplayed_badge: false,
         }
     }
 }

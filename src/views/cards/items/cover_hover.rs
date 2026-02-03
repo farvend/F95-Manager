@@ -356,6 +356,41 @@ pub fn draw_cover(
                 }
             },
         );
+        next_x = warn_rect.max.x + crate::ui_constants::card::STATS_MARGIN_V;
+    }
+
+    let is_unplayed = crate::app::settings::with_settings(|st| {
+        st.show_unplayed_badge
+            && st
+                .downloaded_games
+                .iter()
+                .find(|g| g.thread_id == thread.thread_id.get())
+                .map(|g| !g.has_been_launched)
+                .unwrap_or(false)
+    });
+
+    if is_unplayed {
+        let size = egui::vec2(badge_h, badge_h);
+        let unplayed_rect = egui::Rect::from_min_size(egui::pos2(next_x, y0), size);
+        ui.expand_to_include_rect(unplayed_rect);
+        let painter = ui.painter_at(unplayed_rect);
+        painter.rect_filled(
+            unplayed_rect,
+            Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
+            Color32::from_rgba_premultiplied(0, 0, 0, 160),
+        );
+        painter.rect_stroke(
+            unplayed_rect,
+            Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
+            Stroke::new(1.0, Color32::from_gray(40)),
+        );
+        painter.text(
+            unplayed_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            "✨",
+            egui::FontId::proportional(12.0),
+            Color32::WHITE,
+        );
     }
 
     // Markers (small horizontal dashes) under the image: show only on hover.
