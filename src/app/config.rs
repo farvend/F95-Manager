@@ -1,3 +1,4 @@
+use crate::app::persistable::Persistable;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -10,6 +11,8 @@ pub struct AppConfig {
     #[serde(default)]
     pub username: Option<String>,
 }
+
+impl Persistable for AppConfig {}
 
 lazy_static! {
     pub static ref APP_CONFIG: RwLock<AppConfig> = RwLock::new(AppConfig::default());
@@ -25,18 +28,6 @@ fn config_file_path() -> PathBuf {
 }
 
 impl AppConfig {
-    pub fn load_from_file(path: &std::path::Path) -> std::io::Result<Self> {
-        let data = std::fs::read_to_string(path)?;
-        let s: AppConfig = serde_json::from_str(&data)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        Ok(s)
-    }
-
-    pub fn save_to_file(&self, path: &std::path::Path) -> std::io::Result<()> {
-        let data = serde_json::to_string_pretty(self)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-        std::fs::write(path, data)
-    }
 }
 
 pub fn load_config_from_disk() {

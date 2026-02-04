@@ -1,5 +1,6 @@
 // Settings store: data types, global state, load/save, and records of downloaded games.
 
+use crate::app::persistable::Persistable;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::path::PathBuf;
@@ -103,6 +104,8 @@ pub struct AppSettings {
     pub classic_library_toggle: bool,
 }
 
+impl Persistable for AppSettings {}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
@@ -181,20 +184,7 @@ fn settings_file_path() -> PathBuf {
     PathBuf::from("app_settings.json")
 }
 
-impl AppSettings {
-    pub fn load_from_file(path: &std::path::Path) -> std::io::Result<Self> {
-        let data = std::fs::read_to_string(path)?;
-        let s: AppSettings = serde_json::from_str(&data)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        Ok(s)
-    }
-
-    pub fn save_to_file(&self, path: &std::path::Path) -> std::io::Result<()> {
-        let data = serde_json::to_string_pretty(self)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-        std::fs::write(path, data)
-    }
-}
+impl AppSettings {}
 
 pub fn load_settings_from_disk() {
     let path = settings_file_path();

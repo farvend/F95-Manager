@@ -11,6 +11,7 @@ pub mod game_updates;
 mod grid;
 pub mod library;
 mod logs_ui;
+pub mod persistable;
 pub mod settings;
 mod update_ui;
 
