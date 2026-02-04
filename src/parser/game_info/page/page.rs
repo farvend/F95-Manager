@@ -46,7 +46,7 @@ impl fmt::Display for GetLinksError {
 
 impl F95PageUrl {
     pub async fn get_page(&self) -> Result<F95Page, reqwest::Error> {
-        let client = reqwest::Client::builder().build().unwrap();
+        let client = crate::net::client();
         let text = client
             .get(self.0.clone())
             .header("Cookie", cookies())

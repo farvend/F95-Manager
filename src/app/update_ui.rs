@@ -98,8 +98,7 @@ fn ensure_update_check(ctx: &egui::Context) {
 }
 
 async fn check_latest_github() -> Option<(String, String)> {
-    let ua = format!("F95-Manager/{} (reqwest)", env!("CARGO_PKG_VERSION"));
-    let client = reqwest::Client::builder().user_agent(ua).build().ok()?;
+    let client = crate::net::client();
 
     // 1) Try releases/latest
     if let Ok(resp) = client

@@ -74,12 +74,7 @@ pub fn save_config_to_disk() {
 /// Perform login against f95zone and persist cookies into app_config.json.
 /// On success, APP_CONFIG.cookies will contain a ready-to-use "Cookie" header string.
 pub async fn login_and_store(login: String, password: String) -> Result<(), String> {
-    // Do not follow redirects to ensure we capture Set-Cookie from the login response itself.
-    let client = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .map_err(|e| format!("client build error: {e}"))?;
+    let client = crate::net::client();
 
     // Fetch CSRF token
     let page_resp = client

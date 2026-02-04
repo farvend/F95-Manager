@@ -5,7 +5,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use crate::app::settings::APP_SETTINGS;
 use crate::{
     game_download::{GameDownloadStatus, Progress},
-    parser::{CLIENT, game_info::HostingSubset},
+    parser::game_info::HostingSubset,
 };
 
 use self::info::DirectRequest;
@@ -183,7 +183,7 @@ impl DownloadLink {
                         .map_err(|_| DownloadError::UnsupportedHosting)?;
                 }
 
-                let ans = CLIENT
+                let ans = crate::net::client()
                     .post(link.clone())
                     .header(
                         "Content-Type",
@@ -224,9 +224,7 @@ impl DownloadLink {
         };
 
         // Fire request / or branch for MEGA
-        let client = reqwest::Client::builder()
-            .build()
-            .map_err(DownloadError::ClientBuild)?;
+        let client = crate::net::client();
         let resp = match direct_req {
             DirectRequest::Http(request) => client
                 .execute(request)
@@ -237,7 +235,7 @@ impl DownloadLink {
                 log::info!("downloading from {}", url.as_str());
 
                 // 1) Init MEGA client over reqwest
-                let http_client = reqwest::Client::new();
+                let http_client = crate::net::client().clone();
                 let mega_client = match mega::ClientBuilder::new().https(true).build(http_client) {
                     Ok(c) => c,
                     Err(e) => {
