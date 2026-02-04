@@ -27,6 +27,7 @@ lazy_static! {
     // Update check frequency
     static ref UPDATE_FREQ_INPUT: RwLock<crate::app::settings::store::UpdateCheckFrequency> = RwLock::new(crate::app::settings::store::UpdateCheckFrequency::Manual);
     static ref SHOW_UNPLAYED_BADGE_INPUT: RwLock<bool> = RwLock::new(false);
+    static ref CLASSIC_LIBRARY_TOGGLE_INPUT: RwLock<bool> = RwLock::new(false);
     // State for extract-dir change confirmation and migration
     static ref MOVE_CONFIRM_OPEN: RwLock<bool> = RwLock::new(false);
     static ref PENDING_TEMP_DIR: RwLock<String> = RwLock::new(String::new());
@@ -120,6 +121,10 @@ pub fn open_settings() {
     {
         let mut b = SHOW_UNPLAYED_BADGE_INPUT.write().unwrap();
         *b = s.show_unplayed_badge;
+    }
+    {
+        let mut b = CLASSIC_LIBRARY_TOGGLE_INPUT.write().unwrap();
+        *b = s.classic_library_toggle;
     }
     *SETTINGS_OPEN.write().unwrap() = true;
 }
@@ -296,6 +301,13 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     let mut show_badge = *SHOW_UNPLAYED_BADGE_INPUT.read().unwrap();
                     if ui.checkbox(&mut show_badge, crate::localization::translate("settings-show-unplayed-badge")).changed() {
                         *SHOW_UNPLAYED_BADGE_INPUT.write().unwrap() = show_badge;
+                    }
+                });
+
+                ui.horizontal(|ui| {
+                    let mut classic_toggle = *CLASSIC_LIBRARY_TOGGLE_INPUT.read().unwrap();
+                    if ui.checkbox(&mut classic_toggle, crate::localization::translate("settings-classic-library-toggle")).changed() {
+                        *CLASSIC_LIBRARY_TOGGLE_INPUT.write().unwrap() = classic_toggle;
                     }
                 });
 
@@ -535,6 +547,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                                 let startup_exclude_prefixes = STARTUP_EXCLUDE_PREFIXES_INPUT.read().unwrap().clone();
                                 let log_to_file = *LOG_TO_FILE_INPUT.read().unwrap();
                                 let show_unplayed_badge = *SHOW_UNPLAYED_BADGE_INPUT.read().unwrap();
+                                let classic_library_toggle = *CLASSIC_LIBRARY_TOGGLE_INPUT.read().unwrap();
                                 let update_freq = UPDATE_FREQ_INPUT.read().unwrap().clone();
                                 let mut st = APP_SETTINGS.write().unwrap();
                                 st.temp_dir = std::path::PathBuf::from(temp_val);
@@ -551,6 +564,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                                 st.loading_anim = loading_anim;
                                 st.log_to_file = log_to_file;
                                 st.show_unplayed_badge = show_unplayed_badge;
+                                st.classic_library_toggle = classic_library_toggle;
                                 st.update_check_frequency = update_freq;
                                 // Store language selection
                                 st.language = *LANGUAGE_INPUT.read().unwrap();
@@ -684,6 +698,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                         // Apply log_to_file setting
                         st.log_to_file = *LOG_TO_FILE_INPUT.read().unwrap();
                         st.show_unplayed_badge = *SHOW_UNPLAYED_BADGE_INPUT.read().unwrap();
+                        st.classic_library_toggle = *CLASSIC_LIBRARY_TOGGLE_INPUT.read().unwrap();
                         for (tid, nf, ne) in moved {
                             if let Some(entry) = st.downloaded_games.iter_mut().find(|e| e.thread_id == tid) {
                                 entry.folder = nf;

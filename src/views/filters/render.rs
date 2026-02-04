@@ -241,14 +241,31 @@ pub fn draw_filters_panel(
                 {
                     settings_clicked = true;
                 }
-                // ViewMode segmented tabs
-                let mut view_mode = if *library_only {
-                    ViewMode::Downloaded
+
+                let classic_mode = crate::app::settings::APP_SETTINGS
+                    .read()
+                    .unwrap()
+                    .classic_library_toggle;
+
+                if classic_mode {
+                    let label = if *library_only {
+                        crate::localization::translate("filters-library-button-on")
+                    } else {
+                        crate::localization::translate("filters-library-button")
+                    };
+                    if ui.button(label).clicked() {
+                        *library_only = !*library_only;
+                        changed_now = true;
+                    }
                 } else {
-                    ViewMode::Catalog
-                };
-                if segmented_panel(ui, "view-mode-header", &mut view_mode) {
-                    *library_only = matches!(view_mode, ViewMode::Downloaded);
+                    let mut view_mode = if *library_only {
+                        ViewMode::Downloaded
+                    } else {
+                        ViewMode::Catalog
+                    };
+                    if segmented_panel(ui, "view-mode-header", &mut view_mode) {
+                        *library_only = matches!(view_mode, ViewMode::Downloaded);
+                    }
                 }
             });
         });
