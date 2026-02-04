@@ -39,6 +39,7 @@ url = "2.5"
 async-trait = "0.1"
 
 dotenvy = "0.15"
+directories = "6.0.0"
 
 [profile.release]
 opt-level = "z"
