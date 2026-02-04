@@ -99,6 +99,8 @@ pub struct AppSettings {
     pub last_update_check: Option<i64>,
     #[serde(default)]
     pub show_unplayed_badge: bool,
+    #[serde(default)]
+    pub classic_library_toggle: bool,
 }
 
 impl Default for AppSettings {
@@ -125,6 +127,7 @@ impl Default for AppSettings {
             update_check_frequency: UpdateCheckFrequency::default(),
             last_update_check: None,
             show_unplayed_badge: false,
+            classic_library_toggle: false,
         }
     }
 }
