@@ -1,12 +1,39 @@
 // Settings store: data types, global state, load/save, and records of downloaded games.
 
+use directories::{ProjectDirs, UserDirs};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::path::PathBuf;
 use std::sync::RwLock;
 
+lazy_static! {
+    pub static ref PROJECT_DIRS: Option<ProjectDirs> =
+        ProjectDirs::from("org", "farvend", "F95-Manager");
+}
+
 fn default_cache_dir() -> PathBuf {
-    PathBuf::from("cache")
+    PROJECT_DIRS
+        .as_ref()
+        .map(|dirs| dirs.cache_dir().into())
+        .unwrap_or(PathBuf::from("cache"))
+}
+
+fn default_downloads_dir() -> PathBuf {
+    UserDirs::new()
+        .and_then(|u| u.download_dir().map(|d| d.into()))
+        .unwrap_or(PathBuf::from("downloads"))
+}
+
+fn default_games_dir() -> PathBuf {
+    let mut home: PathBuf = UserDirs::new()
+        .map(|u| u.home_dir().into())
+        .unwrap_or_default();
+
+    #[cfg(target_os = "windows")]
+    home.push("games");
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "ios"))]
+    home.push("Games");
+    home
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,10 +132,14 @@ pub struct AppSettings {
 
 impl Default for AppSettings {
     fn default() -> Self {
+        let temp_dir = default_downloads_dir();
+        let extract_dir = default_games_dir();
+        let cache_dir = default_cache_dir();
+
         Self {
-            temp_dir: PathBuf::from("downloads"),
-            extract_dir: PathBuf::from("games"),
-            cache_dir: PathBuf::from("cache"),
+            temp_dir,
+            extract_dir,
+            cache_dir,
             downloaded_games: Vec::new(),
             pending_downloads: Vec::new(),
             hidden_threads: Vec::new(),
@@ -136,7 +167,7 @@ fn default_log_to_file() -> bool {
     true
 }
 
-//// Serde helpers for language field to keep backward compatibility with older JSONs.
+/// Serde helpers for language field to keep backward compatibility with older JSONs.
 fn deserialize_language_opt<'de, D>(
     deserializer: D,
 ) -> Result<Option<crate::localization::SupportedLang>, D::Error>
