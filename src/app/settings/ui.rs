@@ -129,16 +129,50 @@ pub fn open_settings() {
     *SETTINGS_OPEN.write().unwrap() = true;
 }
 
+fn calc_settings_window_size() -> [f32; 2] {
+    const ROW_HEIGHT: f32 = 26.0;
+    const FIXED_UI_ROWS: f32 = 24.0;
+    const TAG_PICKER_SECTIONS: f32 = 6.0;
+    const PICKER_HEIGHT: f32 = 28.0;
+    const PADDING: f32 = 40.0;
+    const CHIPS_PER_ROW: f32 = 4.0;
+
+    let chip_rows = {
+        let startup_tags = STARTUP_TAGS_INPUT.read().unwrap().len();
+        let startup_exclude_tags = STARTUP_EXCLUDE_TAGS_INPUT.read().unwrap().len();
+        let startup_prefixes = STARTUP_PREFIXES_INPUT.read().unwrap().len();
+        let startup_exclude_prefixes = STARTUP_EXCLUDE_PREFIXES_INPUT.read().unwrap().len();
+        let warn_tags = WARN_TAGS_INPUT.read().unwrap().len();
+        let warn_prefixes = WARN_PREFIXES_INPUT.read().unwrap().len();
+
+        let total_chips = startup_tags
+            + startup_exclude_tags
+            + startup_prefixes
+            + startup_exclude_prefixes
+            + warn_tags
+            + warn_prefixes;
+        (total_chips as f32 / CHIPS_PER_ROW).ceil()
+    };
+
+    let height = FIXED_UI_ROWS * ROW_HEIGHT
+        + TAG_PICKER_SECTIONS * PICKER_HEIGHT
+        + chip_rows * ROW_HEIGHT
+        + PADDING;
+
+    [620.0, height.max(500.0).min(900.0)]
+}
+
 pub fn draw_settings_viewport(ctx: &egui::Context) {
     if !*SETTINGS_OPEN.read().unwrap() {
         return;
     }
+    let size = calc_settings_window_size();
     let viewport_id = egui::ViewportId::from_hash_of("settings_window");
     ctx.show_viewport_immediate(
         viewport_id,
         egui::ViewportBuilder::default()
             .with_title(crate::localization::translate("settings-window-title"))
-            .with_inner_size([640.0, 420.0])
+            .with_inner_size(size)
             .with_resizable(true),
         move |ctx, _class| {
             egui::CentralPanel::default().show(ctx, |ui| {
@@ -516,7 +550,8 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     }
                 });
 
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.add_space(crate::ui_constants::spacing::MEDIUM);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                     if ui.button(crate::localization::translate("settings-save")).clicked() {
                         let temp_val = TEMP_DIR_INPUT.read().unwrap().clone();
                         let extract_val = EXTRACT_DIR_INPUT.read().unwrap().clone();
