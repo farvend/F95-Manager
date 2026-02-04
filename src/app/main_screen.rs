@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use eframe::egui;
 
-use super::{about_ui, errors_ui, logs_ui, settings, update_ui, NoLagApp};
+use super::{NoLagApp, about_ui, errors_ui, logs_ui, settings, update_ui};
 use crate::parser::F95Thread;
 use crate::types::TagLogic;
 use crate::views::filters::draw_filters_panel;

@@ -64,8 +64,7 @@ impl F95Page {
         let selector = scraper::Selector::parse(r#"[style="text-align: center"]"#).unwrap();
         let span_html = &html
             .select(&selector)
-            .filter(|e| e.html().contains("DOWNLOAD"))
-            .next()
+            .find(|e| e.html().contains("DOWNLOAD"))
             .ok_or(GetLinksError::NoDownloadsBlock)?
             .html();
         let span_html = span_html.split_once("DOWNLOAD").unwrap().1;

@@ -114,7 +114,9 @@ impl super::NoLagApp {
                                         .clone()
                                 };
                                 tokio::spawn(async move {
-                                    if let Err(e) = helpers::save_to_cache(&cache_dir, id, &th_clone) {
+                                    if let Err(e) =
+                                        helpers::save_to_cache(&cache_dir, id, &th_clone)
+                                    {
                                         log::warn!("Failed to save cache for thread {}: {}", id, e);
                                     }
                                 });
@@ -280,7 +282,6 @@ impl super::NoLagApp {
         self.spawn_lib_pipeline_sequential_with_req(ctx, req_id, installs, targets, existing_map);
 
         // Do not scan listing pages at all in Library mode
-        return;
     }
 
     /// Start background prefetch of Library data right after app start.
@@ -317,7 +318,7 @@ impl super::NoLagApp {
     pub(super) fn schedule_cover_downloads(&mut self, ctx: &egui::Context) {
         if let Some(msg) = &self.net.last_result {
             for t in &msg.data {
-                let thread_id = t.thread_id.clone();
+                let thread_id = t.thread_id;
                 let id = t.thread_id.get();
 
                 if self.filters.library_only {
@@ -458,11 +459,7 @@ impl super::NoLagApp {
                         image,
                         egui::TextureOptions::default(),
                     );
-                    let entry = self
-                        .images
-                        .screens
-                        .entry(thread_id)
-                        .or_insert_with(|| Vec::new());
+                    let entry = self.images.screens.entry(thread_id).or_default();
                     if entry.len() < idx + 1 {
                         entry.resize_with(idx + 1, || None);
                     }

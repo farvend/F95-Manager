@@ -38,11 +38,7 @@ impl From<&str> for Platform {
         let mut flags = Platform::empty();
 
         // Normalize common delimiters and split into tokens
-        let normalized = lower
-            .replace('\\', "/")
-            .replace(',', "/")
-            .replace('|', "/")
-            .replace('&', "/");
+        let normalized = lower.replace(['\\', ',', '|', '&'], "/");
 
         for token in normalized.split('/') {
             let t = token.trim();

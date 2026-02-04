@@ -107,21 +107,18 @@ async fn check_latest_github() -> Option<(String, String)> {
         .header("Accept", "application/vnd.github+json")
         .send()
         .await
+        && resp.status().is_success()
+        && let Ok(v) = resp.json::<serde_json::Value>().await
+        && let Some(tag) = v.get("tag_name").and_then(|t| t.as_str())
     {
-        if resp.status().is_success() {
-            if let Ok(v) = resp.json::<serde_json::Value>().await {
-                if let Some(tag) = v.get("tag_name").and_then(|t| t.as_str()) {
-                    let url = v
-                        .get("html_url")
-                        .and_then(|t| t.as_str())
-                        .unwrap_or("https://github.com/farvend/F95-Manager/releases")
-                        .to_string();
-                    let ver = normalize_version(tag);
-                    if !ver.is_empty() {
-                        return Some((ver, url));
-                    }
-                }
-            }
+        let url = v
+            .get("html_url")
+            .and_then(|t| t.as_str())
+            .unwrap_or("https://github.com/farvend/F95-Manager/releases")
+            .to_string();
+        let ver = normalize_version(tag);
+        if !ver.is_empty() {
+            return Some((ver, url));
         }
     }
 
@@ -131,21 +128,17 @@ async fn check_latest_github() -> Option<(String, String)> {
         .header("Accept", "application/vnd.github+json")
         .send()
         .await
+        && resp.status().is_success()
+        && let Ok(v) = resp.json::<serde_json::Value>().await
+        && let Some(first) = v.as_array().and_then(|a| a.first())
+        && let Some(name) = first.get("name").and_then(|n| n.as_str())
     {
-        if resp.status().is_success() {
-            if let Ok(v) = resp.json::<serde_json::Value>().await {
-                if let Some(first) = v.as_array().and_then(|a| a.first()) {
-                    if let Some(name) = first.get("name").and_then(|n| n.as_str()) {
-                        let ver = normalize_version(name);
-                        if !ver.is_empty() {
-                            return Some((
-                                ver,
-                                "https://github.com/farvend/F95-Manager/releases".to_string(),
-                            ));
-                        }
-                    }
-                }
-            }
+        let ver = normalize_version(name);
+        if !ver.is_empty() {
+            return Some((
+                ver,
+                "https://github.com/farvend/F95-Manager/releases".to_string(),
+            ));
         }
     }
 

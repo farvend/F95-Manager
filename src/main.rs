@@ -33,7 +33,7 @@ fn main() -> eframe::Result<()> {
     // - renderer: Wgpu (быстрее и даёт контроль над present mode)
     // - vsync: false (меньше задержка, возможен tearing)
     let wgpu_options = WgpuConfiguration {
-        present_mode: eframe::wgpu::PresentMode::AutoNoVsync,
+        present_mode: PresentMode::AutoNoVsync,
         ..Default::default()
     };
     let native_options = eframe::NativeOptions {

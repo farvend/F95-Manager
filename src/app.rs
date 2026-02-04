@@ -67,7 +67,7 @@ impl Default for NoLagApp {
             cache_dir
         };
         log::info!("Using cache directory: {:?}", cache_dir);
-        
+
         let provider = std::sync::Arc::new(library::CachingProvider::new(
             library::NetworkProvider::new(),
             cache_dir,
