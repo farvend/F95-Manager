@@ -17,6 +17,7 @@ settings-save = Save
 settings-cancel = Cancel
 settings-log-to-file = Write logs to file (warn and error)
 settings-show-unplayed-badge = Show unplayed games badge
+settings-classic-library-toggle = Classic library toggle
 
 
 auth-login-title = Login
@@ -50,6 +51,9 @@ filters-select-prefix-include = Select a prefix to filter...
 filters-select-prefix-exclude = Select a prefix to exclude...
 filters-unplayed = Unplayed
 filters-unplayed-on = Unplayed (ON)
+filters-library-button = Downloaded
+filters-library-button-on = Downloaded (ON)
+
 filters-search-placeholder = Search...
 
 # Enum localized names

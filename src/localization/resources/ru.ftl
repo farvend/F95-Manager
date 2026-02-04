@@ -17,6 +17,7 @@ settings-save = Сохранить
 settings-cancel = Отмена
 settings-log-to-file = Писать логи в файл (предупреждения и ошибки)
 settings-show-unplayed-badge = Показывать бейдж не запущенных игр
+settings-classic-library-toggle = Классический вид библиотеки
 
 
 auth-login-title = Вход
@@ -50,6 +51,9 @@ filters-select-prefix-include = Выберите префикс для филь�
 filters-select-prefix-exclude = Выберите префикс для исключения...
 filters-unplayed = Не запущенные
 filters-unplayed-on = Не запущенные (ВКЛ)
+filters-library-button = Скаченные
+filters-library-button-on = Скаченные (ВКЛ)
+
 filters-search-placeholder = Поиск...
 
 # Локализованные имена перечислений
