@@ -293,30 +293,30 @@ pub fn hide_thread(thread_id: u64) {
 
 // Check if a thread is hidden
 pub fn is_thread_hidden(thread_id: u64) -> bool {
-    let st = APP_SETTINGS.read().unwrap();
-    st.hidden_threads.contains(&thread_id)
+    super::with_settings(|st| st.hidden_threads.contains(&thread_id))
 }
 
 pub fn is_pending_download(thread_id: u64) -> bool {
-    let st = APP_SETTINGS.read().unwrap();
-    st.pending_downloads.contains(&thread_id)
+    super::with_settings(|st| st.pending_downloads.contains(&thread_id))
 }
 
 // Return the folder of a downloaded game by thread_id, if present
 pub fn downloaded_game_folder(thread_id: u64) -> Option<PathBuf> {
-    let st = APP_SETTINGS.read().unwrap();
-    st.downloaded_games
-        .iter()
-        .find(|e| e.thread_id == thread_id)
-        .map(|e| e.folder.clone())
+    super::with_settings(|st| {
+        st.downloaded_games
+            .iter()
+            .find(|e| e.thread_id == thread_id)
+            .map(|e| e.folder.clone())
+    })
 }
 
 pub fn downloaded_game_exe(thread_id: u64) -> Option<PathBuf> {
-    let st = APP_SETTINGS.read().unwrap();
-    st.downloaded_games
-        .iter()
-        .find(|e| e.thread_id == thread_id)
-        .and_then(|e| e.exe_path.clone())
+    super::with_settings(|st| {
+        st.downloaded_games
+            .iter()
+            .find(|e| e.thread_id == thread_id)
+            .and_then(|e| e.exe_path.clone())
+    })
 }
 
 // Remove downloaded game files and its record from settings

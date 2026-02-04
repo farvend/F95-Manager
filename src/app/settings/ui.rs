@@ -57,75 +57,76 @@ pub enum SettingsMsg {
 }
 
 pub fn open_settings() {
-    let s = APP_SETTINGS.read().unwrap();
-    {
-        let mut tmp = TEMP_DIR_INPUT.write().unwrap();
-        *tmp = s.temp_dir.to_string_lossy().to_string();
-    }
-    {
-        let mut ext = EXTRACT_DIR_INPUT.write().unwrap();
-        *ext = s.extract_dir.to_string_lossy().to_string();
-    }
-    {
-        let mut cd = CACHE_DIR_INPUT.write().unwrap();
-        *cd = s.cache_dir.to_string_lossy().to_string();
-    }
-    {
-        let mut cl = CUSTOM_LAUNCH_INPUT.write().unwrap();
-        *cl = s.custom_launch.clone();
-    }
-    {
-        let mut b = CACHE_ON_DOWNLOAD_INPUT.write().unwrap();
-        *b = s.cache_on_download;
-    }
-    {
-        let mut v = WARN_TAGS_INPUT.write().unwrap();
-        *v = s.warn_tags.clone();
-    }
-    {
-        let mut v = WARN_PREFIXES_INPUT.write().unwrap();
-        *v = s.warn_prefixes.clone();
-    }
-    {
-        let mut v = STARTUP_TAGS_INPUT.write().unwrap();
-        *v = s.startup_tags.clone();
-    }
-    {
-        let mut v = STARTUP_EXCLUDE_TAGS_INPUT.write().unwrap();
-        *v = s.startup_exclude_tags.clone();
-    }
-    {
-        let mut v = STARTUP_PREFIXES_INPUT.write().unwrap();
-        *v = s.startup_prefixes.clone();
-    }
-    {
-        let mut v = STARTUP_EXCLUDE_PREFIXES_INPUT.write().unwrap();
-        *v = s.startup_exclude_prefixes.clone();
-    }
-    {
-        let mut l = LANGUAGE_INPUT.write().unwrap();
-        *l = s.language;
-    }
-    {
-        let mut a = LOADING_ANIM_INPUT.write().unwrap();
-        *a = s.loading_anim;
-    }
-    {
-        let mut b = LOG_TO_FILE_INPUT.write().unwrap();
-        *b = s.log_to_file;
-    }
-    {
-        let mut f = UPDATE_FREQ_INPUT.write().unwrap();
-        *f = s.update_check_frequency.clone();
-    }
-    {
-        let mut b = SHOW_UNPLAYED_BADGE_INPUT.write().unwrap();
-        *b = s.show_unplayed_badge;
-    }
-    {
-        let mut b = CLASSIC_LIBRARY_TOGGLE_INPUT.write().unwrap();
-        *b = s.classic_library_toggle;
-    }
+    super::with_settings(|s| {
+        {
+            let mut tmp = TEMP_DIR_INPUT.write().unwrap();
+            *tmp = s.temp_dir.to_string_lossy().to_string();
+        }
+        {
+            let mut ext = EXTRACT_DIR_INPUT.write().unwrap();
+            *ext = s.extract_dir.to_string_lossy().to_string();
+        }
+        {
+            let mut cd = CACHE_DIR_INPUT.write().unwrap();
+            *cd = s.cache_dir.to_string_lossy().to_string();
+        }
+        {
+            let mut cl = CUSTOM_LAUNCH_INPUT.write().unwrap();
+            *cl = s.custom_launch.clone();
+        }
+        {
+            let mut b = CACHE_ON_DOWNLOAD_INPUT.write().unwrap();
+            *b = s.cache_on_download;
+        }
+        {
+            let mut v = WARN_TAGS_INPUT.write().unwrap();
+            *v = s.warn_tags.clone();
+        }
+        {
+            let mut v = WARN_PREFIXES_INPUT.write().unwrap();
+            *v = s.warn_prefixes.clone();
+        }
+        {
+            let mut v = STARTUP_TAGS_INPUT.write().unwrap();
+            *v = s.startup_tags.clone();
+        }
+        {
+            let mut v = STARTUP_EXCLUDE_TAGS_INPUT.write().unwrap();
+            *v = s.startup_exclude_tags.clone();
+        }
+        {
+            let mut v = STARTUP_PREFIXES_INPUT.write().unwrap();
+            *v = s.startup_prefixes.clone();
+        }
+        {
+            let mut v = STARTUP_EXCLUDE_PREFIXES_INPUT.write().unwrap();
+            *v = s.startup_exclude_prefixes.clone();
+        }
+        {
+            let mut l = LANGUAGE_INPUT.write().unwrap();
+            *l = s.language;
+        }
+        {
+            let mut a = LOADING_ANIM_INPUT.write().unwrap();
+            *a = s.loading_anim;
+        }
+        {
+            let mut b = LOG_TO_FILE_INPUT.write().unwrap();
+            *b = s.log_to_file;
+        }
+        {
+            let mut f = UPDATE_FREQ_INPUT.write().unwrap();
+            *f = s.update_check_frequency.clone();
+        }
+        {
+            let mut b = SHOW_UNPLAYED_BADGE_INPUT.write().unwrap();
+            *b = s.show_unplayed_badge;
+        }
+        {
+            let mut b = CLASSIC_LIBRARY_TOGGLE_INPUT.write().unwrap();
+            *b = s.classic_library_toggle;
+        }
+    });
     *SETTINGS_OPEN.write().unwrap() = true;
 }
 
@@ -556,10 +557,9 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                         let temp_val = TEMP_DIR_INPUT.read().unwrap().clone();
                         let extract_val = EXTRACT_DIR_INPUT.read().unwrap().clone();
                         // Check if extract-dir changed and if there are installed games
-                        let (old_extract, has_installed) = {
-                            let st = APP_SETTINGS.read().unwrap();
+                        let (old_extract, has_installed) = super::with_settings(|st| {
                             (st.extract_dir.clone(), !st.downloaded_games.is_empty())
-                        };
+                        });
                         let new_extract_pb = std::path::PathBuf::from(extract_val.clone());
                         if has_installed && new_extract_pb != old_extract {
                             // Ask for confirmation and stash pending values
@@ -606,7 +606,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                             } // drop write lock before saving to avoid deadlock
                             // Apply language immediately
                             {
-                                let lang_opt = APP_SETTINGS.read().unwrap().language;
+                                let lang_opt = super::with_settings(|s| s.language);
                                 if let Some(lang) = lang_opt {
                                     let _ = crate::localization::set_current_language(lang);
                                 } else {
@@ -615,7 +615,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                             }
                             // Apply logger toggle immediately
                             {
-                                let enabled = APP_SETTINGS.read().unwrap().log_to_file;
+                                let enabled = super::with_settings(|s| s.log_to_file);
                                 crate::logger::set_file_logging_enabled(enabled);
                             }
                             save_settings_to_disk();
@@ -645,13 +645,13 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                                         let new_extract = std::path::PathBuf::from(&new_extract_str);
 
                                         // Clone entries to move without holding the lock during IO
-                                        let entries: Vec<(u64, std::path::PathBuf, Option<std::path::PathBuf>)> = {
-                                            let st = APP_SETTINGS.read().unwrap();
-                                            st.downloaded_games
-                                                .iter()
-                                                .map(|e| (e.thread_id, e.folder.clone(), e.exe_path.clone()))
-                                                .collect()
-                                        };
+                                        let entries: Vec<(u64, std::path::PathBuf, Option<std::path::PathBuf>)> =
+                                            super::with_settings(|st| {
+                                                st.downloaded_games
+                                                    .iter()
+                                                    .map(|e| (e.thread_id, e.folder.clone(), e.exe_path.clone()))
+                                                    .collect()
+                                            });
 
                                         // Start background migration thread
                                         {
@@ -745,7 +745,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     }
                     // Apply language immediately
                     {
-                        let lang_opt = APP_SETTINGS.read().unwrap().language;
+                        let lang_opt = super::with_settings(|s| s.language);
                         if let Some(lang) = lang_opt {
                             let _ = crate::localization::set_current_language(lang);
                         } else {
@@ -754,7 +754,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     }
                     // Apply logger toggle immediately
                     {
-                        let enabled = APP_SETTINGS.read().unwrap().log_to_file;
+                        let enabled = super::with_settings(|s| s.log_to_file);
                         crate::logger::set_file_logging_enabled(enabled);
                     }
                     save_settings_to_disk();

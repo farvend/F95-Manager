@@ -17,18 +17,18 @@ pub fn get_cover_or_first_screen_url(t: &F95Thread) -> Option<String> {
 
 /// Collect installed games (thread_id, folder) from settings, filtering non-existing folders.
 pub fn collect_installs() -> Vec<(u64, PathBuf)> {
-    let st = crate::app::settings::APP_SETTINGS.read().unwrap();
-    st.downloaded_games
-        .iter()
-        .filter(|g| crate::app::settings::game_folder_exists(&g.folder))
-        .map(|g| (g.thread_id, g.folder.clone()))
-        .collect()
+    crate::app::settings::with_settings(|st| {
+        st.downloaded_games
+            .iter()
+            .filter(|g| crate::app::settings::game_folder_exists(&g.folder))
+            .map(|g| (g.thread_id, g.folder.clone()))
+            .collect()
+    })
 }
 
 /// Collect persisted pending downloads.
 pub fn collect_pending_ids() -> Vec<u64> {
-    let st = crate::app::settings::APP_SETTINGS.read().unwrap();
-    st.pending_downloads.clone()
+    crate::app::settings::with_settings(|st| st.pending_downloads.clone())
 }
 
 /// Build unique list of target thread IDs: installed + downloading + pending.
@@ -110,13 +110,7 @@ pub fn fill_threads_from_targets(
     existing_map: &HashMap<u64, crate::parser::F95Thread>,
     install_map: &HashMap<u64, PathBuf>,
 ) -> Vec<crate::parser::F95Thread> {
-    let cache_dir = {
-        crate::app::settings::APP_SETTINGS
-            .read()
-            .unwrap()
-            .cache_dir
-            .clone()
-    };
+    let cache_dir = crate::app::settings::with_settings(|st| st.cache_dir.clone());
 
     let mut out = Vec::with_capacity(targets.len());
     for id in targets {
