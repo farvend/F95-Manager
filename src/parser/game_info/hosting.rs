@@ -133,9 +133,7 @@ pub enum HostingSubsetError {
 impl TryFrom<Url> for HostingSubset {
     type Error = HostingSubsetError;
     fn try_from(value: Url) -> Result<Self, Self::Error> {
-        let hosting: Hosting = value
-            .try_into()
-            .map_err(HostingSubsetError::HostingError)?;
+        let hosting: Hosting = value.try_into().map_err(HostingSubsetError::HostingError)?;
         hosting
             .try_into()
             .map_err(|_| HostingSubsetError::UnsopportedHosting)

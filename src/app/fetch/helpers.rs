@@ -1,5 +1,5 @@
-use crate::parser::game_info::ThreadId;
 use crate::parser::F95Thread;
+use crate::parser::game_info::ThreadId;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -259,8 +259,7 @@ pub fn save_to_cache(cache_dir: &Path, thread_id: u64, thread: &F95Thread) -> st
     };
 
     // Serialize to JSON
-    let json = serde_json::to_string_pretty(&cached)
-        .map_err(std::io::Error::other)?;
+    let json = serde_json::to_string_pretty(&cached).map_err(std::io::Error::other)?;
 
     // Write to file
     let path = cache_meta_path(cache_dir, thread_id);

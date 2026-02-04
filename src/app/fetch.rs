@@ -114,7 +114,9 @@ impl super::NoLagApp {
                                         .clone()
                                 };
                                 tokio::spawn(async move {
-                                    if let Err(e) = helpers::save_to_cache(&cache_dir, id, &th_clone) {
+                                    if let Err(e) =
+                                        helpers::save_to_cache(&cache_dir, id, &th_clone)
+                                    {
                                         log::warn!("Failed to save cache for thread {}: {}", id, e);
                                     }
                                 });
@@ -457,11 +459,7 @@ impl super::NoLagApp {
                         image,
                         egui::TextureOptions::default(),
                     );
-                    let entry = self
-                        .images
-                        .screens
-                        .entry(thread_id)
-                        .or_default();
+                    let entry = self.images.screens.entry(thread_id).or_default();
                     if entry.len() < idx + 1 {
                         entry.resize_with(idx + 1, || None);
                     }
