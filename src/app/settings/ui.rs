@@ -5,7 +5,6 @@ use lazy_static::lazy_static;
 use std::path::PathBuf;
 use std::sync::{RwLock, mpsc};
 
-use super::helpers::move_directory;
 use super::migrate;
 use super::store::{APP_SETTINGS, save_settings_to_disk};
 use crate::views::filters::items::{prefixes_menu::prefixes_picker, tags_menu::tags_picker};

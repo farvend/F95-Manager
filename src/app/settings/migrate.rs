@@ -48,15 +48,15 @@ pub fn migrate_installed_games(
         };
 
         // Ensure parent exists
-        if let Some(parent) = new_folder.parent() {
-            if let Err(e) = std::fs::create_dir_all(parent) {
-                log::error!(
-                    "Failed to create parent {}: {}",
-                    parent.to_string_lossy(),
-                    e
-                );
-                continue;
-            }
+        if let Some(parent) = new_folder.parent()
+            && let Err(e) = std::fs::create_dir_all(parent)
+        {
+            log::error!(
+                "Failed to create parent {}: {}",
+                parent.to_string_lossy(),
+                e
+            );
+            continue;
         }
 
         // If destination exists, pick a non-colliding name by appending _movedN

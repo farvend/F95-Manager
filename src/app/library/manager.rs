@@ -182,7 +182,7 @@ impl LibraryCardManager {
                         image,
                         egui::TextureOptions::default(),
                     );
-                    let entry = self.screens.entry(thread_id).or_insert_with(Vec::new);
+                    let entry = self.screens.entry(thread_id).or_default();
                     if entry.len() <= idx {
                         entry.resize_with(idx + 1, || None);
                     }

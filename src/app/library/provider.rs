@@ -746,7 +746,7 @@ mod tests {
             println!("Reading cover file...");
             let bytes = fs.read(&cover_path).await.expect("Should read cover file");
             println!("Read {} bytes", bytes.len());
-            assert!(bytes.len() > 0, "Cover file should not be empty");
+            assert!(!bytes.is_empty(), "Cover file should not be empty");
             
             // Test 4: Try to decode the image
             println!("Decoding image...");

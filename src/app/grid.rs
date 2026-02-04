@@ -69,7 +69,7 @@ impl super::NoLagApp {
                 let link_choices = self
                     .downloads
                     .get(&id)
-                    .and_then(|s| s.link_choices.as_ref().map(|v| v.as_slice()));
+                    .and_then(|s| s.link_choices.as_deref());
                 thread_card(ui, t, card_w, cover, screens_slice, progress, link_choices)
             } else {
                 let cover = self.images.covers.get(&id);
@@ -78,7 +78,7 @@ impl super::NoLagApp {
                 let link_choices = self
                     .downloads
                     .get(&id)
-                    .and_then(|s| s.link_choices.as_ref().map(|v| v.as_slice()));
+                    .and_then(|s| s.link_choices.as_deref());
                 thread_card(ui, t, card_w, cover, screens_slice, progress, link_choices)
             };
 
@@ -129,19 +129,19 @@ impl super::NoLagApp {
                             .screens
                             .entry(id)
                             .or_insert_with(|| vec![None; t.screens.len()]);
-                        if idx < entry.len() && entry[idx].is_none() {
-                            if let Some(url) = t.screens.get(idx) {
-                                if !url.is_empty() {
-                                    maybe_url = Some(crate::parser::normalize_url(url));
-                                }
-                            }
+                        if idx < entry.len()
+                            && entry[idx].is_none()
+                            && let Some(url) = t.screens.get(idx)
+                            && !url.is_empty()
+                        {
+                            maybe_url = Some(crate::parser::normalize_url(url));
                         }
                     }
-                    if let Some(url) = maybe_url {
-                        if !self.images.screens_loading.contains(&(id, idx)) {
-                            self.images.screens_loading.insert((id, idx));
-                            self.spawn_screen_download(ctx, id, idx, url);
-                        }
+                    if let Some(url) = maybe_url
+                        && !self.images.screens_loading.contains(&(id, idx))
+                    {
+                        self.images.screens_loading.insert((id, idx));
+                        self.spawn_screen_download(ctx, id, idx, url);
                     }
                 }
             }
@@ -194,15 +194,15 @@ impl super::NoLagApp {
             if hover.refresh_clicked {
                 let thread_id = id;
                 let ctx_clone = ctx.clone();
-                
+
                 log::info!("Refresh button clicked for thread {}", thread_id);
-                
+
                 super::rt().spawn(async move {
                     match crate::parser::game_info::thread_meta::fetch_thread_meta(thread_id).await
                     {
                         Ok(meta) => {
                             log::info!("Refresh: fetched metadata for thread {}", thread_id);
-                            
+
                             let cache_dir = {
                                 crate::app::settings::APP_SETTINGS
                                     .read()
@@ -210,7 +210,7 @@ impl super::NoLagApp {
                                     .cache_dir
                                     .clone()
                             };
-                            
+
                             let thread = crate::parser::F95Thread {
                                 thread_id: crate::parser::game_info::ThreadId(thread_id),
                                 title: meta.title,
@@ -229,16 +229,22 @@ impl super::NoLagApp {
                                 is_new: false,
                                 ts: 0,
                             };
-                            
-                            match super::fetch::helpers::save_to_cache(&cache_dir, thread_id, &thread) {
+
+                            match super::fetch::helpers::save_to_cache(
+                                &cache_dir, thread_id, &thread,
+                            ) {
                                 Ok(_) => {
                                     log::info!("Refresh: saved cache for thread {}", thread_id);
-                                },
+                                }
                                 Err(e) => {
-                                    log::warn!("Failed to save refreshed cache for {}: {}", thread_id, e);
+                                    log::warn!(
+                                        "Failed to save refreshed cache for {}: {}",
+                                        thread_id,
+                                        e
+                                    );
                                 }
                             }
-                            
+
                             ctx_clone.request_repaint();
                         }
                         Err(e) => {
@@ -246,7 +252,7 @@ impl super::NoLagApp {
                         }
                     }
                 });
-                
+
                 self.refresh_prefetch_library(ctx);
             }
         });
@@ -271,7 +277,7 @@ impl super::NoLagApp {
             return;
         }
         let cols = cols.max(1);
-        let total_rows = (total_items + cols - 1) / cols;
+        let total_rows = total_items.div_ceil(cols);
 
         // Compute stable card height based on our fixed layout in thread_card().
         // Layout breakdown:

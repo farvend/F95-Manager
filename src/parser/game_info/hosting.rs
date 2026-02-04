@@ -117,7 +117,9 @@ impl TryFrom<Url> for Hosting {
             .to_string();
 
         let mut name = sec;
-        name.get_mut(0..1).map(|s| s.make_ascii_uppercase());
+        if let Some(s) = name.get_mut(0..1) {
+            s.make_ascii_uppercase()
+        }
         name.parse().map_err(|_| HostingError::UnknownDomain)
     }
 }
@@ -133,7 +135,7 @@ impl TryFrom<Url> for HostingSubset {
     fn try_from(value: Url) -> Result<Self, Self::Error> {
         let hosting: Hosting = value
             .try_into()
-            .map_err(|e| HostingSubsetError::HostingError(e))?;
+            .map_err(HostingSubsetError::HostingError)?;
         hosting
             .try_into()
             .map_err(|_| HostingSubsetError::UnsopportedHosting)

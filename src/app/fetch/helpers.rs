@@ -260,7 +260,7 @@ pub fn save_to_cache(cache_dir: &Path, thread_id: u64, thread: &F95Thread) -> st
 
     // Serialize to JSON
     let json = serde_json::to_string_pretty(&cached)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        .map_err(std::io::Error::other)?;
 
     // Write to file
     let path = cache_meta_path(cache_dir, thread_id);

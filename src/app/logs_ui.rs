@@ -67,16 +67,14 @@ pub fn draw_logs_viewport(ctx: &egui::Context) {
                     }
                     // Autoscroll toggle
                     let mut autoscroll = AUTOSCROLL.read().map(|g| *g).unwrap_or(true);
-                    if ui
+                    let checkbox_changed = ui
                         .checkbox(
                             &mut autoscroll,
                             crate::localization::translate("logs-autoscroll"),
                         )
-                        .changed()
-                    {
-                        if let Ok(mut w) = AUTOSCROLL.write() {
-                            *w = autoscroll;
-                        }
+                        .changed();
+                    if checkbox_changed && let Ok(mut w) = AUTOSCROLL.write() {
+                        *w = autoscroll;
                     }
                     ui.separator();
                     ui.label(crate::localization::translate_with(

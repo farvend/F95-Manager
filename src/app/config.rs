@@ -33,8 +33,7 @@ impl AppConfig {
     }
 
     pub fn save_to_file(&self, path: &std::path::Path) -> std::io::Result<()> {
-        let data = serde_json::to_string_pretty(self)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let data = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
         std::fs::write(path, data)
     }
 }
@@ -130,13 +129,13 @@ pub async fn login_and_store(login: String, password: String) -> Result<(), Stri
     for val in headers.get_all(reqwest::header::SET_COOKIE).iter() {
         let Ok(s) = val.to_str() else { continue };
         // Take first part "name=value" before attributes
-        if let Some(first) = s.split(';').next() {
-            if let Some((name, value)) = first.split_once('=') {
-                let name = name.trim();
-                let value = value.trim();
-                if !name.is_empty() && !value.is_empty() {
-                    cookie_map.insert(name.to_string(), value.to_string());
-                }
+        if let Some(first) = s.split(';').next()
+            && let Some((name, value)) = first.split_once('=')
+        {
+            let name = name.trim();
+            let value = value.trim();
+            if !name.is_empty() && !value.is_empty() {
+                cookie_map.insert(name.to_string(), value.to_string());
             }
         }
     }
@@ -170,6 +169,31 @@ pub async fn login_and_store(login: String, password: String) -> Result<(), Stri
     }
     save_config_to_disk();
     Ok(())
+}
+
+/// Залогиниться, взяв логин/пароль из .env/переменных окружения (F95_LOGIN, F95_PASSWORD)
+pub async fn login_from_env_and_store() -> Result<(), String> {
+    // Загружаем .env, если есть
+    let _ = dotenvy::dotenv();
+    let login = match std::env::var("F95_LOGIN") {
+        Ok(v) => v,
+        Err(_) => {
+            log::warn!(
+                "Переменная окружения F95_LOGIN не задана. Укажите её в .env или окружении."
+            );
+            return Err("F95_LOGIN not set".to_string());
+        }
+    };
+    let password = match std::env::var("F95_PASSWORD") {
+        Ok(v) => v,
+        Err(_) => {
+            log::warn!(
+                "Переменная окружения F95_PASSWORD не задана. Укажите её в .env или окружении."
+            );
+            return Err("F95_PASSWORD not set".to_string());
+        }
+    };
+    login_and_store(login, password).await
 }
 
 #[cfg(test)]
@@ -210,29 +234,4 @@ mod tests {
         // Cleanup
         let _ = std::fs::remove_file(cfg_path);
     }
-}
-
-/// Залогиниться, взяв логин/пароль из .env/переменных окружения (F95_LOGIN, F95_PASSWORD)
-pub async fn login_from_env_and_store() -> Result<(), String> {
-    // Загружаем .env, если есть
-    let _ = dotenvy::dotenv();
-    let login = match std::env::var("F95_LOGIN") {
-        Ok(v) => v,
-        Err(_) => {
-            log::warn!(
-                "Переменная окружения F95_LOGIN не задана. Укажите её в .env или окружении."
-            );
-            return Err("F95_LOGIN not set".to_string());
-        }
-    };
-    let password = match std::env::var("F95_PASSWORD") {
-        Ok(v) => v,
-        Err(_) => {
-            log::warn!(
-                "Переменная окружения F95_PASSWORD не задана. Укажите её в .env или окружении."
-            );
-            return Err("F95_PASSWORD not set".to_string());
-        }
-    };
-    login_and_store(login, password).await
 }
