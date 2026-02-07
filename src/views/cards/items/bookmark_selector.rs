@@ -15,7 +15,7 @@ pub fn draw_bookmark_selector_popup(ui: &mut egui::Ui, thread_id: u64, card_rect
         return;
     }
 
-    let popup_width = 220.0;
+    let popup_width = 200.0;
     let popup_pos = egui::pos2(
         card_rect.left(),
         card_rect.bottom() + crate::ui_constants::spacing::SMALL,
@@ -29,6 +29,7 @@ pub fn draw_bookmark_selector_popup(ui: &mut egui::Ui, thread_id: u64, card_rect
         Color32::from_gray(80),
         Rounding::same(crate::ui_constants::card::ROUNDING),
         |ui| {
+            ui.set_max_width(popup_width - 16.0);
             ui.vertical(|ui| {
                 ui.add_space(crate::ui_constants::spacing::SMALL);
                 ui.horizontal(|ui| {
@@ -87,26 +88,42 @@ pub fn draw_bookmark_selector_popup(ui: &mut egui::Ui, thread_id: u64, card_rect
                     .collect();
 
                 if !available_bookmarks.is_empty() {
-                    let pick = crate::views::filters::items::picker::dropdown_picker(
-                        ui,
-                        &thread_id.to_string(),
-                        &crate::localization::translate("bookmarks-selector-add-placeholder"),
-                        "bookmark_add_picker",
-                        |q| {
-                            available_bookmarks
-                                .iter()
-                                .filter(|b| b.label.to_lowercase().contains(&q.to_lowercase()))
-                                .enumerate()
-                                .map(|(idx, b)| (idx as u32, format!("{} {}", b.emoji, b.label)))
-                                .collect()
-                        },
-                    );
+                    ui.horizontal(|ui| {
+                        ui.add_space(crate::ui_constants::spacing::MEDIUM);
+                        ui.label(crate::localization::translate(
+                            "bookmarks-selector-add-placeholder",
+                        ));
+                    });
+                    ui.add_space(crate::ui_constants::spacing::SMALL);
 
-                    if let Some(idx) = pick {
-                        if let Some(b) = available_bookmarks.get(idx as usize) {
-                            add_bookmark_to_game(thread_id, &b.id);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.add_space(crate::ui_constants::spacing::MEDIUM);
+                        for bookmark in &available_bookmarks {
+                            let bg_color = bookmark
+                                .color
+                                .map(|[r, g, b]| Color32::from_rgb(r, g, b))
+                                .unwrap_or(Color32::from_gray(60));
+
+                            let (rect, resp) =
+                                ui.allocate_exact_size(Vec2::splat(24.0), egui::Sense::click());
+
+                            ui.painter()
+                                .rect_filled(rect, Rounding::same(4.0), bg_color);
+                            ui.painter().text(
+                                rect.center(),
+                                egui::Align2::CENTER_CENTER,
+                                &bookmark.emoji,
+                                egui::FontId::proportional(14.0),
+                                Color32::WHITE,
+                            );
+
+                            if resp.clicked() {
+                                add_bookmark_to_game(thread_id, &bookmark.id);
+                            }
+
+                            resp.on_hover_text(&bookmark.label);
                         }
-                    }
+                    });
                     ui.add_space(crate::ui_constants::spacing::SMALL);
                 }
 
@@ -143,11 +160,13 @@ pub fn draw_bookmark_selector_popup(ui: &mut egui::Ui, thread_id: u64, card_rect
                                     ))
                                     .desired_width(30.0),
                             );
-                            ui.add(egui::TextEdit::singleline(&mut label).hint_text(
-                                crate::localization::translate(
-                                    "bookmarks-selector-label-placeholder",
-                                ),
-                            ));
+                            ui.add(
+                                egui::TextEdit::singleline(&mut label)
+                                    .hint_text(crate::localization::translate(
+                                        "bookmarks-selector-label-placeholder",
+                                    ))
+                                    .desired_width(100.0),
+                            );
                         });
 
                         // Simple color palette
