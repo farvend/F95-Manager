@@ -102,7 +102,30 @@ fn apply_library_filters(app: &NoLagApp, display_data: &mut Vec<F95Thread>) {
     let q = app.filters.query.to_lowercase();
     let use_query = !q.trim().is_empty();
 
+    // Get bookmark mappings for filtering
+    let game_bookmark_ids = crate::app::settings::with_settings(|st| {
+        st.downloaded_games
+            .iter()
+            .map(|g| (g.thread_id, g.bookmark_ids.clone()))
+            .collect::<std::collections::HashMap<u64, Vec<String>>>()
+    });
+
     display_data.retain(|t| {
+        // Bookmark filter (OR logic)
+        if !app.filters.filter_bookmarks.is_empty() {
+            let thread_id = t.thread_id.get();
+            let game_bmarks = game_bookmark_ids.get(&thread_id);
+            let has_match = match game_bmarks {
+                Some(bids) => bids
+                    .iter()
+                    .any(|bid| app.filters.filter_bookmarks.contains(bid)),
+                None => false,
+            };
+            if !has_match {
+                return false;
+            }
+        }
+
         // Query filter
         if use_query {
             let hay = t.title.to_lowercase();
@@ -283,13 +306,14 @@ struct FiltersPanelResult {
     open_settings: bool,
     open_logs: bool,
     open_about: bool,
+    open_bookmarks: bool,
     prev_query: String,
 }
 
 /// Draw filters panel and return interaction results
 fn draw_filters(app: &mut NoLagApp, ctx: &egui::Context) -> FiltersPanelResult {
     let prev_query = app.filters.query.clone();
-    let (apply, open_settings, open_logs, open_about) = draw_filters_panel(
+    let (apply, open_settings, open_logs, open_about, open_bookmarks) = draw_filters_panel(
         ctx,
         &mut app.filters.sort,
         &mut app.filters.date_limit,
@@ -301,6 +325,7 @@ fn draw_filters(app: &mut NoLagApp, ctx: &egui::Context) -> FiltersPanelResult {
         &mut app.filters.exclude_prefixes,
         &mut app.filters.search_mode,
         &mut app.filters.query,
+        &mut app.filters.filter_bookmarks,
         &mut app.filters.library_only,
         &mut app.filters.unplayed_only,
     );
@@ -309,6 +334,7 @@ fn draw_filters(app: &mut NoLagApp, ctx: &egui::Context) -> FiltersPanelResult {
         open_settings,
         open_logs,
         open_about,
+        open_bookmarks,
         prev_query,
     }
 }
@@ -358,6 +384,10 @@ fn handle_panel_buttons(ctx: &egui::Context, result: &FiltersPanelResult) {
     }
     if result.open_about {
         about_ui::open_about();
+        ctx.request_repaint();
+    }
+    if result.open_bookmarks {
+        crate::views::bookmarks_management::open_bookmarks_management();
         ctx.request_repaint();
     }
 }
@@ -452,6 +482,7 @@ fn draw_overlays_and_viewports(ctx: &egui::Context) {
     logs_ui::draw_logs_viewport(ctx);
     about_ui::draw_about_viewport(ctx);
     settings::draw_settings_viewport(ctx);
+    crate::views::bookmarks_management::draw_bookmarks_management_viewport(ctx);
 }
 
 pub(super) fn update_main(app: &mut NoLagApp, ctx: &egui::Context) {
@@ -476,9 +507,17 @@ pub(super) fn update_main(app: &mut NoLagApp, ctx: &egui::Context) {
     // 6. Handle panel buttons
     handle_panel_buttons(ctx, &result);
 
-    // 7. Auto-save tags if filters changed
+    // 7. Auto-save tags/bookmarks if filters changed
     if result.apply {
         autosave_selected_tags(app);
+
+        // Also save bookmarks filter
+        crate::app::settings::with_settings_mut(|st| {
+            if st.filter_bookmarks != app.filters.filter_bookmarks {
+                st.filter_bookmarks = app.filters.filter_bookmarks.clone();
+                crate::app::settings::save_settings_to_disk();
+            }
+        });
     }
 
     // 8. Handle library mode toggle

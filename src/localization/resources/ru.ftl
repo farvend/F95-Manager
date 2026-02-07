@@ -19,6 +19,11 @@ settings-log-to-file = Писать логи в файл (предупрежде
 settings-show-unplayed-badge = Показывать бейдж не запущенных игр
 settings-classic-library-toggle = Классический вид библиотеки
 
+settings-bookmarks-header = Закладки
+settings-bookmarks-mgmt-btn = Управление закладками...
+settings-bookmarks-visible-limit = Кол-во закладок на обложке:
+settings-bookmarks-default-color = Цвет закладок по умолчанию:
+
 
 auth-login-title = Вход
 auth-username = Имя пользователя:
@@ -49,6 +54,9 @@ filters-select-tag-include = Выберите тег для фильтра...
 filters-select-tag-exclude = Выберите тег для исключения...
 filters-select-prefix-include = Выберите префикс для фильтра...
 filters-select-prefix-exclude = Выберите префикс для исключения...
+
+filters-bookmarks-header = МОИ ЗАКЛАДКИ
+filters-select-bookmark = Выберите закладку...
 filters-unplayed = Не запущенные
 filters-unplayed-on = Не запущенные (ВКЛ)
 filters-library-button = Скаченные
@@ -87,6 +95,8 @@ search-mode-title = НАЗВАНИЕ
 common-logs = Логи
 common-about = О программе
 common-settings = Настройки
+common-bookmarks = Закладки
+
 
 # Доп. строки настроек
 settings-startup-tags = Теги автозапуска (добавляются при старте):
@@ -136,4 +146,14 @@ bookmarks-selector-emoji-placeholder = 🔖
 bookmarks-selector-label-placeholder = Название
 bookmarks-selector-create-btn = Создать
 bookmarks-selector-cancel-btn = Отмена
+
+bookmarks-mgmt-title = Управление закладками
+bookmarks-mgmt-add-btn = + Добавить закладку
+bookmarks-mgmt-edit-btn = Редактировать
+bookmarks-mgmt-delete-btn = Удалить
+bookmarks-mgmt-delete-confirm = Вы уверены, что хотите удалить эту закладку? Она будет удалена у всех игр.
+bookmarks-mgmt-save-btn = Сохранить
+bookmarks-mgmt-default-color = Цвет закладок по умолчанию:
+bookmarks-mgmt-visible-limit = Кол-во закладок на обложке:
+bookmarks-mgmt-no-bookmarks = Закладок пока нет.
 

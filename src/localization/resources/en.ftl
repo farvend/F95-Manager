@@ -19,6 +19,11 @@ settings-log-to-file = Write logs to file (warn and error)
 settings-show-unplayed-badge = Show unplayed games badge
 settings-classic-library-toggle = Classic library toggle
 
+settings-bookmarks-header = Bookmarks
+settings-bookmarks-mgmt-btn = Manage Bookmarks...
+settings-bookmarks-visible-limit = Bookmarks visible on cover:
+settings-bookmarks-default-color = Default bookmark color:
+
 
 auth-login-title = Login
 auth-username = Username:
@@ -49,6 +54,9 @@ filters-select-tag-include = Select a tag to filter...
 filters-select-tag-exclude = Select a tag to exclude...
 filters-select-prefix-include = Select a prefix to filter...
 filters-select-prefix-exclude = Select a prefix to exclude...
+
+filters-bookmarks-header = MY BOOKMARKS
+filters-select-bookmark = Select bookmark...
 filters-unplayed = Unplayed
 filters-unplayed-on = Unplayed (ON)
 filters-library-button = Downloaded
@@ -87,6 +95,8 @@ search-mode-title = TITLE
 common-logs = Logs
 common-about = About
 common-settings = Settings
+common-bookmarks = Bookmarks
+
 
 # Settings extra
 settings-startup-tags = Startup tags (added on app start):
@@ -136,4 +146,14 @@ bookmarks-selector-emoji-placeholder = 🔖
 bookmarks-selector-label-placeholder = Label
 bookmarks-selector-create-btn = Create
 bookmarks-selector-cancel-btn = Cancel
+
+bookmarks-mgmt-title = Manage Bookmarks
+bookmarks-mgmt-add-btn = + Add Bookmark
+bookmarks-mgmt-edit-btn = Edit
+bookmarks-mgmt-delete-btn = Delete
+bookmarks-mgmt-delete-confirm = Are you sure you want to delete this bookmark? It will be removed from all games.
+bookmarks-mgmt-save-btn = Save
+bookmarks-mgmt-default-color = Default bookmark color:
+bookmarks-mgmt-visible-limit = Bookmarks visible on cover:
+bookmarks-mgmt-no-bookmarks = No bookmarks created yet.
 
