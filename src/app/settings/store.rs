@@ -10,6 +10,22 @@ fn default_cache_dir() -> PathBuf {
     PathBuf::from("cache")
 }
 
+fn default_bookmark_color() -> [u8; 3] {
+    [60, 120, 200]
+}
+
+fn default_bookmarks_visible() -> u8 {
+    3
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Bookmark {
+    pub id: String,
+    pub emoji: String,
+    pub label: String,
+    pub color: Option<[u8; 3]>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DownloadedGame {
     pub thread_id: u64,
@@ -17,6 +33,8 @@ pub struct DownloadedGame {
     pub exe_path: Option<PathBuf>,
     #[serde(default)]
     pub has_been_launched: bool,
+    #[serde(default)]
+    pub bookmark_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -102,6 +120,12 @@ pub struct AppSettings {
     pub show_unplayed_badge: bool,
     #[serde(default)]
     pub classic_library_toggle: bool,
+    #[serde(default)]
+    pub bookmarks: Vec<Bookmark>,
+    #[serde(default = "default_bookmark_color")]
+    pub default_bookmark_color: [u8; 3],
+    #[serde(default = "default_bookmarks_visible")]
+    pub bookmarks_visible_on_cover: u8,
 }
 
 impl Persistable for AppSettings {}
@@ -131,6 +155,9 @@ impl Default for AppSettings {
             last_update_check: None,
             show_unplayed_badge: false,
             classic_library_toggle: false,
+            bookmarks: Vec::new(),
+            default_bookmark_color: default_bookmark_color(),
+            bookmarks_visible_on_cover: default_bookmarks_visible(),
         }
     }
 }
@@ -262,6 +289,7 @@ pub fn record_downloaded_game(thread_id: u64, folder: PathBuf, exe_path: Option<
                 folder: folder.clone(),
                 exe_path: exe_path.clone(),
                 has_been_launched: false,
+                bookmark_ids: Vec::new(),
             });
         }
         // Also clear any pending entry for this thread
@@ -375,4 +403,25 @@ pub fn delete_downloaded_game(thread_id: u64) {
         }
     }
     save_settings_to_disk();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bookmark_serialization() {
+        let bookmark = Bookmark {
+            id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
+            emoji: "⭐".to_string(),
+            label: "Favorite".to_string(),
+            color: Some([255, 0, 0]),
+        };
+
+        let json = serde_json::to_string(&bookmark).expect("Failed to serialize bookmark");
+        let decoded: Bookmark =
+            serde_json::from_str(&json).expect("Failed to deserialize bookmark");
+
+        assert_eq!(bookmark, decoded);
+    }
 }
