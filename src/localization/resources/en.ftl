@@ -129,3 +129,11 @@ card-update-available = UPDATE
 
 card-context-bookmarks = 🔖 Bookmarks...
 
+bookmarks-selector-title = Game Bookmarks
+bookmarks-selector-add-placeholder = Add bookmark...
+bookmarks-selector-create-new = + Create new
+bookmarks-selector-emoji-placeholder = 🔖
+bookmarks-selector-label-placeholder = Label
+bookmarks-selector-create-btn = Create
+bookmarks-selector-cancel-btn = Cancel
+

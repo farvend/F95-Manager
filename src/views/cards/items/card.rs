@@ -6,6 +6,7 @@ use crate::app::settings::{
 };
 use crate::parser::F95Thread;
 // use crate::views::cards::items::cover_hover::CoverHover;
+use super::bookmark_selector::draw_bookmark_selector_popup;
 use super::cover_hover::draw_cover;
 use super::meta_row::draw_meta_row;
 use super::tags_panel::draw_tags_panel;
@@ -221,6 +222,8 @@ pub fn thread_card(
     let (_is_open, area_hovered) =
         draw_tags_panel(ui, t, card_rect, hovered_any, fill, stroke, rounding);
     hovered_any |= area_hovered;
+
+    draw_bookmark_selector_popup(ui, t.thread_id.get(), card_rect);
 
     CardHover {
         hovered: hovered_any,

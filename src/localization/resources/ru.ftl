@@ -129,3 +129,11 @@ card-update-available = ОБНОВИТЬ
 
 card-context-bookmarks = 🔖 Закладки...
 
+bookmarks-selector-title = Закладки игры
+bookmarks-selector-add-placeholder = Добавить закладку...
+bookmarks-selector-create-new = + Создать новую
+bookmarks-selector-emoji-placeholder = 🔖
+bookmarks-selector-label-placeholder = Название
+bookmarks-selector-create-btn = Создать
+bookmarks-selector-cancel-btn = Отмена
+
