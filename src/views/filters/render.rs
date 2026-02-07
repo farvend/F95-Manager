@@ -222,30 +222,6 @@ pub fn draw_filters_panel(
                 .filter(|b| !filter_bookmarks.contains(&b.id))
                 .collect();
 
-            if !available_bookmarks.is_empty() {
-                let pick = crate::views::filters::items::picker::dropdown_picker(
-                    ui,
-                    "filter_bookmarks",
-                    &crate::localization::translate("filters-select-bookmark"),
-                    "bookmark_filter_picker",
-                    |q| {
-                        available_bookmarks
-                            .iter()
-                            .filter(|b| b.label.to_lowercase().contains(&q.to_lowercase()))
-                            .map(|b| (0u32, format!("{} {}", b.emoji, b.label))) // id doesn't matter here, we use index
-                            .collect()
-                    },
-                );
-                // The picker implementation returns Option<u32>, but it's based on alphabetical sort inside.
-                // It's safer to re-find the item or use a different approach.
-                // However, dropdown_picker is designed for u32. Let's adapt.
-                if let Some(_) = pick {
-                    // Since pick index depends on search query which is cleared,
-                    // and dropdown_picker is generic, I'll need a better way if I want to use it.
-                    // For now, let's use a simpler version or just the labels.
-                }
-            }
-
             // Simpler bookmark selector for filter since dropdown_picker is for u32
             ui.horizontal(|ui| {
                 egui::ComboBox::from_id_source("bookmark_filter_combo")
