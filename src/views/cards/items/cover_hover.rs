@@ -425,8 +425,20 @@ pub fn draw_cover(
 
     // Bookmark badges
     let (bookmarks, limit, default_color) = crate::app::settings::with_settings(|st| {
+        let game = st
+            .downloaded_games
+            .iter()
+            .find(|g| g.thread_id == thread.thread_id.get());
+        let empty_vec = Vec::new();
+        let bookmark_ids = game.map(|g| &g.bookmark_ids).unwrap_or(&empty_vec);
+        let bookmarks = st
+            .bookmarks
+            .iter()
+            .filter(|b| bookmark_ids.contains(&b.id))
+            .cloned()
+            .collect::<Vec<_>>();
         (
-            crate::app::settings::store::get_game_bookmarks(thread.thread_id.get()),
+            bookmarks,
             st.bookmarks_visible_on_cover as usize,
             st.default_bookmark_color,
         )
