@@ -548,7 +548,6 @@ mod tests {
         let thread_id = 12345;
         let bookmark_id = create_bookmark("🔖".to_string(), "Game Tag".to_string(), None);
 
-        // Record a game first
         record_downloaded_game(thread_id, PathBuf::from("test_game"), None);
 
         add_bookmark_to_game(thread_id, &bookmark_id);
@@ -569,7 +568,6 @@ mod tests {
         record_downloaded_game(thread_id, PathBuf::from("another_game"), None);
         add_bookmark_to_game(thread_id, &bookmark_id);
 
-        // Add to filters as well
         {
             APP_SETTINGS
                 .write()
@@ -578,7 +576,6 @@ mod tests {
                 .push(bookmark_id.clone());
         }
 
-        // Verify it's there
         assert_eq!(get_game_bookmarks(thread_id).len(), 1);
         assert!(APP_SETTINGS
             .read()
@@ -586,16 +583,12 @@ mod tests {
             .filter_bookmarks
             .contains(&bookmark_id));
 
-        // Delete bookmark globally
         delete_bookmark(&bookmark_id);
 
-        // Verify it's gone from global list
         assert!(get_bookmark(&bookmark_id).is_none());
 
-        // Verify it's gone from game
         assert_eq!(get_game_bookmarks(thread_id).len(), 0);
 
-        // Verify it's gone from filters
         assert!(!APP_SETTINGS
             .read()
             .unwrap()

@@ -40,7 +40,6 @@ pub fn draw_bookmark_selector_popup(ui: &mut egui::Ui, thread_id: u64, card_rect
                 });
                 ui.add_space(crate::ui_constants::spacing::SMALL);
 
-                // Current bookmarks for this game
                 let game_bookmarks = get_game_bookmarks(thread_id);
                 if !game_bookmarks.is_empty() {
                     for bookmark in &game_bookmarks {
@@ -200,7 +199,6 @@ pub fn draw_bookmark_selector_popup(ui: &mut egui::Ui, thread_id: u64, card_rect
                                     create_bookmark(final_emoji, label.clone(), selected_color);
                                 add_bookmark_to_game(thread_id, &new_id);
 
-                                // Reset state
                                 ui.memory_mut(|m| {
                                     m.data.insert_temp(creating_id, false);
                                     m.data.insert_temp(
@@ -255,7 +253,6 @@ pub fn draw_bookmark_selector_popup(ui: &mut egui::Ui, thread_id: u64, card_rect
         },
     );
 
-    // Close when clicking outside
     let clicked_outside =
         crate::views::ui_helpers::clicked_outside(ui, &[inner.response.rect, card_rect]);
     if clicked_outside {
