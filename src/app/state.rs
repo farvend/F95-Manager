@@ -22,6 +22,7 @@ pub struct FiltersState {
     pub exclude_tags: Vec<u32>,
     pub include_prefixes: Vec<u32>,
     pub exclude_prefixes: Vec<u32>,
+    pub filter_bookmarks: Vec<String>,
     // Not used by logic, but part of the filters panel signature
     pub exclude_mode: Vec<u32>,
     pub search_mode: SearchMode,
@@ -34,14 +35,16 @@ pub struct FiltersState {
 
 impl Default for FiltersState {
     fn default() -> Self {
-        let (mut inc, mut exc, mut pref, mut nopref) = super::settings::with_settings(|st| {
-            (
-                st.startup_tags.clone(),
-                st.startup_exclude_tags.clone(),
-                st.startup_prefixes.clone(),
-                st.startup_exclude_prefixes.clone(),
-            )
-        });
+        let (mut inc, mut exc, mut pref, mut nopref, bmarks) =
+            super::settings::with_settings(|st| {
+                (
+                    st.startup_tags.clone(),
+                    st.startup_exclude_tags.clone(),
+                    st.startup_prefixes.clone(),
+                    st.startup_exclude_prefixes.clone(),
+                    st.filter_bookmarks.clone(),
+                )
+            });
         let max = crate::ui_constants::MAX_FILTER_ITEMS;
         if inc.len() > max {
             inc.truncate(max);
@@ -64,6 +67,7 @@ impl Default for FiltersState {
             exclude_tags: exc,
             include_prefixes: pref,
             exclude_prefixes: nopref,
+            filter_bookmarks: bmarks,
             exclude_mode: Vec::new(),
             search_mode: SearchMode::default(),
             query: String::new(),

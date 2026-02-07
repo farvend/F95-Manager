@@ -126,6 +126,8 @@ pub struct AppSettings {
     pub default_bookmark_color: [u8; 3],
     #[serde(default = "default_bookmarks_visible")]
     pub bookmarks_visible_on_cover: u8,
+    #[serde(default)]
+    pub filter_bookmarks: Vec<String>,
 }
 
 impl Persistable for AppSettings {}
@@ -158,6 +160,7 @@ impl Default for AppSettings {
             bookmarks: Vec::new(),
             default_bookmark_color: default_bookmark_color(),
             bookmarks_visible_on_cover: default_bookmarks_visible(),
+            filter_bookmarks: Vec::new(),
         }
     }
 }
@@ -444,6 +447,7 @@ pub fn delete_bookmark(id: &str) {
         for game in st.downloaded_games.iter_mut() {
             game.bookmark_ids.retain(|bid| bid != id);
         }
+        st.filter_bookmarks.retain(|bid| bid != id);
     }
     save_settings_to_disk();
 }
@@ -565,8 +569,22 @@ mod tests {
         record_downloaded_game(thread_id, PathBuf::from("another_game"), None);
         add_bookmark_to_game(thread_id, &bookmark_id);
 
+        // Add to filters as well
+        {
+            APP_SETTINGS
+                .write()
+                .unwrap()
+                .filter_bookmarks
+                .push(bookmark_id.clone());
+        }
+
         // Verify it's there
         assert_eq!(get_game_bookmarks(thread_id).len(), 1);
+        assert!(APP_SETTINGS
+            .read()
+            .unwrap()
+            .filter_bookmarks
+            .contains(&bookmark_id));
 
         // Delete bookmark globally
         delete_bookmark(&bookmark_id);
@@ -576,5 +594,12 @@ mod tests {
 
         // Verify it's gone from game
         assert_eq!(get_game_bookmarks(thread_id).len(), 0);
+
+        // Verify it's gone from filters
+        assert!(!APP_SETTINGS
+            .read()
+            .unwrap()
+            .filter_bookmarks
+            .contains(&bookmark_id));
     }
 }
