@@ -217,7 +217,7 @@ pub fn thread_card(
     });
 
     // Floating tags drop-down below the card: absolute area so it doesn't push layout.
-    let mut card_rect = frame_out.response.rect;
+    let card_rect = frame_out.response.rect;
     //card_rect.set_width(width);
     let (_is_open, area_hovered) =
         draw_tags_panel(ui, t, card_rect, hovered_any, fill, stroke, rounding);

@@ -43,7 +43,7 @@ pub fn draw_bookmark_selector_popup(ui: &mut egui::Ui, thread_id: u64, card_rect
                 // Current bookmarks for this game
                 let game_bookmarks = get_game_bookmarks(thread_id);
                 if !game_bookmarks.is_empty() {
-                    for bookmark in game_bookmarks {
+                    for bookmark in &game_bookmarks {
                         ui.horizontal(|ui| {
                             ui.add_space(crate::ui_constants::spacing::MEDIUM);
                             let bg_color = bookmark
@@ -194,9 +194,10 @@ pub fn draw_bookmark_selector_popup(ui: &mut egui::Ui, thread_id: u64, card_rect
                                 let final_emoji = if emoji.is_empty() {
                                     "🔖".to_string()
                                 } else {
-                                    emoji
+                                    emoji.clone()
                                 };
-                                let new_id = create_bookmark(final_emoji, label, selected_color);
+                                let new_id =
+                                    create_bookmark(final_emoji, label.clone(), selected_color);
                                 add_bookmark_to_game(thread_id, &new_id);
 
                                 // Reset state

@@ -1,4 +1,4 @@
-use eframe::egui::{self, Color32, Rect, RichText, Rounding, Stroke, Ui, Vec2, pos2};
+use eframe::egui::{self, pos2, Color32, Rect, RichText, Rounding, Stroke, Ui, Vec2};
 
 /// Stateless discrete slider that can only take values from a provided list.
 /// Header row: name on the left, active value on the right.
