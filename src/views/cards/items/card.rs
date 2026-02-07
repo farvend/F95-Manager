@@ -168,6 +168,20 @@ pub fn thread_card(
             ui.close_menu();
         }
 
+        // Bookmarks (only for downloaded games)
+        if is_downloaded {
+            if ui
+                .button(crate::localization::translate("card-context-bookmarks"))
+                .clicked()
+            {
+                ui.ctx().memory_mut(|m| {
+                    m.data
+                        .insert_temp(egui::Id::new(("bookmark_selector_open", thread_id)), true);
+                });
+                ui.close_menu();
+            }
+        }
+
         // Refresh metadata from network (for library games)
         if is_downloaded {
             if ui.button("🔄 Refresh").clicked() {
