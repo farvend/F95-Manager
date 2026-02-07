@@ -409,6 +409,7 @@ pub fn delete_downloaded_game(thread_id: u64) {
 }
 
 pub fn create_bookmark(emoji: String, label: String, color: Option<[u8; 3]>) -> String {
+    let label = label.chars().take(50).collect::<String>();
     let id = uuid::Uuid::new_v4().to_string();
     {
         let mut st = APP_SETTINGS.write().unwrap();
@@ -424,6 +425,7 @@ pub fn create_bookmark(emoji: String, label: String, color: Option<[u8; 3]>) -> 
 }
 
 pub fn update_bookmark(id: &str, emoji: String, label: String, color: Option<[u8; 3]>) -> bool {
+    let label = label.chars().take(50).collect::<String>();
     let mut found = false;
     {
         let mut st = APP_SETTINGS.write().unwrap();
