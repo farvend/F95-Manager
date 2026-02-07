@@ -122,6 +122,89 @@ fn draw_clickable_update_badge(ui: &mut egui::Ui, thread_id: u64, cover_rect: eg
     resp.clicked()
 }
 
+fn draw_left_badge(
+    ui: &mut egui::Ui,
+    label: &str,
+    bg_color: Color32,
+    text_color: Color32,
+    next_x: &mut f32,
+    y0: f32,
+    badge_h: f32,
+) -> egui::Rect {
+    let font_id = egui::TextStyle::Small.resolve(ui.style()).clone();
+    let text_w = ui.fonts(|f| {
+        f.layout_no_wrap(label.to_string(), font_id, text_color)
+            .rect
+            .width()
+    });
+    let pad_x = 8.0f32;
+    let w = text_w + pad_x * 2.0;
+    let rect = egui::Rect::from_min_max(
+        egui::pos2(*next_x, y0),
+        egui::pos2(*next_x + w, y0 + badge_h),
+    );
+
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(
+        rect,
+        Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
+        bg_color,
+    );
+    painter.rect_stroke(
+        rect,
+        Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
+        Stroke::new(1.0, Color32::from_gray(60)),
+    );
+
+    ui.allocate_ui_at_rect(rect, |ui| {
+        ui.centered_and_justified(|ui| {
+            ui.add(
+                egui::Label::new(RichText::new(label).color(text_color))
+                    .truncate(true)
+                    .wrap(false),
+            );
+        });
+    });
+
+    *next_x = rect.max.x + crate::ui_constants::card::STATS_MARGIN_V;
+    rect
+}
+
+fn draw_left_square_badge(
+    ui: &mut egui::Ui,
+    content: &str,
+    bg_color: Color32,
+    next_x: &mut f32,
+    y0: f32,
+    badge_h: f32,
+) -> egui::Rect {
+    let size = egui::vec2(badge_h, badge_h);
+    let rect = egui::Rect::from_min_size(egui::pos2(*next_x, y0), size);
+
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(
+        rect,
+        Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
+        bg_color,
+    );
+    painter.rect_stroke(
+        rect,
+        Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
+        Stroke::new(1.0, Color32::from_gray(40)),
+    );
+
+    painter.text(
+        rect.center(),
+        eframe::egui::Align2::CENTER_CENTER,
+        content,
+        eframe::egui::FontId::proportional(12.0),
+        Color32::WHITE,
+    );
+
+    *next_x = rect.max.x + crate::ui_constants::card::STATS_MARGIN_V;
+    rect
+}
+
 /// Draws the cover image with 16:9 ratio across `inner_w` width,
 /// shows a version badge, and renders hover markers under the image.
 /// - If a screenshot for the hovered marker is preloaded, it is shown instead of the cover.
@@ -243,44 +326,16 @@ pub fn draw_cover(
     let engine_name = crate::views::cards::items::cover_helpers::resolve_engine_name(thread);
 
     if let Some(name) = &engine_name {
-        let font_id = egui::TextStyle::Small.resolve(ui.style()).clone();
         let text_color = Color32::from_rgb(200, 200, 200);
-        let text_w = ui.fonts(|f| {
-            f.layout_no_wrap(name.clone(), font_id.clone(), text_color)
-                .rect
-                .width()
-        });
-        let pad_x = 8.0f32;
-        let w = text_w + pad_x * 2.0;
-        let engine_rect =
-            egui::Rect::from_min_max(egui::pos2(next_x, y0), egui::pos2(next_x + w, y0 + badge_h));
-        let painter = ui.painter_at(engine_rect);
-        painter.rect_filled(
-            engine_rect,
-            Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
+        draw_left_badge(
+            ui,
+            name,
             Color32::from_rgb(54, 54, 54),
+            text_color,
+            &mut next_x,
+            y0,
+            badge_h,
         );
-        painter.rect_stroke(
-            engine_rect,
-            Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
-            Stroke::new(1.0, Color32::from_gray(60)),
-        );
-        ui.allocate_ui_at_rect(engine_rect, |ui| {
-            ui.centered_and_justified(|ui| {
-                ui.add(
-                    egui::Label::new(RichText::new(name.clone()).color(text_color))
-                        //.truncate(true)
-                        .wrap(false),
-                );
-            });
-        });
-        next_x = engine_rect.max.x + crate::ui_constants::card::STATS_MARGIN_V;
-    } else {
-        //ui.allocate_space(Vec2 { x: next_x, y: cover_h - 30. });
-        let w = text_w + pad_x * 2.0;
-        let engine_rect =
-            egui::Rect::from_min_max(egui::pos2(next_x, y0), egui::pos2(w, y0 + badge_h));
-        ui.allocate_rect(engine_rect, Sense::hover());
     }
 
     // Collect warnings (tags + prefixes) and show counter if any
@@ -288,8 +343,15 @@ pub fn draw_cover(
         crate::views::cards::items::cover_helpers::collect_warnings(thread);
     let warn_count = warn_tag_names.len() + warn_pref_names.len();
     if warn_count > 0 {
-        let size = egui::vec2(badge_h, badge_h);
-        let warn_rect = egui::Rect::from_min_size(egui::pos2(next_x, y0), size);
+        let warn_rect = draw_left_square_badge(
+            ui,
+            &warn_count.to_string(),
+            Color32::from_rgb(170, 40, 40),
+            &mut next_x,
+            y0,
+            badge_h,
+        );
+
         ui.expand_to_include_rect(warn_rect);
         let _warn_resp = ui
             .interact(
@@ -298,24 +360,6 @@ pub fn draw_cover(
                 Sense::hover(),
             )
             .on_hover_cursor(eframe::egui::CursorIcon::PointingHand);
-        let painter = ui.painter_at(warn_rect);
-        painter.rect_filled(
-            warn_rect,
-            Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
-            Color32::from_rgb(170, 40, 40),
-        );
-        painter.rect_stroke(
-            warn_rect,
-            Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
-            Stroke::new(1.0, Color32::from_gray(40)),
-        );
-        painter.text(
-            warn_rect.center(),
-            eframe::egui::Align2::CENTER_CENTER,
-            warn_count.to_string(),
-            eframe::egui::FontId::proportional(12.0),
-            Color32::WHITE,
-        );
 
         // Custom overlay plaque above the warning square (sticky while hovered)
         let mut lines: Vec<String> = Vec::new();
@@ -356,7 +400,6 @@ pub fn draw_cover(
                 }
             },
         );
-        next_x = warn_rect.max.x + crate::ui_constants::card::STATS_MARGIN_V;
     }
 
     let is_unplayed = crate::app::settings::with_settings(|st| {
@@ -370,27 +413,77 @@ pub fn draw_cover(
     });
 
     if is_unplayed {
-        let size = egui::vec2(badge_h, badge_h);
-        let unplayed_rect = egui::Rect::from_min_size(egui::pos2(next_x, y0), size);
-        ui.expand_to_include_rect(unplayed_rect);
-        let painter = ui.painter_at(unplayed_rect);
-        painter.rect_filled(
-            unplayed_rect,
-            Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
-            Color32::from_rgba_premultiplied(0, 0, 0, 160),
-        );
-        painter.rect_stroke(
-            unplayed_rect,
-            Rounding::same(crate::ui_constants::card::STATS_ROUNDING),
-            Stroke::new(1.0, Color32::from_gray(40)),
-        );
-        painter.text(
-            unplayed_rect.center(),
-            egui::Align2::CENTER_CENTER,
+        draw_left_square_badge(
+            ui,
             "✨",
-            egui::FontId::proportional(12.0),
-            Color32::WHITE,
+            Color32::from_rgba_premultiplied(0, 0, 0, 160),
+            &mut next_x,
+            y0,
+            badge_h,
         );
+    }
+
+    // Bookmark badges
+    let (bookmarks, limit, default_color) = crate::app::settings::with_settings(|st| {
+        (
+            crate::app::settings::store::get_game_bookmarks(thread.thread_id.get()),
+            st.bookmarks_visible_on_cover as usize,
+            st.default_bookmark_color,
+        )
+    });
+
+    if !bookmarks.is_empty() {
+        let visible_count = bookmarks.len().min(limit);
+        let has_more = bookmarks.len() > limit;
+
+        for (idx, bookmark) in bookmarks.iter().take(visible_count).enumerate() {
+            let bg_color = bookmark
+                .color
+                .map(|[r, g, b]| Color32::from_rgb(r, g, b))
+                .unwrap_or_else(|| {
+                    Color32::from_rgb(default_color[0], default_color[1], default_color[2])
+                });
+
+            let bookmark_rect =
+                draw_left_square_badge(ui, &bookmark.emoji, bg_color, &mut next_x, y0, badge_h);
+
+            // Hover overlay for the bookmark label
+            crate::views::ui_helpers::show_sticky_overlay(
+                ui,
+                bookmark_rect,
+                (
+                    "bookmark_overlay",
+                    thread.thread_id.get() + (idx as u64) * 1000000,
+                ),
+                crate::ui_constants::card::STATS_MARGIN_V,
+                crate::ui_constants::spacing::SMALL,
+                |ui| {
+                    ui.label(RichText::new(&bookmark.label).color(Color32::from_gray(220)));
+                },
+            );
+        }
+
+        if has_more {
+            let more_rect =
+                draw_left_square_badge(ui, "...", Color32::from_gray(60), &mut next_x, y0, badge_h);
+
+            // Hover overlay for ALL bookmarks
+            crate::views::ui_helpers::show_sticky_overlay(
+                ui,
+                more_rect,
+                ("bookmark_more_overlay", thread.thread_id.get()),
+                crate::ui_constants::card::STATS_MARGIN_V,
+                crate::ui_constants::spacing::SMALL,
+                |ui| {
+                    for bookmark in &bookmarks {
+                        ui.horizontal(|ui| {
+                            ui.label(&bookmark.emoji);
+                            ui.label(RichText::new(&bookmark.label).color(Color32::from_gray(220)));
+                        });
+                    }
+                },
+            );
+        }
     }
 
     // Markers (small horizontal dashes) under the image: show only on hover.
