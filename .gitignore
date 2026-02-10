@@ -13,3 +13,10 @@ src/parser/game_info/page/pages/*
 scrape_pages.py
 nul
 .sisyphus/*
+
+# Local scratch/stopword lists (not part of the project)
+sp_files.txt
+stop_*.txt
+
+# Temporary files
+t

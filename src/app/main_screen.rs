@@ -369,22 +369,15 @@ fn autosave_selected_tags(app: &NoLagApp) {
         return;
     }
 
-    let need_save = settings::with_settings_mut(|st| {
-        let mut changed = false;
+    // Persist atomically: if anything changes, do it in one update and one save.
+    settings::update_settings_and_persist(|st| {
         if st.startup_tags != app.filters.include_tags {
             st.startup_tags = app.filters.include_tags.clone();
-            changed = true;
         }
         if st.startup_exclude_tags != app.filters.exclude_tags {
             st.startup_exclude_tags = app.filters.exclude_tags.clone();
-            changed = true;
         }
-        changed
     });
-
-    if need_save {
-        settings::save_settings_to_disk();
-    }
 }
 
 /// Handle library mode toggle

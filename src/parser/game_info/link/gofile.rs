@@ -10,15 +10,20 @@ use std::str::FromStr;
 use crate::parser::CLIENT;
 
 lazy_static! {
-    static ref RE_GOFILE_TOKEN: Regex = Regex::new(r#"appdata\.wt *= *".*""#).unwrap();
+    static ref RE_GOFILE_TOKEN: Regex = Regex::new(r#"appdata\.wt *= *".*""#)
+        .expect("RE_GOFILE_TOKEN regex should compile");
 }
 
 /// Resolve a GoFile folder id to a direct file download URL and required headers.
 /// Returns (url, headers) on success.
 pub async fn resolve_gofile_file(id: &str) -> Option<(Url, HeaderMap<HeaderValue>)> {
     // Parse `wt` token from gofile global.js (temporary token)
-    let text = reqwest::get("https://gofile.io/dist/js/global.js")
+    let text = CLIENT
+        .get("https://gofile.io/dist/js/global.js")
+        .send()
         .await
+        .ok()?
+        .error_for_status()
         .ok()?
         .text()
         .await
@@ -50,13 +55,13 @@ pub async fn resolve_gofile_file(id: &str) -> Option<(Url, HeaderMap<HeaderValue
         .token;
 
     // Query folder contents with Authorization
-    let resp = reqwest::Client::builder()
-        .build()
-        .ok()?
+    let resp = CLIENT
         .get(url)
         .header("authorization", format!("Bearer {token}"))
         .send()
         .await
+        .ok()?
+        .error_for_status()
         .ok()?;
     let text = resp.text().await.ok()?;
     let data: GofileFiles = serde_json::from_str(&text).ok()?;

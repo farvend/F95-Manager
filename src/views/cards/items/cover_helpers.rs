@@ -3,13 +3,14 @@
 use crate::app::settings as app_settings;
 use crate::parser::F95Thread;
 use crate::tags::TAGS;
+use crate::tags::{prefix_name_by_id, tag_name_by_id};
 
 // Resolve engine name from prefixes (Engine group)
 pub fn resolve_engine_name(thread: &F95Thread) -> Option<String> {
     for group in &TAGS.prefixes.games {
         if group.name.eq_ignore_ascii_case("Engine") {
             for pfx in &group.prefixes {
-                if thread.prefixes.iter().any(|id| *id == pfx.id as u32) {
+                if thread.prefixes.iter().any(|id| *id == pfx.id) {
                     return Some(pfx.name.replace("&#039;", "'"));
                 }
             }
@@ -20,35 +21,25 @@ pub fn resolve_engine_name(thread: &F95Thread) -> Option<String> {
 
 // Collect warnings (tags + prefixes) based on user settings
 pub fn collect_warnings(thread: &F95Thread) -> (Vec<String>, Vec<String>) {
-    let st = app_settings::APP_SETTINGS.read().unwrap();
-
-    // tags
-    let mut tag_names: Vec<String> = Vec::new();
-    for id in &thread.tags {
-        if st.warn_tags.contains(id) {
-            if let Some(name) = TAGS.tags.get(&id.to_string()) {
-                tag_names.push(name.clone());
+    let (tag_names, pref_names) = app_settings::with_settings(|st| {
+        // tags
+        let mut tag_names: Vec<String> = Vec::new();
+        for id in &thread.tags {
+            if st.warn_tags.contains(id) {
+                // Fast path: borrow from flattened lookup table.
+                tag_names.push(tag_name_by_id(*id).replace("&#039;", "'"));
             }
         }
-    }
 
-    // prefixes
-    let mut pref_names: Vec<String> = Vec::new();
-    for pid in &thread.prefixes {
-        if st.warn_prefixes.contains(pid) {
-            // lookup prefix name in "games" groups
-            let mut found: Option<String> = None;
-            for g in &TAGS.prefixes.games {
-                if let Some(p) = g.prefixes.iter().find(|p| p.id as u32 == *pid) {
-                    found = Some(p.name.clone());
-                    break;
-                }
-            }
-            if let Some(n) = found {
-                pref_names.push(n.replace("&#039;", "'"));
+        // prefixes
+        let mut pref_names: Vec<String> = Vec::new();
+        for pid in &thread.prefixes {
+            if st.warn_prefixes.contains(pid) {
+                pref_names.push(prefix_name_by_id(*pid).replace("&#039;", "'"));
             }
         }
-    }
 
+        (tag_names, pref_names)
+    });
     (tag_names, pref_names)
 }

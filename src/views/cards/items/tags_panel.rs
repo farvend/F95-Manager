@@ -2,6 +2,7 @@ use eframe::egui::{self, Color32, Rounding, Stroke, Vec2};
 
 use crate::parser::F95Thread;
 use crate::tags::TAGS;
+use crate::tags::tag_name_by_id;
 
 //// Renders the floating tags panel below the card without affecting layout.
 /// - Opens only while `base_hovered` (card hover) is true; moving cursor onto the panel closes it.
@@ -62,9 +63,9 @@ pub fn draw_tags_panel(
 
                                 let text = TAGS
                                     .tags
-                                    .get(&id.to_string())
+                                    .get(id)
                                     .cloned()
-                                    .unwrap_or_else(|| id.to_string());
+                                    .unwrap_or_else(|| tag_name_by_id(*id).into_owned());
 
                                 // Measure text and compute chip width dynamically with padding
                                 let galley = ui.painter().layout_no_wrap(

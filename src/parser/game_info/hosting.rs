@@ -2,6 +2,7 @@ use std::fmt;
 
 use reqwest::Url;
 use strum::EnumString;
+use thiserror::Error;
 
 // Macro to define an enum with a "subset" companion enum and conversions
 macro_rules! define_subset {
@@ -98,9 +99,11 @@ impl Hosting {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum HostingError {
+    #[error("URL does not have a domain")]
     NotDomain,
+    #[error("Unknown hosting domain")]
     UnknownDomain,
 }
 
@@ -113,7 +116,7 @@ impl TryFrom<Url> for Hosting {
             .split('.')
             .rev()
             .nth(1)
-            .unwrap()
+            .ok_or(HostingError::UnknownDomain)?
             .to_string();
 
         let mut name = sec;
@@ -122,21 +125,21 @@ impl TryFrom<Url> for Hosting {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum HostingSubsetError {
-    HostingError(HostingError),
-    UnsopportedHosting,
+    #[error(transparent)]
+    HostingError(#[from] HostingError),
+    #[error("Unsupported hosting")]
+    UnsupportedHosting,
 }
 
 impl TryFrom<Url> for HostingSubset {
     type Error = HostingSubsetError;
     fn try_from(value: Url) -> Result<Self, Self::Error> {
-        let hosting: Hosting = value
-            .try_into()
-            .map_err(|e| HostingSubsetError::HostingError(e))?;
+        let hosting: Hosting = value.try_into()?;
         hosting
             .try_into()
-            .map_err(|_| HostingSubsetError::UnsopportedHosting)
+            .map_err(|_| HostingSubsetError::UnsupportedHosting)
     }
 
     // fn from(value: Url) -> Self {

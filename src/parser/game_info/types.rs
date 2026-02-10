@@ -15,7 +15,20 @@ impl ThreadId {
     }
     pub fn get_page(&self) -> F95PageUrl {
         let url = format!("https://f95zone.to/threads/{}/", self.0);
-        F95PageUrl(Url::from_str(&url).unwrap())
+        // Url::from_str on a formatted literal URL should not fail, but avoid unwrap to be safe.
+        match Url::from_str(&url) {
+            Ok(u) => F95PageUrl(u),
+            Err(e) => {
+                log::error!("Failed to construct thread page URL {}: {}", url, e);
+                // Fallback to a safe default; this should rarely happen.
+                // Avoid panicking even if URL parsing fails (should not happen for a literal).
+                F95PageUrl(Url::from_str("https://f95zone.to/").unwrap_or_else(|e| {
+                    log::error!("Failed to parse base url: {e}");
+                    // As last resort, fall back to a dummy local URL.
+                    Url::from_str("http://localhost/").expect("localhost url valid")
+                }))
+            }
+        }
     }
 }
 

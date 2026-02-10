@@ -13,10 +13,7 @@ pub struct GameUpdateInfo {
 }
 
 pub async fn check_single_game(thread_id: u64) -> Option<GameUpdateInfo> {
-    let cache_dir = {
-        let settings = APP_SETTINGS.read().unwrap();
-        settings.cache_dir.clone()
-    };
+    let cache_dir = crate::app::settings::with_settings(|s| s.cache_dir.clone());
 
     let cached_thread = load_from_cache(&cache_dir, thread_id)?;
     let cached_version = cached_thread.version.clone();
@@ -42,14 +39,13 @@ pub async fn check_single_game(thread_id: u64) -> Option<GameUpdateInfo> {
 }
 
 pub async fn check_all_updates() -> Vec<GameUpdateInfo> {
-    let thread_ids: Vec<u64> = {
-        let settings = APP_SETTINGS.read().unwrap();
+    let thread_ids: Vec<u64> = crate::app::settings::with_settings(|settings| {
         settings
             .downloaded_games
             .iter()
             .map(|g| g.thread_id)
             .collect()
-    };
+    });
 
     if thread_ids.is_empty() {
         return Vec::new();

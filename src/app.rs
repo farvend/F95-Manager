@@ -60,7 +60,7 @@ impl Default for NoLagApp {
             Screen::Main
         };
 
-        let cache_dir = settings::APP_SETTINGS.read().unwrap().cache_dir.clone();
+        let cache_dir = settings::with_settings(|s| s.cache_dir.clone());
         let cache_dir = if cache_dir.is_relative() {
             std::env::current_exe()
                 .ok()
@@ -132,8 +132,7 @@ impl App for NoLagApp {
         if !self.auto_update_check_triggered && self.startup_time.elapsed().as_secs() >= 5 {
             self.auto_update_check_triggered = true;
             
-            let should_check = {
-                let settings = settings::APP_SETTINGS.read().unwrap();
+            let should_check = settings::with_settings(|settings| {
                 match settings.update_check_frequency {
                     settings::store::UpdateCheckFrequency::Manual => false,
                     settings::store::UpdateCheckFrequency::OnStartup => true,
@@ -150,7 +149,7 @@ impl App for NoLagApp {
                         }
                     }
                 }
-            };
+            });
 
             if should_check {
                 game_updates::ui::trigger_update_check(ctx);
@@ -159,11 +158,7 @@ impl App for NoLagApp {
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()
                     .as_secs() as i64;
-                {
-                    let mut settings = settings::APP_SETTINGS.write().unwrap();
-                    settings.last_update_check = Some(now);
-                }
-                settings::save_settings_to_disk();
+                settings::update_settings_and_persist(|st| st.last_update_check = Some(now));
             }
         }
 
