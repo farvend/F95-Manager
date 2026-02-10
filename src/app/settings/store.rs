@@ -200,7 +200,7 @@ pub fn load_settings_from_disk() {
     let path = settings_file_path();
     match AppSettings::load_from_file(&path) {
         Ok(s) => {
-            *APP_SETTINGS.write().unwrap() = s.clone();
+            super::with_settings_mut(|st| *st = s.clone());
             // Apply logger toggle based on settings
             crate::logger::set_file_logging_enabled(s.log_to_file);
             log::info!("Loaded settings from {}", path.to_string_lossy());
@@ -213,7 +213,7 @@ pub fn load_settings_from_disk() {
                 e
             );
             // Apply default logger toggle
-            let enabled = APP_SETTINGS.read().unwrap().log_to_file;
+            let enabled = super::with_settings(|st| st.log_to_file);
             crate::logger::set_file_logging_enabled(enabled);
         }
     }
@@ -221,7 +221,7 @@ pub fn load_settings_from_disk() {
 
 pub fn save_settings_to_disk() {
     let path = settings_file_path();
-    let st = APP_SETTINGS.read().unwrap().clone();
+    let st = super::with_settings(|st| st.clone());
     if let Err(e) = st.save_to_file(&path) {
         log::error!(
             "Failed to save settings to {}: {}",
@@ -233,32 +233,39 @@ pub fn save_settings_to_disk() {
     }
 }
 
-// New helpers: persist IDs of pending/incomplete downloads
-pub fn record_pending_download(thread_id: u64) {
-    {
-        let mut st = APP_SETTINGS.write().unwrap();
-        if !st.pending_downloads.contains(&thread_id) {
-            st.pending_downloads.push(thread_id);
-        }
-    }
+/// Convenience helper: mutate settings and persist them once.
+///
+/// This reduces a common foot-gun where we update settings in multiple places and
+/// forget to call `save_settings_to_disk()` (or call it too often).
+pub fn update_settings_and_persist<F>(f: F)
+where
+    F: FnOnce(&mut AppSettings),
+{
+    super::with_settings_mut(f);
     save_settings_to_disk();
 }
 
+// New helpers: persist IDs of pending/incomplete downloads
+pub fn record_pending_download(thread_id: u64) {
+    update_settings_and_persist(|st| {
+        if !st.pending_downloads.contains(&thread_id) {
+            st.pending_downloads.push(thread_id);
+        }
+    });
+}
+
 pub fn remove_pending_download(thread_id: u64) {
-    {
-        let mut st = APP_SETTINGS.write().unwrap();
+    update_settings_and_persist(|st| {
         let before = st.pending_downloads.len();
         st.pending_downloads.retain(|id| *id != thread_id);
         if st.pending_downloads.len() != before {
             log::info!("Removed pending download entry for thread {}", thread_id);
         }
-    }
-    save_settings_to_disk();
+    });
 }
 
 pub fn record_downloaded_game(thread_id: u64, folder: PathBuf, exe_path: Option<PathBuf>) {
-    {
-        let mut st = APP_SETTINGS.write().unwrap();
+    update_settings_and_persist(|st| {
         if let Some(entry) = st
             .downloaded_games
             .iter_mut()
@@ -276,19 +283,16 @@ pub fn record_downloaded_game(thread_id: u64, folder: PathBuf, exe_path: Option<
         }
         // Also clear any pending entry for this thread
         st.pending_downloads.retain(|id| *id != thread_id);
-    }
-    save_settings_to_disk();
+    });
 }
 
 // Mark a thread as hidden (adds its thread_id to settings and saves to disk)
 pub fn hide_thread(thread_id: u64) {
-    {
-        let mut st = APP_SETTINGS.write().unwrap();
+    update_settings_and_persist(|st| {
         if !st.hidden_threads.contains(&thread_id) {
             st.hidden_threads.push(thread_id);
         }
-    }
-    save_settings_to_disk();
+    });
 }
 
 // Check if a thread is hidden
@@ -323,7 +327,7 @@ pub fn downloaded_game_exe(thread_id: u64) -> Option<PathBuf> {
 pub fn delete_downloaded_game(thread_id: u64) {
     // Try delete from disk, but only if the path is inside the configured extract_dir.
     if let Some(folder) = downloaded_game_folder(thread_id) {
-        let extract_dir = { APP_SETTINGS.read().unwrap().extract_dir.clone() };
+        let extract_dir = { super::with_settings(|st| st.extract_dir.clone()) };
 
         // Resolve canonical extract_dir first
         match std::fs::canonicalize(&extract_dir) {
@@ -376,13 +380,11 @@ pub fn delete_downloaded_game(thread_id: u64) {
         }
     }
     // Remove entry from settings
-    {
-        let mut st = APP_SETTINGS.write().unwrap();
+    update_settings_and_persist(|st| {
         let before = st.downloaded_games.len();
         st.downloaded_games.retain(|e| e.thread_id != thread_id);
         if st.downloaded_games.len() != before {
             log::info!("Removed downloaded game entry for thread {}", thread_id);
         }
-    }
-    save_settings_to_disk();
+    });
 }

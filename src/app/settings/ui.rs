@@ -7,8 +7,10 @@ use std::sync::{mpsc, RwLock};
 
 use super::helpers::move_directory;
 use super::migrate;
-use super::store::{save_settings_to_disk, APP_SETTINGS};
+use super::store::save_settings_to_disk;
 use crate::views::filters::items::{prefixes_menu::prefixes_picker, tags_menu::tags_picker};
+use crate::tags::prefix_name_by_id;
+use crate::tags::tag_name_by_id;
 
 lazy_static! {
     pub static ref SETTINGS_OPEN: RwLock<bool> = RwLock::new(false);
@@ -375,11 +377,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     let mut to_remove: Option<usize> = None;
                     let list_clone = { STARTUP_TAGS_INPUT.read().unwrap().clone() };
                     for (i, id) in list_clone.iter().enumerate() {
-                        let name = crate::tags::TAGS
-                            .tags
-                            .get(&id.to_string())
-                            .cloned()
-                            .unwrap_or_else(|| id.to_string());
+                        let name = tag_name_by_id(*id).into_owned();
                         if ui.button(format!("{} ×", name)).clicked() {
                             to_remove = Some(i);
                         }
@@ -404,11 +402,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     let mut to_remove: Option<usize> = None;
                     let list_clone = { STARTUP_EXCLUDE_TAGS_INPUT.read().unwrap().clone() };
                     for (i, id) in list_clone.iter().enumerate() {
-                        let name = crate::tags::TAGS
-                            .tags
-                            .get(&id.to_string())
-                            .cloned()
-                            .unwrap_or_else(|| id.to_string());
+                        let name = tag_name_by_id(*id).into_owned();
                         if ui.button(format!("{} ×", name)).clicked() {
                             to_remove = Some(i);
                         }
@@ -433,15 +427,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     let mut to_remove: Option<usize> = None;
                     let list_clone = { STARTUP_PREFIXES_INPUT.read().unwrap().clone() };
                     for (i, id) in list_clone.iter().enumerate() {
-                        // Find prefix name by id
-                        let mut name: Option<String> = None;
-                        for group in &crate::tags::TAGS.prefixes.games {
-                            if let Some(p) = group.prefixes.iter().find(|p| p.id as u32 == *id) {
-                                name = Some(p.name.clone());
-                                break;
-                            }
-                        }
-                        let label = name.unwrap_or_else(|| id.to_string());
+                        let label = prefix_name_by_id(*id).into_owned();
                         if ui.button(format!("{} ×", label)).clicked() {
                             to_remove = Some(i);
                         }
@@ -466,15 +452,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     let mut to_remove: Option<usize> = None;
                     let list_clone = { STARTUP_EXCLUDE_PREFIXES_INPUT.read().unwrap().clone() };
                     for (i, id) in list_clone.iter().enumerate() {
-                        // Find prefix name by id
-                        let mut name: Option<String> = None;
-                        for group in &crate::tags::TAGS.prefixes.games {
-                            if let Some(p) = group.prefixes.iter().find(|p| p.id as u32 == *id) {
-                                name = Some(p.name.clone());
-                                break;
-                            }
-                        }
-                        let label = name.unwrap_or_else(|| id.to_string());
+                        let label = prefix_name_by_id(*id).into_owned();
                         if ui.button(format!("{} ×", label)).clicked() {
                             to_remove = Some(i);
                         }
@@ -501,11 +479,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     let mut to_remove: Option<usize> = None;
                     let list_clone = { WARN_TAGS_INPUT.read().unwrap().clone() };
                     for (i, id) in list_clone.iter().enumerate() {
-                        let name = crate::tags::TAGS
-                            .tags
-                            .get(&id.to_string())
-                            .cloned()
-                            .unwrap_or_else(|| id.to_string());
+                        let name = tag_name_by_id(*id).into_owned();
                         if ui.button(format!("{} ×", name)).clicked() {
                             to_remove = Some(i);
                         }
@@ -530,15 +504,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     let mut to_remove: Option<usize> = None;
                     let list_clone = { WARN_PREFIXES_INPUT.read().unwrap().clone() };
                     for (i, id) in list_clone.iter().enumerate() {
-                        // Find prefix name by id
-                        let mut name: Option<String> = None;
-                        for group in &crate::tags::TAGS.prefixes.games {
-                            if let Some(p) = group.prefixes.iter().find(|p| p.id as u32 == *id) {
-                                name = Some(p.name.clone());
-                                break;
-                            }
-                        }
-                        let label = name.unwrap_or_else(|| id.to_string());
+                        let label = prefix_name_by_id(*id).into_owned();
                         if ui.button(format!("{} ×", label)).clicked() {
                             to_remove = Some(i);
                         }
@@ -584,8 +550,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                                 let show_unplayed_badge = *SHOW_UNPLAYED_BADGE_INPUT.read().unwrap();
                                 let classic_library_toggle = *CLASSIC_LIBRARY_TOGGLE_INPUT.read().unwrap();
                                 let update_freq = UPDATE_FREQ_INPUT.read().unwrap().clone();
-                                let mut st = APP_SETTINGS.write().unwrap();
-                                st.temp_dir = std::path::PathBuf::from(temp_val);
+                                super::with_settings_mut(|st| st.temp_dir = std::path::PathBuf::from(temp_val));
                                 st.extract_dir = new_extract_pb;
                                 st.warn_tags = warn_tags;
                                 st.warn_prefixes = warn_prefixes;
@@ -715,8 +680,7 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     let startup_prefixes = STARTUP_PREFIXES_INPUT.read().unwrap().clone();
                     let startup_exclude_prefixes = STARTUP_EXCLUDE_PREFIXES_INPUT.read().unwrap().clone();
                     {
-                        let mut st = APP_SETTINGS.write().unwrap();
-                        st.temp_dir = std::path::PathBuf::from(new_temp);
+                        super::with_settings_mut(|st| st.temp_dir = std::path::PathBuf::from(new_temp));
                         st.extract_dir = new_extract.clone();
                         st.warn_tags = warn_tags;
                         st.warn_prefixes = warn_prefixes;

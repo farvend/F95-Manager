@@ -38,10 +38,18 @@ impl DirectDownloadLink {
                     + &self.hosting.to_string()
                     + "/"
                     + &self.path[0];
-                let mut request =
-                    reqwest::Request::new(reqwest::Method::GET, Url::from_str(&url).unwrap());
+                let parsed = Url::from_str(&url).ok();
+                let mut request = match parsed {
+                    Some(u) => reqwest::Request::new(reqwest::Method::GET, u),
+                    None => return None,
+                };
                 let mut headers = HeaderMap::new();
-                let value = HeaderValue::try_from("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0) Gecko/20100101 Firefox/142.0").unwrap();
+                let value = match HeaderValue::try_from(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0) Gecko/20100101 Firefox/142.0",
+                ) {
+                    Ok(v) => v,
+                    Err(_) => return None,
+                };
                 headers.insert("User-Agent", value);
                 *request.headers_mut() = headers;
                 Some(DirectRequest::Http(request))
@@ -65,7 +73,13 @@ impl DirectDownloadLink {
                     format!("{hosting}/file/{url_path}")
                 };
 
-                Some(DirectRequest::MegaPublicUrl(Url::from_str(&url).unwrap()))
+                match Url::from_str(&url) {
+                    Ok(u) => Some(DirectRequest::MegaPublicUrl(u)),
+                    Err(e) => {
+                        log::error!("Failed to parse MEGA url {}: {}", url, e);
+                        None
+                    }
+                }
             }
         }
     }

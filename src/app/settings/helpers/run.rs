@@ -5,9 +5,9 @@ use std::path::{Path, PathBuf};
 
 use super::open::reveal_in_file_manager;
 use crate::app::settings::store::{
-    downloaded_game_exe, downloaded_game_folder, record_downloaded_game, save_settings_to_disk,
-    APP_SETTINGS,
+    downloaded_game_exe, downloaded_game_folder, record_downloaded_game, APP_SETTINGS,
 };
+use crate::app::settings::store::update_settings_and_persist;
 
 #[cfg(target_os = "windows")]
 fn run_executable(path: &Path) {
@@ -273,19 +273,15 @@ pub fn run_downloaded_game(thread_id: u64) {
             }
         }
 
+    update_settings_and_persist(|st| {
+        if let Some(game) = st
+            .downloaded_games
+            .iter_mut()
+            .find(|g| g.thread_id == thread_id)
         {
-            let mut st = APP_SETTINGS.write().unwrap();
-            if let Some(game) = st
-                .downloaded_games
-                .iter_mut()
-                .find(|g| g.thread_id == thread_id)
-            {
-                if !game.has_been_launched {
-                    game.has_been_launched = true;
-                }
-            }
+            game.has_been_launched = true;
         }
-        save_settings_to_disk();
+    });
 
         run_executable(&chosen);
         return;

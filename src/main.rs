@@ -24,7 +24,7 @@ fn main() -> eframe::Result<()> {
     // Load lightweight app_config (for cookies/auth gating)
     app::config::load_config_from_disk();
     // Initialize localization based on settings or system locale (enum-based)
-    let preferred_lang = { app::settings::APP_SETTINGS.read().unwrap().language };
+    let preferred_lang = { app::settings::with_settings(|s| s.language) };
     if let Err(e) = localization::initialize_localization(preferred_lang) {
         log::error!("Localization initialization failed: {e}");
     }

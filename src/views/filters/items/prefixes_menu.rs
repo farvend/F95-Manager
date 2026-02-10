@@ -16,7 +16,7 @@ pub fn prefixes_picker(ui: &mut Ui, key: &str, placeholder: &str) -> Option<u32>
                 if !ql.is_empty() && !name.to_lowercase().contains(&ql) {
                     continue;
                 }
-                items.push((p.id as u32, name.to_string()));
+                items.push((p.id, name.to_string()));
             }
         }
         items

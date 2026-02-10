@@ -1,7 +1,13 @@
 // Split game_info into submodules
 
 pub fn cookies() -> String {
-    let cfg = crate::app::config::APP_CONFIG.read().unwrap();
+    let cfg = match crate::app::config::APP_CONFIG.read() {
+        Ok(g) => g,
+        Err(e) => {
+            log::error!("APP_CONFIG lock poisoned: {e}");
+            return String::new();
+        }
+    };
     if let Some(c) = cfg.cookies.as_ref() {
         let trimmed = c.trim();
         if !trimmed.is_empty() {
@@ -19,6 +25,6 @@ pub mod types;
 
 // Re-exports to keep external API unchanged
 pub use hosting::{Hosting, HostingSubset};
-pub use link::{DirectDownloadLink, DownloadLink, DownloadLinkInfo};
+pub use link::{DirectDownloadLink, DownloadError, DownloadLink, DownloadLinkInfo};
 pub use page::{F95PageUrl, GetLinksError};
 pub use types::{Platform, PlatformDownloads, ThreadId};

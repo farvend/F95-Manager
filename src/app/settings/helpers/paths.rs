@@ -1,6 +1,6 @@
 // Path utilities and folder existence checks.
 
-use crate::app::settings::store::APP_SETTINGS;
+use crate::app::settings;
 use std::path::{Path, PathBuf};
 
 fn to_abs(p: &Path) -> PathBuf {
@@ -27,7 +27,7 @@ pub fn game_folder_exists(folder: &Path) -> bool {
         return true;
     }
     // 2) resolve against current extract_dir keeping relative structure (if any)
-    let extract = { APP_SETTINGS.read().unwrap().extract_dir.clone() };
+    let extract = settings::with_settings(|st| st.extract_dir.clone());
     let abs_extract = to_abs(&extract);
     if let Ok(rel) = folder.strip_prefix(&extract) {
         let candidate = abs_extract.join(rel);

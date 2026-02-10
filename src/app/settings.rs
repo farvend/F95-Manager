@@ -11,7 +11,7 @@ pub use store::{
     APP_SETTINGS, AppSettings, DownloadedGame, delete_downloaded_game, downloaded_game_exe,
     downloaded_game_folder, hide_thread, is_pending_download, is_thread_hidden,
     load_settings_from_disk, record_downloaded_game, record_pending_download,
-    remove_pending_download, save_settings_to_disk,
+    remove_pending_download, save_settings_to_disk, update_settings_and_persist,
 };
 
 // Helpers: filesystem utilities, launching games, and convenience funcs
@@ -29,8 +29,16 @@ pub fn with_settings<F, R>(f: F) -> R
 where
     F: FnOnce(&AppSettings) -> R,
 {
-    let st = APP_SETTINGS.read().unwrap();
-    f(&st)
+    match APP_SETTINGS.read() {
+        Ok(st) => f(&st),
+        Err(poison) => {
+            // If the lock is poisoned, recover by using the inner data. This avoids panics
+            // in UI code while still surfacing the issue through a log.
+            log::warn!("APP_SETTINGS read lock poisoned, recovering");
+            let st = poison.into_inner();
+            f(&st)
+        }
+    }
 }
 
 /// Helper function to modify settings with a closure.
@@ -39,6 +47,12 @@ pub fn with_settings_mut<F, R>(f: F) -> R
 where
     F: FnOnce(&mut AppSettings) -> R,
 {
-    let mut st = APP_SETTINGS.write().unwrap();
-    f(&mut st)
+    match APP_SETTINGS.write() {
+        Ok(mut st) => f(&mut st),
+        Err(poison) => {
+            log::warn!("APP_SETTINGS write lock poisoned, recovering");
+            let mut st = poison.into_inner();
+            f(&mut st)
+        }
+    }
 }

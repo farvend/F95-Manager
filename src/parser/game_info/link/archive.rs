@@ -180,7 +180,10 @@ fn unzip_streaming(
         }
     }
     let strip_prefix = if !root_files && top_levels.len() == 1 {
-        Some(format!("{}/", top_levels.iter().next().unwrap()))
+        top_levels
+            .iter()
+            .next()
+            .map(|s| format!("{s}/"))
     } else {
         None
     };
