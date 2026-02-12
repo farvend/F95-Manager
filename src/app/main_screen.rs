@@ -99,6 +99,16 @@ fn apply_library_filters(app: &NoLagApp, display_data: &mut Vec<F95Thread>) {
         return;
     }
 
+    log::debug!(
+        "[FILTER] Library filters: include_tags={:?}, exclude_tags={:?}, query='{}', bookmarks={}, unplayed={}",
+        app.filters.include_tags,
+        app.filters.exclude_tags,
+        app.filters.query,
+        app.filters.filter_bookmarks.len(),
+        app.filters.unplayed_only
+    );
+    let before_count = display_data.len();
+
     let q = app.filters.query.to_lowercase();
     let use_query = !q.trim().is_empty();
 
@@ -172,6 +182,12 @@ fn apply_library_filters(app: &NoLagApp, display_data: &mut Vec<F95Thread>) {
 
         true
     });
+
+    log::debug!(
+        "[FILTER] Result: {} → {} items",
+        before_count,
+        display_data.len()
+    );
 }
 
 /// Render bottom controls: library summary or pagination
@@ -306,14 +322,13 @@ struct FiltersPanelResult {
     open_settings: bool,
     open_logs: bool,
     open_about: bool,
-    open_bookmarks: bool,
     prev_query: String,
 }
 
 /// Draw filters panel and return interaction results
 fn draw_filters(app: &mut NoLagApp, ctx: &egui::Context) -> FiltersPanelResult {
     let prev_query = app.filters.query.clone();
-    let (apply, open_settings, open_logs, open_about, open_bookmarks) = draw_filters_panel(
+    let (apply, open_settings, open_logs, open_about) = draw_filters_panel(
         ctx,
         &mut app.filters.sort,
         &mut app.filters.date_limit,
@@ -334,7 +349,6 @@ fn draw_filters(app: &mut NoLagApp, ctx: &egui::Context) -> FiltersPanelResult {
         open_settings,
         open_logs,
         open_about,
-        open_bookmarks,
         prev_query,
     }
 }
@@ -344,7 +358,10 @@ fn handle_filter_apply(app: &mut NoLagApp, ctx: &egui::Context) {
     app.page = 1;
     app.filters.search_due_at = None;
     if app.filters.library_only {
-        app.start_fetch_library(ctx);
+        // Library filters (tags, query, bookmarks, unplayed) are applied client-side
+        // by apply_library_filters. No need to restart the async pipeline.
+        log::debug!("Library filter changed — client-side repaint only");
+        ctx.request_repaint();
     } else {
         app.start_fetch(ctx);
     }
@@ -384,10 +401,6 @@ fn handle_panel_buttons(ctx: &egui::Context, result: &FiltersPanelResult) {
     }
     if result.open_about {
         about_ui::open_about();
-        ctx.request_repaint();
-    }
-    if result.open_bookmarks {
-        crate::views::bookmarks_management::open_bookmarks_management();
         ctx.request_repaint();
     }
 }
@@ -456,7 +469,8 @@ fn run_debounced_fetch(app: &mut NoLagApp, ctx: &egui::Context) {
     if Instant::now() >= due {
         app.filters.search_due_at = None;
         if app.filters.library_only {
-            app.start_fetch_library(ctx);
+            // Library query filtering is client-side — just repaint.
+            ctx.request_repaint();
         } else {
             app.start_fetch(ctx);
         }
