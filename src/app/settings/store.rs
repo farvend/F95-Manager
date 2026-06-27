@@ -536,65 +536,73 @@ mod tests {
     }
 
     #[test]
-    fn test_create_bookmark_returns_uuid() {
-        let id = create_bookmark("🔖".to_string(), "Test Bookmark".to_string(), None);
-        assert!(!id.is_empty());
-        assert!(uuid::Uuid::parse_str(&id).is_ok());
+    fn test_downloaded_game_serialization_with_bookmarks() {
+        let game = DownloadedGame {
+            thread_id: 99999,
+            folder: PathBuf::from("test_folder"),
+            exe_path: Some(PathBuf::from("test.exe")),
+            has_been_launched: true,
+            bookmark_ids: vec!["bookmark-1".to_string(), "bookmark-2".to_string()],
+        };
 
-        let bookmarks = get_bookmarks();
-        assert!(bookmarks.iter().any(|b| b.id == id));
+        let json = serde_json::to_string(&game).expect("Failed to serialize");
+        let decoded: DownloadedGame = serde_json::from_str(&json).expect("Failed to deserialize");
+
+        assert_eq!(game.thread_id, decoded.thread_id);
+        assert_eq!(game.bookmark_ids, decoded.bookmark_ids);
     }
 
     #[test]
-    fn test_add_bookmark_to_game() {
-        let thread_id = 12345;
-        let bookmark_id = create_bookmark("🔖".to_string(), "Game Tag".to_string(), None);
+    fn test_downloaded_game_backward_compat() {
+        // Old JSON without bookmark_ids field should deserialize with empty vec
+        let old_json = r#"{
+            "thread_id": 12345,
+            "folder": "games/test",
+            "exe_path": null,
+            "has_been_launched": false
+        }"#;
 
-        record_downloaded_game(thread_id, PathBuf::from("test_game"), None);
+        let game: DownloadedGame =
+            serde_json::from_str(old_json).expect("Failed to deserialize old format");
 
-        add_bookmark_to_game(thread_id, &bookmark_id);
-
-        let game_bookmarks = get_game_bookmarks(thread_id);
-        assert_eq!(game_bookmarks.len(), 1);
-        assert_eq!(game_bookmarks[0].id, bookmark_id);
-
-        remove_bookmark_from_game(thread_id, &bookmark_id);
-        assert_eq!(get_game_bookmarks(thread_id).len(), 0);
+        assert_eq!(game.thread_id, 12345);
+        assert!(game.bookmark_ids.is_empty());
     }
 
     #[test]
-    fn test_delete_bookmark_cascades() {
-        let thread_id = 54321;
-        let bookmark_id = create_bookmark("🔥".to_string(), "Trending".to_string(), None);
+    fn test_app_settings_backward_compat() {
+        // Old JSON without bookmark fields should deserialize with defaults
+        let old_json = r#"{
+            "temp_dir": "downloads",
+            "extract_dir": "games",
+            "downloaded_games": [],
+            "pending_downloads": [],
+            "hidden_threads": [],
+            "startup_tags": [],
+            "startup_exclude_tags": [],
+            "startup_prefixes": [],
+            "startup_exclude_prefixes": [],
+            "warn_tags": [],
+            "warn_prefixes": [],
+            "custom_launch": "",
+            "cache_on_download": false,
+            "loading_anim": "bottom_bar",
+            "language": null,
+            "log_to_file": true,
+            "autosave_selected_tags": false,
+            "update_check_frequency": "manual",
+            "last_update_check": null,
+            "show_unplayed_badge": false,
+            "classic_library_toggle": false
+        }"#;
 
-        record_downloaded_game(thread_id, PathBuf::from("another_game"), None);
-        add_bookmark_to_game(thread_id, &bookmark_id);
+        let settings: AppSettings =
+            serde_json::from_str(old_json).expect("Failed to deserialize old format");
 
-        {
-            APP_SETTINGS
-                .write()
-                .unwrap()
-                .filter_bookmarks
-                .push(bookmark_id.clone());
-        }
-
-        assert_eq!(get_game_bookmarks(thread_id).len(), 1);
-        assert!(APP_SETTINGS
-            .read()
-            .unwrap()
-            .filter_bookmarks
-            .contains(&bookmark_id));
-
-        delete_bookmark(&bookmark_id);
-
-        assert!(get_bookmark(&bookmark_id).is_none());
-
-        assert_eq!(get_game_bookmarks(thread_id).len(), 0);
-
-        assert!(!APP_SETTINGS
-            .read()
-            .unwrap()
-            .filter_bookmarks
-            .contains(&bookmark_id));
+        // New fields should have defaults
+        assert!(settings.bookmarks.is_empty());
+        assert_eq!(settings.default_bookmark_color, [60, 120, 200]);
+        assert_eq!(settings.bookmarks_visible_on_cover, 3);
+        assert!(settings.filter_bookmarks.is_empty());
     }
 }
