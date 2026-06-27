@@ -49,12 +49,11 @@ pub fn draw_filters_panel(
     filter_bookmarks: &mut Vec<String>,
     library_only: &mut bool,
     unplayed_only: &mut bool,
-) -> (bool, bool, bool, bool, bool) {
+) -> (bool, bool, bool, bool) {
     let mut changed_now: bool = false;
     let mut settings_clicked: bool = false;
     let mut logs_clicked: bool = false;
     let mut about_clicked: bool = false;
-    let mut bookmarks_clicked: bool = false;
     egui::SidePanel::right("filters_panel")
         .frame(
             egui::Frame::none()
@@ -288,12 +287,12 @@ pub fn draw_filters_panel(
                 {
                     settings_clicked = true;
                 }
-                if ui
-                    .button(crate::localization::translate("common-bookmarks"))
-                    .clicked()
-                {
-                    bookmarks_clicked = true;
-                }
+                // if ui
+                //     .button(crate::localization::translate("common-bookmarks"))
+                //     .clicked()
+                // {
+                //     bookmarks_clicked = true;
+                // }
 
                 let classic_mode = crate::app::settings::APP_SETTINGS
                     .read()
@@ -323,11 +322,5 @@ pub fn draw_filters_panel(
             });
         });
 
-    (
-        changed_now,
-        settings_clicked,
-        logs_clicked,
-        about_clicked,
-        bookmarks_clicked,
-    )
+    (changed_now, settings_clicked, logs_clicked, about_clicked)
 }
