@@ -114,5 +114,5 @@ pub(super) fn update_auth(app: &mut NoLagApp, ctx: &egui::Context) {
     errors_ui::draw_errors_button(ctx, bottom_offset);
     errors_ui::draw_errors_viewport(ctx);
     about_ui::draw_about_viewport(ctx);
-    settings::draw_settings_viewport(ctx);
+    settings::draw_settings_viewport(ctx, &mut app.settings_ui);
 }

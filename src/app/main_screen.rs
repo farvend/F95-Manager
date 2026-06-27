@@ -390,9 +390,9 @@ fn handle_query_debounce(
 }
 
 /// Handle panel button clicks (settings, logs, about)
-fn handle_panel_buttons(ctx: &egui::Context, result: &FiltersPanelResult) {
+fn handle_panel_buttons(app: &mut NoLagApp, ctx: &egui::Context, result: &FiltersPanelResult) {
     if result.open_settings {
-        settings::open_settings();
+        settings::open_settings(&mut app.settings_ui);
         ctx.request_repaint();
     }
     if result.open_logs {
@@ -489,13 +489,13 @@ fn draw_central_panel(app: &mut NoLagApp, ctx: &egui::Context) {
 }
 
 /// Draw floating overlays and separate viewports
-fn draw_overlays_and_viewports(ctx: &egui::Context) {
+fn draw_overlays_and_viewports(ctx: &egui::Context, settings_ui: &mut settings::SettingsUiState) {
     let bottom_offset = update_ui::draw_update_notice(ctx);
     errors_ui::draw_errors_button(ctx, bottom_offset);
     errors_ui::draw_errors_viewport(ctx);
     logs_ui::draw_logs_viewport(ctx);
     about_ui::draw_about_viewport(ctx);
-    settings::draw_settings_viewport(ctx);
+    settings::draw_settings_viewport(ctx, settings_ui);
     crate::views::bookmarks_management::draw_bookmarks_management_viewport(ctx);
 }
 
@@ -519,7 +519,7 @@ pub(super) fn update_main(app: &mut NoLagApp, ctx: &egui::Context) {
     handle_query_debounce(app, ctx, query_changed, result.apply);
 
     // 6. Handle panel buttons
-    handle_panel_buttons(ctx, &result);
+    handle_panel_buttons(app, ctx, &result);
 
     // 7. Auto-save tags/bookmarks if filters changed
     if result.apply {
@@ -544,5 +544,5 @@ pub(super) fn update_main(app: &mut NoLagApp, ctx: &egui::Context) {
     draw_central_panel(app, ctx);
 
     // 11. Draw overlays and viewports
-    draw_overlays_and_viewports(ctx);
+    draw_overlays_and_viewports(ctx, &mut app.settings_ui);
 }

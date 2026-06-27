@@ -37,6 +37,7 @@ pub struct NoLagApp {
     net: NetState,
     images: ImagesState,
     auth: AuthState,
+    settings_ui: settings::SettingsUiState,
     downloads: HashMap<u64, DownloadState>,
 
     library_manager: library::LibraryCardManager,
@@ -87,6 +88,7 @@ impl Default for NoLagApp {
             net: NetState::new(),
             images: ImagesState::new(),
             auth: AuthState::new(screen),
+            settings_ui: settings::SettingsUiState::default(),
             downloads: HashMap::new(),
             library_manager: library::LibraryCardManager::new(provider),
             

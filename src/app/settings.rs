@@ -21,7 +21,7 @@ pub use helpers::{
 };
 
 // UI: egui viewport window for settings and separate eframe App
-pub use ui::{SettingsApp, SettingsMsg, draw_settings_viewport, open_settings};
+pub use ui::{SettingsUiState, draw_settings_viewport, open_settings};
 
 /// Helper function to read settings with a closure.
 /// DRY principle: Reduces boilerplate of `.read().unwrap()` pattern.
