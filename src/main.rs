@@ -10,6 +10,7 @@ mod app;
 pub mod game_download;
 mod localization;
 mod logger;
+mod net;
 mod parser;
 mod tags;
 mod types;

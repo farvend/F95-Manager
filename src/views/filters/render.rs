@@ -46,13 +46,15 @@ pub fn draw_filters_panel(
     exclude_prefixes: &mut Vec<u32>,
     search_mode: &mut SearchMode,
     query: &mut String,
+    filter_bookmarks: &mut Vec<String>,
     library_only: &mut bool,
     unplayed_only: &mut bool,
-) -> (bool, bool, bool, bool) {
+) -> (bool, bool, bool, bool, bool) {
     let mut changed_now: bool = false;
     let mut settings_clicked: bool = false;
     let mut logs_clicked: bool = false;
     let mut about_clicked: bool = false;
+    let mut bookmarks_clicked: bool = false;
     egui::SidePanel::right("filters_panel")
         .frame(
             egui::Frame::none()
@@ -208,6 +210,51 @@ pub fn draw_filters_panel(
                 changed_now = true;
             }
 
+            // MY BOOKMARKS
+            ui.separator();
+            ui.label(
+                RichText::new(crate::localization::translate("filters-bookmarks-header")).weak(),
+            );
+
+            let all_bookmarks = crate::app::settings::store::get_bookmarks();
+            let available_bookmarks: Vec<_> = all_bookmarks
+                .iter()
+                .filter(|b| !filter_bookmarks.contains(&b.id))
+                .collect();
+
+            // Simpler bookmark selector for filter since dropdown_picker is for u32
+            ui.horizontal(|ui| {
+                egui::ComboBox::from_id_source("bookmark_filter_combo")
+                    .selected_text(crate::localization::translate("filters-select-bookmark"))
+                    .show_ui(ui, |ui| {
+                        for b in available_bookmarks {
+                            if ui
+                                .selectable_label(false, format!("{} {}", b.emoji, b.label))
+                                .clicked()
+                            {
+                                filter_bookmarks.push(b.id.clone());
+                                changed_now = true;
+                            }
+                        }
+                    });
+            });
+
+            let mut to_remove: Option<usize> = None;
+            ui.horizontal_wrapped(|ui| {
+                for (i, id) in filter_bookmarks.iter().enumerate() {
+                    let name = crate::app::settings::store::get_bookmark(id)
+                        .map(|b| format!("{} {}", b.emoji, b.label))
+                        .unwrap_or_else(|| id.clone());
+                    if ui.button(format!("{} ×", name)).clicked() {
+                        to_remove = Some(i);
+                    }
+                }
+            });
+            if let Some(i) = to_remove {
+                filter_bookmarks.remove(i);
+                changed_now = true;
+            }
+
             if *library_only {
                 ui.separator();
                 if ui
@@ -241,6 +288,12 @@ pub fn draw_filters_panel(
                 {
                     settings_clicked = true;
                 }
+                if ui
+                    .button(crate::localization::translate("common-bookmarks"))
+                    .clicked()
+                {
+                    bookmarks_clicked = true;
+                }
 
                 let classic_mode = crate::app::settings::APP_SETTINGS
                     .read()
@@ -270,5 +323,11 @@ pub fn draw_filters_panel(
             });
         });
 
-    (changed_now, settings_clicked, logs_clicked, about_clicked)
+    (
+        changed_now,
+        settings_clicked,
+        logs_clicked,
+        about_clicked,
+        bookmarks_clicked,
+    )
 }

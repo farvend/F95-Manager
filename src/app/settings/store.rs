@@ -1,5 +1,6 @@
 // Settings store: data types, global state, load/save, and records of downloaded games.
 
+use crate::app::persistable::Persistable;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::path::PathBuf;
@@ -9,6 +10,22 @@ fn default_cache_dir() -> PathBuf {
     PathBuf::from("cache")
 }
 
+fn default_bookmark_color() -> [u8; 3] {
+    [60, 120, 200]
+}
+
+fn default_bookmarks_visible() -> u8 {
+    3
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Bookmark {
+    pub id: String,
+    pub emoji: String,
+    pub label: String,
+    pub color: Option<[u8; 3]>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DownloadedGame {
     pub thread_id: u64,
@@ -16,6 +33,8 @@ pub struct DownloadedGame {
     pub exe_path: Option<PathBuf>,
     #[serde(default)]
     pub has_been_launched: bool,
+    #[serde(default)]
+    pub bookmark_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -101,7 +120,17 @@ pub struct AppSettings {
     pub show_unplayed_badge: bool,
     #[serde(default)]
     pub classic_library_toggle: bool,
+    #[serde(default)]
+    pub bookmarks: Vec<Bookmark>,
+    #[serde(default = "default_bookmark_color")]
+    pub default_bookmark_color: [u8; 3],
+    #[serde(default = "default_bookmarks_visible")]
+    pub bookmarks_visible_on_cover: u8,
+    #[serde(default)]
+    pub filter_bookmarks: Vec<String>,
 }
+
+impl Persistable for AppSettings {}
 
 impl Default for AppSettings {
     fn default() -> Self {
@@ -128,6 +157,10 @@ impl Default for AppSettings {
             last_update_check: None,
             show_unplayed_badge: false,
             classic_library_toggle: false,
+            bookmarks: Vec::new(),
+            default_bookmark_color: default_bookmark_color(),
+            bookmarks_visible_on_cover: default_bookmarks_visible(),
+            filter_bookmarks: Vec::new(),
         }
     }
 }
@@ -181,20 +214,7 @@ fn settings_file_path() -> PathBuf {
     PathBuf::from("app_settings.json")
 }
 
-impl AppSettings {
-    pub fn load_from_file(path: &std::path::Path) -> std::io::Result<Self> {
-        let data = std::fs::read_to_string(path)?;
-        let s: AppSettings = serde_json::from_str(&data)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        Ok(s)
-    }
-
-    pub fn save_to_file(&self, path: &std::path::Path) -> std::io::Result<()> {
-        let data = serde_json::to_string_pretty(self)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-        std::fs::write(path, data)
-    }
-}
+impl AppSettings {}
 
 pub fn load_settings_from_disk() {
     let path = settings_file_path();
@@ -272,6 +292,7 @@ pub fn record_downloaded_game(thread_id: u64, folder: PathBuf, exe_path: Option<
                 folder: folder.clone(),
                 exe_path: exe_path.clone(),
                 has_been_launched: false,
+                bookmark_ids: Vec::new(),
             });
         }
         // Also clear any pending entry for this thread
@@ -385,4 +406,195 @@ pub fn delete_downloaded_game(thread_id: u64) {
         }
     }
     save_settings_to_disk();
+}
+
+pub fn create_bookmark(emoji: String, label: String, color: Option<[u8; 3]>) -> String {
+    let label = label.chars().take(50).collect::<String>();
+    let id = uuid::Uuid::new_v4().to_string();
+    {
+        let mut st = APP_SETTINGS.write().unwrap();
+        st.bookmarks.push(Bookmark {
+            id: id.clone(),
+            emoji,
+            label,
+            color,
+        });
+    }
+    save_settings_to_disk();
+    id
+}
+
+pub fn update_bookmark(id: &str, emoji: String, label: String, color: Option<[u8; 3]>) -> bool {
+    let label = label.chars().take(50).collect::<String>();
+    let mut found = false;
+    {
+        let mut st = APP_SETTINGS.write().unwrap();
+        if let Some(b) = st.bookmarks.iter_mut().find(|b| b.id == id) {
+            b.emoji = emoji;
+            b.label = label;
+            b.color = color;
+            found = true;
+        }
+    }
+    if found {
+        save_settings_to_disk();
+    }
+    found
+}
+
+pub fn delete_bookmark(id: &str) {
+    {
+        let mut st = APP_SETTINGS.write().unwrap();
+        st.bookmarks.retain(|b| b.id != id);
+        for game in st.downloaded_games.iter_mut() {
+            game.bookmark_ids.retain(|bid| bid != id);
+        }
+        st.filter_bookmarks.retain(|bid| bid != id);
+    }
+    save_settings_to_disk();
+}
+
+pub fn get_bookmarks() -> Vec<Bookmark> {
+    APP_SETTINGS.read().unwrap().bookmarks.clone()
+}
+
+pub fn get_bookmark(id: &str) -> Option<Bookmark> {
+    APP_SETTINGS
+        .read()
+        .unwrap()
+        .bookmarks
+        .iter()
+        .find(|b| b.id == id)
+        .cloned()
+}
+
+pub fn add_bookmark_to_game(thread_id: u64, bookmark_id: &str) {
+    {
+        let mut st = APP_SETTINGS.write().unwrap();
+        if let Some(game) = st
+            .downloaded_games
+            .iter_mut()
+            .find(|g| g.thread_id == thread_id)
+        {
+            if !game.bookmark_ids.iter().any(|bid| bid == bookmark_id) {
+                game.bookmark_ids.push(bookmark_id.to_string());
+            }
+        }
+    }
+    save_settings_to_disk();
+}
+
+pub fn remove_bookmark_from_game(thread_id: u64, bookmark_id: &str) {
+    {
+        let mut st = APP_SETTINGS.write().unwrap();
+        if let Some(game) = st
+            .downloaded_games
+            .iter_mut()
+            .find(|g| g.thread_id == thread_id)
+        {
+            game.bookmark_ids.retain(|bid| bid != bookmark_id);
+        }
+    }
+    save_settings_to_disk();
+}
+
+pub fn get_game_bookmarks(thread_id: u64) -> Vec<Bookmark> {
+    let st = APP_SETTINGS.read().unwrap();
+    if let Some(game) = st
+        .downloaded_games
+        .iter()
+        .find(|g| g.thread_id == thread_id)
+    {
+        st.bookmarks
+            .iter()
+            .filter(|b| game.bookmark_ids.contains(&b.id))
+            .cloned()
+            .collect()
+    } else {
+        Vec::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bookmark_serialization() {
+        let bookmark = Bookmark {
+            id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
+            emoji: "⭐".to_string(),
+            label: "Favorite".to_string(),
+            color: Some([255, 0, 0]),
+        };
+
+        let json = serde_json::to_string(&bookmark).expect("Failed to serialize bookmark");
+        let decoded: Bookmark =
+            serde_json::from_str(&json).expect("Failed to deserialize bookmark");
+
+        assert_eq!(bookmark, decoded);
+    }
+
+    #[test]
+    fn test_create_bookmark_returns_uuid() {
+        let id = create_bookmark("🔖".to_string(), "Test Bookmark".to_string(), None);
+        assert!(!id.is_empty());
+        assert!(uuid::Uuid::parse_str(&id).is_ok());
+
+        let bookmarks = get_bookmarks();
+        assert!(bookmarks.iter().any(|b| b.id == id));
+    }
+
+    #[test]
+    fn test_add_bookmark_to_game() {
+        let thread_id = 12345;
+        let bookmark_id = create_bookmark("🔖".to_string(), "Game Tag".to_string(), None);
+
+        record_downloaded_game(thread_id, PathBuf::from("test_game"), None);
+
+        add_bookmark_to_game(thread_id, &bookmark_id);
+
+        let game_bookmarks = get_game_bookmarks(thread_id);
+        assert_eq!(game_bookmarks.len(), 1);
+        assert_eq!(game_bookmarks[0].id, bookmark_id);
+
+        remove_bookmark_from_game(thread_id, &bookmark_id);
+        assert_eq!(get_game_bookmarks(thread_id).len(), 0);
+    }
+
+    #[test]
+    fn test_delete_bookmark_cascades() {
+        let thread_id = 54321;
+        let bookmark_id = create_bookmark("🔥".to_string(), "Trending".to_string(), None);
+
+        record_downloaded_game(thread_id, PathBuf::from("another_game"), None);
+        add_bookmark_to_game(thread_id, &bookmark_id);
+
+        {
+            APP_SETTINGS
+                .write()
+                .unwrap()
+                .filter_bookmarks
+                .push(bookmark_id.clone());
+        }
+
+        assert_eq!(get_game_bookmarks(thread_id).len(), 1);
+        assert!(APP_SETTINGS
+            .read()
+            .unwrap()
+            .filter_bookmarks
+            .contains(&bookmark_id));
+
+        delete_bookmark(&bookmark_id);
+
+        assert!(get_bookmark(&bookmark_id).is_none());
+
+        assert_eq!(get_game_bookmarks(thread_id).len(), 0);
+
+        assert!(!APP_SETTINGS
+            .read()
+            .unwrap()
+            .filter_bookmarks
+            .contains(&bookmark_id));
+    }
 }

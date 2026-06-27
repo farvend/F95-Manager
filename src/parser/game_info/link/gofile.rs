@@ -7,8 +7,6 @@ use reqwest::{
 use serde::Deserialize;
 use std::str::FromStr;
 
-use crate::parser::CLIENT;
-
 lazy_static! {
     static ref RE_GOFILE_TOKEN: Regex = Regex::new(r#"appdata\.wt *= *".*""#).unwrap();
 }
@@ -17,7 +15,8 @@ lazy_static! {
 /// Returns (url, headers) on success.
 pub async fn resolve_gofile_file(id: &str) -> Option<(Url, HeaderMap<HeaderValue>)> {
     // Parse `wt` token from gofile global.js (temporary token)
-    let text = reqwest::get("https://gofile.io/dist/js/global.js")
+    let text = crate::net::client().get("https://gofile.io/dist/js/global.js")
+        .send()
         .await
         .ok()?
         .text()
@@ -29,14 +28,14 @@ pub async fn resolve_gofile_file(id: &str) -> Option<(Url, HeaderMap<HeaderValue
         .as_str()
         .split('"')
         .nth(1)
-        .filter(|s| !s.is_empty())?;
+        .filter(|s: &&str| !s.is_empty())?;
 
     let url = format!(
         "https://api.gofile.io/contents/{id}?wt={token}&contentFilter=&page=1&pageSize=1000&sortField=name&sortDirection=1"
     );
 
     // Create free temp account, extract account token
-    let resp_txt = CLIENT
+    let resp_txt = crate::net::client()
         .post("https://api.gofile.io/accounts")
         .send()
         .await
@@ -50,9 +49,7 @@ pub async fn resolve_gofile_file(id: &str) -> Option<(Url, HeaderMap<HeaderValue
         .token;
 
     // Query folder contents with Authorization
-    let resp = reqwest::Client::builder()
-        .build()
-        .ok()?
+    let resp = crate::net::client()
         .get(url)
         .header("authorization", format!("Bearer {token}"))
         .send()

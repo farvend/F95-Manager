@@ -1,5 +1,5 @@
 use eframe::egui::{
-    self, Color32, FontId, PointerButton, RichText, Sense, TextFormat, Ui, text::LayoutJob,
+    self, text::LayoutJob, Color32, FontId, PointerButton, RichText, Sense, TextFormat, Ui,
 };
 use strum::{EnumCount, IntoEnumIterator};
 

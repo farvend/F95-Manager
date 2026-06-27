@@ -28,7 +28,10 @@ lazy_static! {
     static ref UPDATE_FREQ_INPUT: RwLock<crate::app::settings::store::UpdateCheckFrequency> = RwLock::new(crate::app::settings::store::UpdateCheckFrequency::Manual);
     static ref SHOW_UNPLAYED_BADGE_INPUT: RwLock<bool> = RwLock::new(false);
     static ref CLASSIC_LIBRARY_TOGGLE_INPUT: RwLock<bool> = RwLock::new(false);
+    static ref DEFAULT_BOOKMARK_COLOR_INPUT: RwLock<[u8; 3]> = RwLock::new([60, 120, 200]);
+    static ref BOOKMARKS_VISIBLE_ON_COVER_INPUT: RwLock<u8> = RwLock::new(3);
     // State for extract-dir change confirmation and migration
+
     static ref MOVE_CONFIRM_OPEN: RwLock<bool> = RwLock::new(false);
     static ref PENDING_TEMP_DIR: RwLock<String> = RwLock::new(String::new());
     static ref PENDING_EXTRACT_DIR: RwLock<String> = RwLock::new(String::new());
@@ -126,13 +129,21 @@ pub fn open_settings() {
             let mut b = CLASSIC_LIBRARY_TOGGLE_INPUT.write().unwrap();
             *b = s.classic_library_toggle;
         }
+        {
+            let mut c = DEFAULT_BOOKMARK_COLOR_INPUT.write().unwrap();
+            *c = s.default_bookmark_color;
+        }
+        {
+            let mut v = BOOKMARKS_VISIBLE_ON_COVER_INPUT.write().unwrap();
+            *v = s.bookmarks_visible_on_cover;
+        }
     });
     *SETTINGS_OPEN.write().unwrap() = true;
 }
 
 fn calc_settings_window_size() -> [f32; 2] {
     const ROW_HEIGHT: f32 = 26.0;
-    const FIXED_UI_ROWS: f32 = 24.0;
+    const FIXED_UI_ROWS: f32 = 28.0;
     const TAG_PICKER_SECTIONS: f32 = 6.0;
     const PICKER_HEIGHT: f32 = 28.0;
     const PADDING: f32 = 40.0;
@@ -227,7 +238,40 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                         }
                     }
                 });
-                //ui.add_space(8.0);
+                 //ui.add_space(8.0);
+                ui.separator();
+
+                ui.heading(crate::localization::translate("settings-bookmarks-header"));
+                if ui.button(crate::localization::translate("settings-bookmarks-mgmt-btn")).clicked() {
+                    crate::views::bookmarks_management::open_bookmarks_management();
+                }
+
+                ui.horizontal(|ui| {
+                    ui.label(crate::localization::translate("settings-bookmarks-visible-limit"));
+                    let mut val = *BOOKMARKS_VISIBLE_ON_COVER_INPUT.read().unwrap();
+                    if ui.add(egui::Slider::new(&mut val, 1..=5)).changed() {
+                        *BOOKMARKS_VISIBLE_ON_COVER_INPUT.write().unwrap() = val;
+                    }
+                });
+
+                ui.horizontal(|ui| {
+                    ui.label(crate::localization::translate("settings-bookmarks-default-color"));
+                    let color = *DEFAULT_BOOKMARK_COLOR_INPUT.read().unwrap();
+                    let mut color_f32 = [
+                        color[0] as f32 / 255.0,
+                        color[1] as f32 / 255.0,
+                        color[2] as f32 / 255.0,
+                    ];
+                    if ui.color_edit_button_rgb(&mut color_f32).changed() {
+                        *DEFAULT_BOOKMARK_COLOR_INPUT.write().unwrap() = [
+                            (color_f32[0] * 255.0) as u8,
+                            (color_f32[1] * 255.0) as u8,
+                            (color_f32[2] * 255.0) as u8,
+                        ];
+                    }
+                });
+
+
                 ui.separator();
 
                 // Language selection
@@ -581,8 +625,10 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                                 let startup_prefixes = STARTUP_PREFIXES_INPUT.read().unwrap().clone();
                                 let startup_exclude_prefixes = STARTUP_EXCLUDE_PREFIXES_INPUT.read().unwrap().clone();
                                 let log_to_file = *LOG_TO_FILE_INPUT.read().unwrap();
-                                let show_unplayed_badge = *SHOW_UNPLAYED_BADGE_INPUT.read().unwrap();
+                                 let show_unplayed_badge = *SHOW_UNPLAYED_BADGE_INPUT.read().unwrap();
                                 let classic_library_toggle = *CLASSIC_LIBRARY_TOGGLE_INPUT.read().unwrap();
+                                let default_bookmark_color = *DEFAULT_BOOKMARK_COLOR_INPUT.read().unwrap();
+                                let bookmarks_visible_on_cover = *BOOKMARKS_VISIBLE_ON_COVER_INPUT.read().unwrap();
                                 let update_freq = UPDATE_FREQ_INPUT.read().unwrap().clone();
                                 let mut st = APP_SETTINGS.write().unwrap();
                                 st.temp_dir = std::path::PathBuf::from(temp_val);
@@ -600,6 +646,8 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                                 st.log_to_file = log_to_file;
                                 st.show_unplayed_badge = show_unplayed_badge;
                                 st.classic_library_toggle = classic_library_toggle;
+                                st.default_bookmark_color = default_bookmark_color;
+                                st.bookmarks_visible_on_cover = bookmarks_visible_on_cover;
                                 st.update_check_frequency = update_freq;
                                 // Store language selection
                                 st.language = *LANGUAGE_INPUT.read().unwrap();
@@ -713,7 +761,9 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                     let startup_tags = STARTUP_TAGS_INPUT.read().unwrap().clone();
                     let startup_exclude_tags = STARTUP_EXCLUDE_TAGS_INPUT.read().unwrap().clone();
                     let startup_prefixes = STARTUP_PREFIXES_INPUT.read().unwrap().clone();
-                    let startup_exclude_prefixes = STARTUP_EXCLUDE_PREFIXES_INPUT.read().unwrap().clone();
+                     let startup_exclude_prefixes = STARTUP_EXCLUDE_PREFIXES_INPUT.read().unwrap().clone();
+                    let default_bookmark_color = *DEFAULT_BOOKMARK_COLOR_INPUT.read().unwrap();
+                    let bookmarks_visible_on_cover = *BOOKMARKS_VISIBLE_ON_COVER_INPUT.read().unwrap();
                     {
                         let mut st = APP_SETTINGS.write().unwrap();
                         st.temp_dir = std::path::PathBuf::from(new_temp);
@@ -734,6 +784,8 @@ pub fn draw_settings_viewport(ctx: &egui::Context) {
                         st.log_to_file = *LOG_TO_FILE_INPUT.read().unwrap();
                         st.show_unplayed_badge = *SHOW_UNPLAYED_BADGE_INPUT.read().unwrap();
                         st.classic_library_toggle = *CLASSIC_LIBRARY_TOGGLE_INPUT.read().unwrap();
+                        st.default_bookmark_color = default_bookmark_color;
+                        st.bookmarks_visible_on_cover = bookmarks_visible_on_cover;
                         for (tid, nf, ne) in moved {
                             if let Some(entry) = st.downloaded_games.iter_mut().find(|e| e.thread_id == tid) {
                                 entry.folder = nf;

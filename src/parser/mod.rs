@@ -23,15 +23,6 @@ use crate::{
 
 pub const BASE_URL: &str = "https://f95zone.to/sam/latest_alpha/latest_data.php";
 
-lazy_static! {
-    static ref CLIENT: reqwest::Client = reqwest::Client::builder()
-        .user_agent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:68.0) Gecko/20100101 Firefox/68.0"
-        )
-        .build()
-        .unwrap();
-}
-
 pub mod game_info;
 
 #[derive(Debug, Clone)]
@@ -131,7 +122,7 @@ pub async fn fetch_image_f95_with_ref(
     url: &str,
     referer: &str,
 ) -> Result<(usize, usize, Vec<u8>), String> {
-    let client = &CLIENT;
+    let client = crate::net::client();
     log::debug!("fetch_image: GET {} referer={}", url, referer);
 
     let resp = match client
@@ -363,7 +354,7 @@ struct Root {
 /// Note: uses async reqwest client. Ensure Cargo.toml enables reqwest features:
 /// reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 pub async fn fetch_list_page(page: u32, filters: &F95Filters) -> Result<F95Msg, F95Error> {
-    let client = &CLIENT;
+    let client = crate::net::client();
 
     #[derive(Serialize, Debug)]
     struct Query<'a> {

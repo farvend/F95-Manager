@@ -1,6 +1,6 @@
 use eframe::egui::{
-    self as egui, Color32, Id, Key, Modifiers, Rounding, ScrollArea, Sense, Stroke, TextEdit, Ui,
-    Vec2, pos2,
+    self as egui, pos2, Color32, Id, Key, Modifiers, Rounding, ScrollArea, Sense, Stroke, TextEdit,
+    Ui, Vec2,
 };
 
 /// Generic dropdown picker with inline search and popup list.

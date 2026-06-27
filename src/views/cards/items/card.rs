@@ -6,6 +6,7 @@ use crate::app::settings::{
 };
 use crate::parser::F95Thread;
 // use crate::views::cards::items::cover_hover::CoverHover;
+use super::bookmark_selector::draw_bookmark_selector_popup;
 use super::cover_hover::draw_cover;
 use super::meta_row::draw_meta_row;
 use super::tags_panel::draw_tags_panel;
@@ -168,6 +169,20 @@ pub fn thread_card(
             ui.close_menu();
         }
 
+        // Bookmarks (only for downloaded games)
+        if is_downloaded {
+            if ui
+                .button(crate::localization::translate("card-context-bookmarks"))
+                .clicked()
+            {
+                ui.ctx().memory_mut(|m| {
+                    m.data
+                        .insert_temp(egui::Id::new(("bookmark_selector_open", thread_id)), true);
+                });
+                ui.close_menu();
+            }
+        }
+
         // Refresh metadata from network (for library games)
         if is_downloaded {
             if ui.button("🔄 Refresh").clicked() {
@@ -202,11 +217,13 @@ pub fn thread_card(
     });
 
     // Floating tags drop-down below the card: absolute area so it doesn't push layout.
-    let mut card_rect = frame_out.response.rect;
+    let card_rect = frame_out.response.rect;
     //card_rect.set_width(width);
     let (_is_open, area_hovered) =
         draw_tags_panel(ui, t, card_rect, hovered_any, fill, stroke, rounding);
     hovered_any |= area_hovered;
+
+    draw_bookmark_selector_popup(ui, t.thread_id.get(), card_rect);
 
     CardHover {
         hovered: hovered_any,
