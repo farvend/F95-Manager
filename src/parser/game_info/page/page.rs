@@ -2,7 +2,9 @@ use core::fmt;
 use lazy_static::lazy_static;
 use regex::Regex;
 use reqwest::Url;
+use std::path::PathBuf;
 use std::str::FromStr;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::parser::game_info::DownloadLink;
 use crate::parser::game_info::cookies;
@@ -20,6 +22,8 @@ lazy_static! {
 pub struct F95PageUrl(pub Url);
 pub struct F95Page(pub String);
 
+const FAILED_HTML_DIR: &str = "html_pages";
+
 #[derive(Debug)]
 pub enum GetLinksError {
     BuildClient,
@@ -29,6 +33,7 @@ pub enum GetLinksError {
     PlatformLineFormat,
     PlatformNameMissing,
     NoPlatformLinks,
+    LoginRequired,
 }
 impl fmt::Display for GetLinksError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -40,6 +45,9 @@ impl fmt::Display for GetLinksError {
             GetLinksError::PlatformLineFormat => write!(f, "Platform line parse error"),
             GetLinksError::PlatformNameMissing => write!(f, "Platform name missing"),
             GetLinksError::NoPlatformLinks => write!(f, "No platform links found"),
+            GetLinksError::LoginRequired => {
+                write!(f, "Login required: F95zone hides download links for guests")
+            }
         }
     }
 }
@@ -59,6 +67,28 @@ impl F95PageUrl {
 }
 
 impl F95Page {
+    pub async fn save_failed_parse_html<E: fmt::Display + ?Sized>(
+        &self,
+        page_url: &F95PageUrl,
+        error: &E,
+    ) -> std::io::Result<PathBuf> {
+        let dir = PathBuf::from(FAILED_HTML_DIR);
+        tokio::fs::create_dir_all(&dir).await?;
+
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_millis())
+            .unwrap_or_default();
+        let page_name = safe_filename_part(page_url.0.path());
+        let error_name = safe_filename_part(&error.to_string());
+        let file_name = format!("{timestamp}_{page_name}_{error_name}.html");
+        let path = dir.join(file_name);
+
+        tokio::fs::write(&path, &self.0).await?;
+
+        Ok(path)
+    }
+
     pub fn get_download_links(&self) -> Result<Vec<PlatformDownloads>, GetLinksError> {
         let html = scraper::Html::parse_document(&self.0);
         let selector = scraper::Selector::parse(r#"[style="text-align: center"]"#).unwrap();
@@ -68,7 +98,10 @@ impl F95Page {
             .next()
             .ok_or(GetLinksError::NoDownloadsBlock)?
             .html();
-        let span_html = span_html.split_once("DOWNLOAD").unwrap().1;
+        let span_html = span_html
+            .split_once("DOWNLOAD")
+            .map(|(_, after_download)| after_download)
+            .ok_or(GetLinksError::NoDownloadsBlock)?;
         let parts: Vec<&str> = RE_BR.split(span_html).collect();
 
         let mut downloads = Vec::new();
@@ -99,10 +132,38 @@ impl F95Page {
         }
 
         if downloads.is_empty() {
+            if page_has_hidden_guest_links(&self.0) {
+                return Err(GetLinksError::LoginRequired);
+            }
             return Err(GetLinksError::NoPlatformLinks);
         }
 
         Ok(downloads)
+    }
+}
+
+fn page_has_hidden_guest_links(html: &str) -> bool {
+    html.contains(r#"data-logged-in="false""#)
+        || html.contains("messageHide--link")
+        || html.contains("You must be registered to see the links")
+}
+
+fn safe_filename_part(value: &str) -> String {
+    let mut name = String::with_capacity(value.len());
+
+    for ch in value.chars() {
+        if ch.is_ascii_alphanumeric() {
+            name.push(ch);
+        } else if !name.ends_with('_') {
+            name.push('_');
+        }
+    }
+
+    let name = name.trim_matches('_');
+    if name.is_empty() {
+        "page".to_string()
+    } else {
+        name.chars().take(120).collect()
     }
 }
 

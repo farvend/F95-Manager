@@ -37,6 +37,14 @@ pub fn create_download_task(page: F95PageUrl) -> mpsc::Receiver<GameDownloadStat
                 Ok(links) => links,
                 Err(err) => {
                     log::error!("err getting links: {err}");
+                    match b.save_failed_parse_html(&page, &err).await {
+                        Ok(path) => {
+                            log::warn!("Saved failed parser HTML to {}", path.to_string_lossy());
+                        }
+                        Err(save_err) => {
+                            log::error!("Failed to save parser HTML: {save_err}");
+                        }
+                    }
                     let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(
                         err.to_string(),
                     )));

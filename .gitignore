@@ -7,6 +7,7 @@ cargo.lock
 /app_config.json
 /cache
 log.txt
+/html_pages
 /.github/instructions
 .env
 src/parser/game_info/page/pages/*

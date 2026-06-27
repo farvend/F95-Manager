@@ -3,7 +3,31 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
-    use crate::parser::game_info::page::F95Page;
+    use crate::parser::game_info::page::{F95Page, GetLinksError};
+
+    #[test]
+    fn hidden_guest_links_return_login_required() {
+        let page = F95Page(
+            r#"
+                <html data-logged-in="false">
+                    <body>
+                        <div style="text-align: center">
+                            <b><span style="font-size: 22px">DOWNLOAD</span></b><br />
+                            <span style="font-size: 18px"><b>Win</b>:
+                                <div class="messageHide messageHide--link">
+                                    You must be registered to see the links
+                                </div>
+                            </span>
+                        </div>
+                    </body>
+                </html>
+            "#
+            .to_string(),
+        );
+
+        let err = page.get_download_links().unwrap_err();
+        assert!(matches!(err, GetLinksError::LoginRequired));
+    }
 
     #[test]
     #[ignore = "Requires big HTML files with potentially sensitive data"]
