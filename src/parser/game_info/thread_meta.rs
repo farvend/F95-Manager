@@ -1,8 +1,11 @@
 use lazy_static::lazy_static;
 use regex::Regex;
-use reqwest::{Client, StatusCode};
+use reqwest::{Client, StatusCode, Url};
 
-use super::cookies;
+use super::{
+    cookies,
+    page::{F95Page, F95PageUrl},
+};
 use crate::tags::TAGS;
 use std::{fmt, time::Duration};
 
@@ -84,40 +87,43 @@ pub async fn fetch_thread_meta(thread_id: u64) -> Result<ThreadMeta, FetchThread
 
     let text = resp.text().await.map_err(FetchThreadMetaError::ReadText)?;
 
-    let full_title_html = RE_OG_TITLE
+    let full_title_html = match RE_OG_TITLE
         .captures(&text)
         .and_then(|cap| cap.get(0))
         .map(|m| m.as_str().to_string())
-        .ok_or(FetchThreadMetaError::OgTitleMissing)?;
+    {
+        Some(title) => title,
+        None => {
+            return parse_error(thread_id, &url, &text, FetchThreadMetaError::OgTitleMissing).await;
+        }
+    };
 
-    let full_title = full_title_html
-        .rsplit_once("</span>")
-        .map(|(_, r)| r)
-        .ok_or(FetchThreadMetaError::OgTitleMissing)?;
+    let full_title = match full_title_html.rsplit_once("</span>").map(|(_, r)| r) {
+        Some(title) => title,
+        None => {
+            return parse_error(thread_id, &url, &text, FetchThreadMetaError::OgTitleMissing).await;
+        }
+    };
 
     let mut title_parts = full_title.split('[');
 
     // Title
-    let title = title_parts
-        .next()
-        .ok_or(FetchThreadMetaError::TitleMissing)?
-        .trim()
-        .to_string();
+    let Some(title_raw) = title_parts.next() else {
+        return parse_error(thread_id, &url, &text, FetchThreadMetaError::TitleMissing).await;
+    };
+    let title = title_raw.trim().to_string();
 
     // Version (strip trailing ']')
-    let version = title_parts
-        .next()
-        .ok_or(FetchThreadMetaError::VersionMissing)?
-        .trim()
-        .trim_end_matches(']')
-        .trim()
-        .to_string();
+    let Some(version_raw) = title_parts.next() else {
+        return parse_error(thread_id, &url, &text, FetchThreadMetaError::VersionMissing).await;
+    };
+    let version = version_raw.trim().trim_end_matches(']').trim().to_string();
 
     // Author (strip trailing markers like ']' and '<')
-    let author_raw = title_parts
-        .next()
-        .ok_or(FetchThreadMetaError::AuthorMissing)?
-        .trim();
+    let Some(author_raw) = title_parts.next() else {
+        return parse_error(thread_id, &url, &text, FetchThreadMetaError::AuthorMissing).await;
+    };
+    let author_raw = author_raw.trim();
     let creator = author_raw
         .trim_end_matches('<')
         .trim()
@@ -134,7 +140,10 @@ pub async fn fetch_thread_meta(thread_id: u64) -> Result<ThreadMeta, FetchThread
     for cap in RE_ATTACH.captures_iter(&text) {
         let s = cap.get(1).unwrap().as_str().to_string();
         // Extract extension (handle query strings like "image.png?hash=123")
-        let ext = s.split('?').next().unwrap_or(&s)
+        let ext = s
+            .split('?')
+            .next()
+            .unwrap_or(&s)
             .rsplit('.')
             .next()
             .unwrap_or("")
@@ -145,12 +154,17 @@ pub async fn fetch_thread_meta(thread_id: u64) -> Result<ThreadMeta, FetchThread
     }
 
     // Cover: prefer explicit cover; fallback to first screenshot if available.
-    let cover = RE_COVER
+    let cover = match RE_COVER
         .captures(&text)
         .and_then(|cap| cap.get(1))
         .map(|m| m.as_str().to_string())
-        .or_else(|| screens.get(0).cloned())
-        .ok_or(FetchThreadMetaError::CoverMissing)?;
+        .or_else(|| screens.first().cloned())
+    {
+        Some(cover) => cover,
+        None => {
+            return parse_error(thread_id, &url, &text, FetchThreadMetaError::CoverMissing).await;
+        }
+    };
 
     // Tags block: <span class="js-tagList"> ... </span> (non-greedy + dotall)
     let mut tag_ids: Vec<u32> = Vec::new();
@@ -195,4 +209,50 @@ pub async fn fetch_thread_meta(thread_id: u64) -> Result<ThreadMeta, FetchThread
         version,
         creator,
     })
+}
+
+async fn parse_error<T>(
+    thread_id: u64,
+    url: &str,
+    html: &str,
+    error: FetchThreadMetaError,
+) -> Result<T, FetchThreadMetaError> {
+    save_failed_thread_meta_html(thread_id, url, html, &error).await;
+    Err(error)
+}
+
+async fn save_failed_thread_meta_html(
+    thread_id: u64,
+    url: &str,
+    html: &str,
+    error: &FetchThreadMetaError,
+) {
+    let parsed_url = match Url::parse(url) {
+        Ok(url) => url,
+        Err(parse_err) => {
+            log::error!("Failed to parse thread URL for HTML dump: {parse_err}");
+            return;
+        }
+    };
+
+    let page = F95Page(html.to_string());
+    match page
+        .save_failed_parse_html(&F95PageUrl(parsed_url), error)
+        .await
+    {
+        Ok(path) => {
+            log::warn!(
+                "Saved failed thread meta HTML for {} to {}",
+                thread_id,
+                path.to_string_lossy()
+            );
+        }
+        Err(save_err) => {
+            log::error!(
+                "Failed to save thread meta HTML for {}: {}",
+                thread_id,
+                save_err
+            );
+        }
+    }
 }
