@@ -1,62 +1,57 @@
-use lazy_static::lazy_static;
-use regex::Regex;
 use reqwest::{
     Url,
     header::{HeaderMap, HeaderValue},
 };
 use serde::Deserialize;
-use std::str::FromStr;
+use sha2::{Digest, Sha256};
+use std::{
+    str::FromStr,
+    time::{SystemTime, UNIX_EPOCH},
+};
+use tokio::sync::OnceCell;
 
-lazy_static! {
-    static ref RE_GOFILE_TOKEN: Regex = Regex::new(r#"appdata\.wt *= *".*""#).unwrap();
+const WEBSITE_TOKEN_SECRET: &str = "9844d94d963d30";
+const WEBSITE_TOKEN_PERIOD_SECS: u64 = 4 * 60 * 60;
+static ACCOUNT_TOKEN: OnceCell<String> = OnceCell::const_new();
+
+#[derive(Debug)]
+pub enum GofileLinkError {
+    MissingFolderId,
+    AccountRequest(reqwest::Error),
+    AccountRead(reqwest::Error),
+    AccountJson(serde_json::Error),
+    ContentsRequest(reqwest::Error),
+    ContentsRead(reqwest::Error),
+    ContentsJson(serde_json::Error),
+    NoFileInFolder,
+    InvalidFileUrl(url::ParseError),
+    InvalidCookieHeader(reqwest::header::InvalidHeaderValue),
 }
 
 /// Resolve a GoFile folder id to a direct file download URL and required headers.
-/// Returns (url, headers) on success.
-pub async fn resolve_gofile_file(id: &str) -> Option<(Url, HeaderMap<HeaderValue>)> {
-    // Parse `wt` token from gofile global.js (temporary token)
-    let text = crate::net::client().get("https://gofile.io/dist/js/global.js")
-        .send()
-        .await
-        .ok()?
-        .text()
-        .await
-        .ok()?;
-    let captures = RE_GOFILE_TOKEN.captures(&text)?;
-    let token = captures
-        .get(0)?
-        .as_str()
-        .split('"')
-        .nth(1)
-        .filter(|s: &&str| !s.is_empty())?;
+pub async fn resolve_gofile_file(
+    id: &str,
+) -> Result<(Url, HeaderMap<HeaderValue>), GofileLinkError> {
+    let token = account_token().await?;
 
+    // Gofile replaced the old `wt` query parameter with a time-limited
+    // X-Website-Token derived from the account token and request headers.
+    let website_token = website_token(&token, SystemTime::now());
     let url = format!(
-        "https://api.gofile.io/contents/{id}?wt={token}&contentFilter=&page=1&pageSize=1000&sortField=name&sortDirection=1"
+        "https://api.gofile.io/contents/{id}?contentFilter=&page=1&pageSize=1000&sortField=name&sortDirection=1"
     );
-
-    // Create free temp account, extract account token
-    let resp_txt = crate::net::client()
-        .post("https://api.gofile.io/accounts")
-        .send()
-        .await
-        .ok()?
-        .text()
-        .await
-        .ok()?;
-    let token = serde_json::from_str::<GofileAuth>(&resp_txt)
-        .ok()?
-        .data
-        .token;
 
     // Query folder contents with Authorization
     let resp = crate::net::client()
         .get(url)
         .header("authorization", format!("Bearer {token}"))
+        .header("x-website-token", website_token)
+        .header("x-bl", "")
         .send()
         .await
-        .ok()?;
-    let text = resp.text().await.ok()?;
-    let data: GofileFiles = serde_json::from_str(&text).ok()?;
+        .map_err(GofileLinkError::ContentsRequest)?;
+    let text = resp.text().await.map_err(GofileLinkError::ContentsRead)?;
+    let data: GofileFiles = serde_json::from_str(&text).map_err(GofileLinkError::ContentsJson)?;
 
     // Pick first file child link
     let url = data
@@ -67,16 +62,48 @@ pub async fn resolve_gofile_file(id: &str) -> Option<(Url, HeaderMap<HeaderValue
             GofileNode::File { link, .. } => Some(link.clone()),
             _ => None,
         })
-        .next()?;
-    let url = Url::from_str(&url).ok()?;
+        .next()
+        .ok_or(GofileLinkError::NoFileInFolder)?;
+    let url = Url::from_str(&url).map_err(GofileLinkError::InvalidFileUrl)?;
 
     let mut headers = HeaderMap::new();
     headers.append(
         "Cookie",
-        HeaderValue::from_str(&format!("accountToken={token}")).ok()?,
+        HeaderValue::from_str(&format!("accountToken={token}"))
+            .map_err(GofileLinkError::InvalidCookieHeader)?,
     );
 
-    Some((url, headers))
+    Ok((url, headers))
+}
+
+async fn account_token() -> Result<&'static str, GofileLinkError> {
+    ACCOUNT_TOKEN
+        .get_or_try_init(|| async {
+            let response = crate::net::client()
+                .post("https://api.gofile.io/accounts")
+                .send()
+                .await
+                .map_err(GofileLinkError::AccountRequest)?;
+            let body = response
+                .text()
+                .await
+                .map_err(GofileLinkError::AccountRead)?;
+            serde_json::from_str::<GofileAuth>(&body)
+                .map(|auth| auth.data.token)
+                .map_err(GofileLinkError::AccountJson)
+        })
+        .await
+        .map(String::as_str)
+}
+
+fn website_token(account_token: &str, now: SystemTime) -> String {
+    let time_bucket =
+        now.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() / WEBSITE_TOKEN_PERIOD_SECS;
+    let input = format!(
+        "{}::::{account_token}::{time_bucket}::{WEBSITE_TOKEN_SECRET}",
+        crate::net::USER_AGENT
+    );
+    format!("{:x}", Sha256::digest(input.as_bytes()))
 }
 
 #[derive(serde::Deserialize)]
@@ -164,4 +191,20 @@ struct GofileFiles {
     status: String,
     data: GofileData,
     metadata: GofileMetadata,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn website_token_matches_gofile_generator() {
+        let now = UNIX_EPOCH + Duration::from_secs(123_983 * WEBSITE_TOKEN_PERIOD_SECS);
+
+        assert_eq!(
+            website_token("test-token", now),
+            "a26ce316e244cf605cf24c3fc80e999372c365b96742e29155b87765da234021"
+        );
+    }
 }

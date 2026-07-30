@@ -138,10 +138,38 @@ impl DownloadLink {
 }
 
 #[derive(Debug)]
+pub enum PixeldrainLinkError {
+    MissingFileId,
+    InvalidUrl(url::ParseError),
+}
+
+#[derive(Debug)]
+pub enum CatboxLinkError {
+    MissingFilePath,
+    InvalidUrl(url::ParseError),
+}
+
+#[derive(Debug)]
+pub enum MegaLinkError {
+    MissingNodeId,
+    MissingNodeKey,
+    MalformedLegacyFragment,
+    InvalidUrl(url::ParseError),
+}
+
+#[derive(Debug)]
+pub enum DirectLinkError {
+    Pixeldrain(PixeldrainLinkError),
+    Gofile(gofile::GofileLinkError),
+    Catbox(CatboxLinkError),
+    Mega(MegaLinkError),
+}
+
+#[derive(Debug)]
 pub enum DownloadError {
     Network(reqwest::Error),
     NoRedirect,
-    DirectLinkFailed,
+    DirectLinkFailed(DirectLinkError),
     UnsupportedHosting,
     Captcha,
     ClientBuild(reqwest::Error),
@@ -220,7 +248,7 @@ impl DownloadLink {
                 .clone()
                 .get()
                 .await
-                .ok_or(DownloadError::DirectLinkFailed)?
+                .map_err(DownloadError::DirectLinkFailed)?
         };
 
         // Fire request / or branch for MEGA
