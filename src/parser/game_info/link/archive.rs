@@ -320,9 +320,9 @@ fn archive_dest_dir(archive_path: &Path, dest_base: &Path) -> PathBuf {
         .to_ascii_lowercase();
 
     // Known multi-part and single extensions we want to strip (longest first)
-    const SUFFIXES: [&str; 13] = [
+    const SUFFIXES: [&str; 14] = [
         ".tar.gz", ".tar.bz2", ".tar.xz", ".tgz", ".tbz2", ".txz", ".zip", ".rar", ".7z", ".tar",
-        ".gz", ".bz2", ".xz",
+        ".exe", ".gz", ".bz2", ".xz",
     ];
 
     let mut base = fname.clone();
@@ -334,6 +334,42 @@ fn archive_dest_dir(archive_path: &Path, dest_base: &Path) -> PathBuf {
     }
     let stem = if base.is_empty() { "extracted" } else { &base };
     dest_base.join(stem)
+}
+
+fn install_standalone_executable(
+    executable_path: &Path,
+    dest_base: &Path,
+    sd: &UnboundedSender<GameDownloadStatus>,
+) -> Result<(PathBuf, Option<PathBuf>), String> {
+    let base_dest = archive_dest_dir(executable_path, dest_base);
+    let mut dest_dir = base_dest.clone();
+    if dest_dir.exists() {
+        let original_name = dest_dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("game")
+            .to_string();
+        let mut index = 2usize;
+        loop {
+            let candidate = dest_dir.with_file_name(format!("{original_name}-{index}"));
+            if !candidate.exists() {
+                dest_dir = candidate;
+                break;
+            }
+            index += 1;
+        }
+    }
+
+    fs::create_dir_all(&dest_dir).map_err(|e| format!("Create game dir failed: {e}"))?;
+    let file_name = executable_path
+        .file_name()
+        .ok_or_else(|| "Executable has no file name".to_string())?;
+    let installed_path = dest_dir.join(file_name);
+    fs::copy(executable_path, &installed_path)
+        .map_err(|e| format!("Install standalone executable failed: {e}"))?;
+    let _ = sd.send(GameDownloadStatus::Unzipping(Progress::Pending(1.0)));
+
+    Ok((dest_dir, Some(installed_path)))
 }
 
 fn extract_with_sevenz(
@@ -399,6 +435,10 @@ pub fn extract_archive(
     // - .zip (native streaming unzip)
     // - .7z (pure Rust via sevenz_rust)
     // - .rar (via unrar + UnRAR.dll on Windows)
+    // - .exe (standalone executable; copied without launching)
+    if name_lower.ends_with(".exe") {
+        return install_standalone_executable(archive_path, dest_base, sd);
+    }
     if name_lower.ends_with(".zip") {
         return unzip_streaming(archive_path, dest_base, sd);
     }
@@ -410,6 +450,33 @@ pub fn extract_archive(
     }
 
     Err(format!("Unsupported archive format: {}", name_lower))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::mpsc::unbounded_channel;
+
+    #[test]
+    fn installs_standalone_executable_without_extracting_it() {
+        let root =
+            std::env::temp_dir().join(format!("f95-standalone-exe-test-{}", uuid::Uuid::new_v4()));
+        let downloads = root.join("downloads");
+        let games = root.join("games");
+        fs::create_dir_all(&downloads).unwrap();
+        let source = downloads.join("noaika_novsync_test.exe");
+        fs::write(&source, b"test executable").unwrap();
+        let (sender, _receiver) = unbounded_channel();
+
+        let (dest_dir, executable) = extract_archive(&source, &games, &sender).unwrap();
+        let executable = executable.unwrap();
+
+        assert_eq!(dest_dir, games.join("noaika_novsync_test"));
+        assert_eq!(executable, dest_dir.join("noaika_novsync_test.exe"));
+        assert_eq!(fs::read(executable).unwrap(), b"test executable");
+
+        fs::remove_dir_all(root).unwrap();
+    }
 }
 
 fn extract_with_unrar(
