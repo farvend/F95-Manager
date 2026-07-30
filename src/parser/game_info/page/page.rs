@@ -15,8 +15,8 @@ lazy_static! {
         Regex::new(r#"DOWNLOAD[.\w<>/ \n="-:]*</a> *< */? *\w+ */?>"#).unwrap();
     static ref RE_PLATFORM_LINKS: Regex = Regex::new(r" *<.*href.*").unwrap();
     static ref RE_LINK: Regex = Regex::new(r#"https://[\w./]*"#).unwrap();
-    static ref RE_PLATFORM: Regex = Regex::new(r">[\w/]+<").unwrap();
     static ref RE_BR: Regex = Regex::new(r"<br\s*/?>").unwrap();
+    static ref RE_DOWNLOAD_LABEL: Regex = Regex::new(r"(?i)download").unwrap();
 }
 
 pub struct F95PageUrl(pub Url);
@@ -33,6 +33,7 @@ pub enum GetLinksError {
     PlatformLineFormat,
     PlatformNameMissing,
     NoPlatformLinks,
+    NoSupportedHostings,
     LoginRequired,
 }
 impl fmt::Display for GetLinksError {
@@ -45,6 +46,7 @@ impl fmt::Display for GetLinksError {
             GetLinksError::PlatformLineFormat => write!(f, "Platform line parse error"),
             GetLinksError::PlatformNameMissing => write!(f, "Platform name missing"),
             GetLinksError::NoPlatformLinks => write!(f, "No platform links found"),
+            GetLinksError::NoSupportedHostings => write!(f, "No supported hostings found"),
             GetLinksError::LoginRequired => {
                 write!(f, "Login required: F95zone hides download links for guests")
             }
@@ -94,30 +96,36 @@ impl F95Page {
         let selector = scraper::Selector::parse(r#"[style="text-align: center"]"#).unwrap();
         let span_html = &html
             .select(&selector)
-            .filter(|e| e.html().contains("DOWNLOAD"))
+            .filter(|e| RE_DOWNLOAD_LABEL.is_match(&e.html()))
             .next()
             .ok_or(GetLinksError::NoDownloadsBlock)?
             .html();
-        let span_html = span_html
-            .split_once("DOWNLOAD")
-            .map(|(_, after_download)| after_download)
+        let span_html = RE_DOWNLOAD_LABEL
+            .find(span_html)
+            .map(|download_label| &span_html[download_label.end()..])
             .ok_or(GetLinksError::NoDownloadsBlock)?;
         let parts: Vec<&str> = RE_BR.split(span_html).collect();
 
         let mut downloads = Vec::new();
+        let mut found_download_urls = false;
 
         for platform_downloads in parts.iter().skip(1) {
-            let platform = match RE_PLATFORM
-                .captures(platform_downloads)
-                .and_then(|e| e.get(0))
+            let fragment = scraper::Html::parse_fragment(platform_downloads);
+            let platform = match fragment
+                .root_element()
+                .text()
+                .map(Platform::from)
+                .find(|platform| !platform.is_empty())
             {
-                Some(m) => m.as_str(),
+                Some(platform) => platform,
                 None => continue,
             };
-            let platform = Platform::from(&platform[1..platform.len() - 1]);
 
-            let links: Vec<DownloadLink> = RE_LINK
-                .captures_iter(platform_downloads)
+            let url_captures: Vec<_> = RE_LINK.captures_iter(platform_downloads).collect();
+            found_download_urls |= !url_captures.is_empty();
+
+            let links: Vec<DownloadLink> = url_captures
+                .into_iter()
                 .filter_map(|link| {
                     let url = link.get(0).map(|m| m.as_str())?;
                     DownloadLink::new(Url::from_str(url).ok()?)
@@ -134,6 +142,9 @@ impl F95Page {
         if downloads.is_empty() {
             if page_has_hidden_guest_links(&self.0) {
                 return Err(GetLinksError::LoginRequired);
+            }
+            if found_download_urls {
+                return Err(GetLinksError::NoSupportedHostings);
             }
             return Err(GetLinksError::NoPlatformLinks);
         }
