@@ -18,6 +18,14 @@ fn default_bookmarks_visible() -> u8 {
     3
 }
 
+fn default_ui_scale_percent() -> u16 {
+    100
+}
+
+fn default_card_scale_percent() -> u16 {
+    100
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Bookmark {
     pub id: String,
@@ -128,6 +136,10 @@ pub struct AppSettings {
     pub bookmarks_visible_on_cover: u8,
     #[serde(default)]
     pub filter_bookmarks: Vec<String>,
+    #[serde(default = "default_ui_scale_percent")]
+    pub ui_scale_percent: u16,
+    #[serde(default = "default_card_scale_percent")]
+    pub card_scale_percent: u16,
 }
 
 impl Persistable for AppSettings {}
@@ -161,6 +173,8 @@ impl Default for AppSettings {
             default_bookmark_color: default_bookmark_color(),
             bookmarks_visible_on_cover: default_bookmarks_visible(),
             filter_bookmarks: Vec::new(),
+            ui_scale_percent: default_ui_scale_percent(),
+            card_scale_percent: default_card_scale_percent(),
         }
     }
 }
@@ -604,5 +618,7 @@ mod tests {
         assert_eq!(settings.default_bookmark_color, [60, 120, 200]);
         assert_eq!(settings.bookmarks_visible_on_cover, 3);
         assert!(settings.filter_bookmarks.is_empty());
+        assert_eq!(settings.ui_scale_percent, 100);
+        assert_eq!(settings.card_scale_percent, 100);
     }
 }

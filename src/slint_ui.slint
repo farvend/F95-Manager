@@ -1,0 +1,1182 @@
+import { CheckBox, ComboBox, LineEdit, Slider, ScrollView, ListView } from "std-widgets.slint";
+
+export struct TagRowData {
+    tags: [string],
+}
+
+export struct CardBadgeData {
+    label: string,
+    red: int,
+    green: int,
+    blue: int,
+}
+
+export struct GameCardData {
+    id: string,
+    title: string,
+    creator: string,
+    version: string,
+    prefix: string,
+    date: string,
+    likes: string,
+    views: string,
+    rating: string,
+    cover: image,
+    screens: [image],
+    screen-loaded: [bool],
+    screen-count: int,
+    screens-ready: bool,
+    tag-rows: [TagRowData],
+    installed: bool,
+    warning-count: int,
+    bookmark-badges: [CardBadgeData],
+    unplayed: bool,
+}
+
+export struct GameRowData {
+    cards: [GameCardData],
+}
+
+export struct BookmarkData {
+    id: string,
+    label: string,
+    active: bool,
+}
+
+export struct SuggestionData {
+    id: string,
+    label: string,
+}
+
+component FlatButton inherits Rectangle {
+    in property <string> text;
+    in property <string> text-font: "Segoe UI";
+    in property <bool> active: false;
+    in property <bool> danger: false;
+    callback clicked;
+    height: 31px * Theme.scale;
+    border-radius: 5px * Theme.scale;
+    border-width: 1px;
+    border-color: active ? #824247 : #444444;
+    background: touch.pressed ? #3a3031 : touch.has-hover ? #303030 : active ? #392627 : #292929;
+    Text {
+        text: root.text;
+        font-family: root.text-font;
+        color: root.danger ? #e68b90 : root.active ? #e96b72 : #bdbdbd;
+        font-size: 13px * Theme.scale;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export global Theme {
+    in-out property <float> scale: 1.0;
+    in-out property <float> card-scale: 1.0;
+    in-out property <length> card-width: 320px;
+}
+
+component GameCard inherits Rectangle {
+    in property <GameCardData> game;
+    in property <string> active-tag-card-id;
+    callback image-needed(string);
+    callback primary-action(string);
+    callback open-thread(string);
+    callback hide-game(string);
+    callback open-folder(string);
+    callback context-requested(string, bool, length, length);
+    callback tags-hovered(string, [TagRowData], length, length, length, bool);
+    in-out property <int> selected-screen: -1;
+    private property <float> card-factor: Theme.scale * Theme.card-scale;
+    private property <length> cover-height: (root.width - 18px * root.card-factor) * 9 / 16;
+    private property <length> base-height: 9px * root.card-factor + root.cover-height
+        + (root.game.screen-count > 0 ? 8px * root.card-factor : 0px)
+        + 8px * root.card-factor + title-text.preferred-height
+        + 8px * root.card-factor + creator-text.preferred-height
+        + 8px * root.card-factor + 34px * root.card-factor + 9px * root.card-factor;
+    // The action button has its own TouchArea. Treat it as part of the card,
+    // otherwise entering the button makes the parent hover disappear and the
+    // button hides itself from under the pointer.
+    private property <bool> card-hovered: hover.has-hover || action-touch.has-hover;
+    private property <bool> tags-open: root.game.tag-rows.length > 0
+        && (root.card-hovered || root.active-tag-card-id == root.game.id);
+    width: Theme.card-width;
+    height: root.base-height;
+    border-radius: 10px * root.card-factor;
+    border-width: 1px;
+    border-color: #454545;
+    background: #232323;
+    clip: false;
+    cache-rendering-hint: true;
+    z: 1;
+
+    hover := TouchArea {
+        pointer-event(event) => {
+            if (event.button == PointerEventButton.right && event.kind == PointerEventKind.down) {
+                root.context-requested(root.game.id, root.game.installed,
+                    self.absolute-position.x + self.mouse-x,
+                    self.absolute-position.y + self.mouse-y);
+            }
+        }
+        changed has-hover => {
+            if (self.has-hover && root.game.tag-rows.length > 0) {
+                root.tags-hovered(root.game.id, root.game.tag-rows, root.x,
+                    root.absolute-position.y + root.base-height,
+                    root.width, true);
+            } else if (!self.has-hover) {
+                root.tags-hovered(root.game.id, root.game.tag-rows, root.x,
+                    root.absolute-position.y + root.base-height,
+                    root.width, false);
+            }
+            if (!self.has-hover && !action-touch.has-hover) { root.selected-screen = -1; }
+        }
+        changed mouse-x => {
+            if (self.has-hover && root.game.screens-ready && root.game.screen-count > 0) {
+                let target = min(root.game.screen-count - 1,
+                    max(0, floor(self.mouse-x / root.width * root.game.screen-count)));
+                root.selected-screen = target < root.game.screen-loaded.length
+                    && root.game.screen-loaded[target] ? target : -1;
+            }
+        }
+    }
+
+    changed absolute-position => {
+        if ((root.card-hovered || root.active-tag-card-id == root.game.id)
+            && root.game.tag-rows.length > 0) {
+            root.tags-hovered(root.game.id, root.game.tag-rows, root.x,
+                root.absolute-position.y + root.base-height,
+                root.width, hover.has-hover);
+        }
+    }
+
+    VerticalLayout {
+        padding: 9px * root.card-factor;
+        spacing: 8px * root.card-factor;
+        Rectangle {
+            height: root.cover-height;
+            background: #121212;
+            clip: true;
+            Image {
+                width: parent.width;
+                height: parent.height;
+                source: root.selected-screen >= 0 && root.selected-screen < root.game.screens.length
+                    ? root.game.screens[root.selected-screen] : root.game.cover;
+                image-fit: cover;
+            }
+            HorizontalLayout {
+                x: 8px * root.card-factor;
+                y: parent.height - self.height - 8px * root.card-factor;
+                height: 25px * root.card-factor;
+                spacing: 4px * root.card-factor;
+                if root.game.prefix != "": Rectangle {
+                    width: prefix-text.preferred-width + 12px * root.card-factor;
+                    border-radius: 5px * root.card-factor;
+                    background: #4b4b4bdd;
+                    prefix-text := Text {
+                        text: root.game.prefix;
+                        color: #dddddd;
+                        font-size: 13px * root.card-factor;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+                if root.game.warning-count > 0: Rectangle {
+                    width: 25px * root.card-factor;
+                    border-radius: 5px * root.card-factor;
+                    background: #aa2828;
+                    Text { text: root.game.warning-count; color: white; font-size: 12px * root.card-factor; horizontal-alignment: center; vertical-alignment: center; }
+                }
+                if root.game.unplayed: Rectangle {
+                    width: 25px * root.card-factor;
+                    border-radius: 5px * root.card-factor;
+                    background: #202020dd;
+                    Text { text: "✨"; font-family: "Segoe UI Emoji"; font-size: 12px * root.card-factor; horizontal-alignment: center; vertical-alignment: center; }
+                }
+                for badge in root.game.bookmark-badges: Rectangle {
+                    width: 25px * root.card-factor;
+                    border-radius: 5px * root.card-factor;
+                    background: rgb(badge.red, badge.green, badge.blue);
+                    Text { text: badge.label; font-family: "Segoe UI Emoji"; color: white; font-size: 12px * root.card-factor; horizontal-alignment: center; vertical-alignment: center; }
+                }
+            }
+            if root.game.version != "": Rectangle {
+                x: parent.width - self.width - 8px * root.card-factor;
+                y: 8px * root.card-factor;
+                width: version-text.preferred-width + 18px * root.card-factor;
+                height: 29px * root.card-factor;
+                border-radius: 9px * root.card-factor;
+                background: #434343ee;
+                version-text := Text {
+                    text: root.game.version;
+                    color: #dddddd;
+                    font-size: 12px * root.card-factor;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+            Rectangle {
+                x: 8px * root.card-factor;
+                y: 8px * root.card-factor;
+                width: 38px * root.card-factor;
+                height: 31px * root.card-factor;
+                border-radius: 7px * root.card-factor;
+                background: #303030dd;
+                opacity: root.card-hovered ? 1 : 0;
+                Text {
+                    text: root.game.installed ? "▶" : "↓";
+                    font-family: "Segoe UI Symbol";
+                    color: #dddddd;
+                    font-size: 16px * root.card-factor;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                action-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    changed has-hover => {
+                        if (self.has-hover && root.game.tag-rows.length > 0) {
+                            root.tags-hovered(root.game.id, root.game.tag-rows, root.x,
+                                root.absolute-position.y + root.base-height,
+                                root.width, true);
+                        } else if (!self.has-hover && !hover.has-hover) {
+                            root.tags-hovered(root.game.id, root.game.tag-rows, root.x,
+                                root.absolute-position.y + root.base-height,
+                                root.width, false);
+                            root.selected-screen = -1;
+                        }
+                    }
+                    clicked => { root.primary-action(root.game.id); }
+                }
+            }
+        }
+        if root.card-hovered && root.game.screen-count > 0: Rectangle {
+            height: 6px * root.card-factor;
+            background: transparent;
+            HorizontalLayout {
+                spacing: 0px;
+                for marker[index] in root.game.screen-count: Rectangle {
+                    height: index == root.selected-screen ? 3px * root.card-factor : 2px * root.card-factor;
+                    border-radius: 0px;
+                    background: index == root.selected-screen ? #e6e6e6 : #696969;
+                }
+            }
+        }
+        title-text := Text {
+            text: root.game.title;
+            color: #dddddd;
+            font-size: 20px * root.card-factor;
+            font-weight: 400;
+            wrap: word-wrap;
+        }
+        creator-text := Text {
+            text: root.game.creator;
+            color: #aaaaaa;
+            font-size: 12px * root.card-factor;
+            overflow: elide;
+        }
+        Rectangle {
+            height: 34px * root.card-factor;
+            width: meta.preferred-width + 18px * root.card-factor;
+            border-radius: 8px * root.card-factor;
+            background: #292929;
+            meta := Text {
+                text: "◷ " + root.game.date + "   ♨ " + root.game.likes + "   ↝ " + root.game.views + "   ☆ " + root.game.rating;
+                font-family: "Segoe UI Symbol";
+                color: #999999;
+                font-size: 11px * root.card-factor;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+
+    if root.tags-open: Rectangle {
+        x: 0px;
+        y: root.height - 10px * root.card-factor;
+        width: root.width;
+        height: 11px * root.card-factor;
+        background: #232323;
+        z: 2;
+        Rectangle { x: 0px; width: 1px; background: #454545; }
+        Rectangle { x: parent.width - 1px; width: 1px; background: #454545; }
+    }
+
+    // Do not start a new network/decode job for every card that merely passes
+    // underneath a stationary cursor while the list is being scrolled.
+    Timer {
+        interval: 140ms;
+        running: root.card-hovered;
+        triggered => {
+            if (root.card-hovered) { root.image-needed(root.game.id); }
+        }
+    }
+
+}
+
+component DarkContextMenu inherits Rectangle {
+    in property <bool> installed;
+    callback hide-game();
+    callback open-thread();
+    callback bookmarks();
+    callback refresh-game();
+    callback delete-game();
+    callback open-folder();
+    width: 154px * Theme.scale;
+    height: (installed ? 200px : 72px) * Theme.scale;
+    background: #202020;
+    border-width: 1px;
+    border-color: #484848;
+    border-radius: 8px * Theme.scale;
+    drop-shadow-color: #00000099;
+    drop-shadow-blur: 12px * Theme.scale;
+    drop-shadow-offset-y: 3px * Theme.scale;
+
+    VerticalLayout {
+        padding: 5px * Theme.scale;
+        spacing: 2px * Theme.scale;
+        FlatButton { text: "Скрыть"; clicked => { root.hide-game(); } }
+        FlatButton { text: "Открыть в F95"; clicked => { root.open-thread(); } }
+        if root.installed: FlatButton { text: "🏷 Закладки…"; text-font: "Segoe UI Emoji"; clicked => { root.bookmarks(); } }
+        if root.installed: FlatButton { text: "↻ Обновить"; text-font: "Segoe UI Symbol"; clicked => { root.refresh-game(); } }
+        if root.installed: FlatButton { text: "Удалить"; danger: true; clicked => { root.delete-game(); } }
+        if root.installed: FlatButton { text: "Открыть папку"; clicked => { root.open-folder(); } }
+    }
+}
+
+component TagPanel inherits Rectangle {
+    in property <[TagRowData]> rows;
+    private property <float> card-factor: Theme.scale * Theme.card-scale;
+    background: #232323;
+    border-width: 1px;
+    border-color: #454545;
+    border-radius: 10px * root.card-factor;
+    height: tag-layout.preferred-height + 18px * root.card-factor;
+    tag-layout := VerticalLayout {
+        padding-left: 9px * root.card-factor;
+        padding-right: 9px * root.card-factor;
+        padding-top: 15px * root.card-factor;
+        padding-bottom: 6px * root.card-factor;
+        spacing: 3px * root.card-factor;
+        for tag-row in root.rows: HorizontalLayout {
+            height: 20px * root.card-factor;
+            spacing: 4px * root.card-factor;
+            for tag in tag-row.tags: Rectangle {
+                width: tag-text.preferred-width + 8px * root.card-factor;
+                border-radius: 4px * root.card-factor;
+                background: #cf4f57;
+                tag-text := Text {
+                    text: tag;
+                    color: #f4eeee;
+                    font-size: 12px * root.card-factor;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+            Rectangle { horizontal-stretch: 1; }
+        }
+    }
+    Rectangle {
+        x: 0px;
+        y: 0px;
+        width: parent.width;
+        height: 11px * root.card-factor;
+        background: #232323;
+        z: 2;
+        Rectangle { x: 0px; width: 1px; background: #454545; }
+        Rectangle { x: parent.width - 1px; width: 1px; background: #454545; }
+    }
+}
+
+component SectionTitle inherits HorizontalLayout {
+    in property <string> left;
+    in property <string> right;
+    height: 18px * Theme.scale;
+    Text { text: root.left; color: #777777; font-size: 13px * Theme.scale; }
+    Rectangle { horizontal-stretch: 1; }
+    Text { text: root.right; color: #a6a6a6; font-size: 13px * Theme.scale; }
+}
+
+component SuggestInput inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder;
+    in property <[SuggestionData]> suggestions;
+    in property <int> kind;
+    in-out property <int> selected-index: 0;
+    callback query-changed(string, int);
+    callback chosen(string, string, int);
+    callback overlay-changed(int, length, length, length, [SuggestionData], int, bool);
+    height: 31px * Theme.scale;
+    horizontal-stretch: 1;
+    changed absolute-position => {
+        root.overlay-changed(root.kind, root.absolute-position.x,
+            root.absolute-position.y + root.height, root.width, root.suggestions,
+            root.selected-index, root.text != "" && root.suggestions.length > 0);
+    }
+    changed suggestions => {
+        root.selected-index = min(max(root.selected-index, 0), max(0, root.suggestions.length - 1));
+        root.overlay-changed(root.kind, root.absolute-position.x,
+            root.absolute-position.y + root.height, root.width, root.suggestions,
+            root.selected-index, root.text != "" && root.suggestions.length > 0);
+    }
+    LineEdit {
+        width: parent.width;
+        height: 31px * Theme.scale;
+        text <=> root.text;
+        placeholder-text: root.placeholder;
+        changed text => {
+            root.selected-index = 0;
+            root.query-changed(self.text, root.kind);
+        }
+        key-pressed(event) => {
+            if (event.text == Key.DownArrow && root.suggestions.length > 0) {
+                root.selected-index = min(root.suggestions.length - 1, root.selected-index + 1);
+                root.overlay-changed(root.kind, root.absolute-position.x,
+                    root.absolute-position.y + root.height, root.width, root.suggestions,
+                    root.selected-index, true);
+                accept
+            } else if (event.text == Key.UpArrow && root.suggestions.length > 0) {
+                root.selected-index = max(0, root.selected-index - 1);
+                root.overlay-changed(root.kind, root.absolute-position.x,
+                    root.absolute-position.y + root.height, root.width, root.suggestions,
+                    root.selected-index, true);
+                accept
+            } else if (event.text == Key.Return && root.suggestions.length > 0) {
+                let item = root.suggestions[root.selected-index];
+                root.chosen(item.id, item.label, root.kind);
+                root.text = "";
+                root.overlay-changed(root.kind, root.absolute-position.x,
+                    root.absolute-position.y + root.height, root.width, root.suggestions,
+                    root.selected-index, false);
+                accept
+            } else {
+                reject
+            }
+        }
+    }
+}
+
+component SelectedFilters inherits VerticalLayout {
+    in property <[SuggestionData]> values;
+    in property <int> kind;
+    callback remove(string, int);
+    horizontal-stretch: 1;
+    spacing: 3px * Theme.scale;
+    for item in root.values: HorizontalLayout {
+        height: 25px * Theme.scale;
+        spacing: 0px;
+        Rectangle {
+            width: chip-text.preferred-width + 16px * Theme.scale;
+            border-radius: 5px * Theme.scale;
+            border-width: 1px;
+            border-color: #704044;
+            background: chip-touch.pressed ? #3a3031 : chip-touch.has-hover ? #303030 : #292929;
+            chip-text := Text {
+                text: item.label + "  ×";
+                color: #e68b90;
+                font-size: 13px * Theme.scale;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            chip-touch := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.remove(item.id, root.kind); }
+            }
+        }
+        Rectangle { horizontal-stretch: 1; }
+    }
+}
+
+component DateStepSlider inherits Rectangle {
+    in-out property <int> value: 0;
+    callback changed(int);
+    height: 38px * Theme.scale;
+    background: #202020;
+    border-width: 1px;
+    border-color: #4a4a4a;
+    border-radius: 7px * Theme.scale;
+    private property <length> track-left: 16px * Theme.scale;
+    private property <length> track-right: root.width - 16px * Theme.scale;
+    private property <length> thumb-x: root.track-left + (root.track-right - root.track-left) * root.value / 8;
+
+    Rectangle { x: root.track-left; y: parent.height / 2 - 3px * Theme.scale; width: root.track-right - root.track-left; height: 6px * Theme.scale; border-radius: 3px * Theme.scale; background: #161616; border-width: 1px; border-color: #3c3c3c; }
+    Rectangle { x: root.track-left; y: parent.height / 2 - 3px * Theme.scale; width: max(0px, root.thumb-x - root.track-left); height: 6px * Theme.scale; border-radius: 3px * Theme.scale; background: #6d343777; }
+    for tick[index] in 9: Rectangle { x: root.track-left + (root.track-right - root.track-left) * index / 8; y: parent.height / 2 - 5px * Theme.scale; width: 1px; height: 10px * Theme.scale; background: #666666; }
+    Rectangle {
+        x: root.thumb-x - 13px * Theme.scale; y: 5px * Theme.scale;
+        width: 26px * Theme.scale; height: parent.height - 10px * Theme.scale;
+        border-radius: 6px * Theme.scale; background: step-touch.has-hover ? #454545 : #393939;
+        border-width: 1px; border-color: #555555;
+        Rectangle { x: parent.width / 2 - 3px * Theme.scale; y: 7px * Theme.scale; width: 1px; height: parent.height - 14px * Theme.scale; background: #6b6b6b; }
+        Rectangle { x: parent.width / 2 + 3px * Theme.scale; y: 7px * Theme.scale; width: 1px; height: parent.height - 14px * Theme.scale; background: #6b6b6b; }
+    }
+    step-touch := TouchArea {
+        mouse-cursor: pointer;
+        function apply-position() {
+            let next = round(max(0, min(8, (self.mouse-x - root.track-left) / max(1px, root.track-right - root.track-left) * 8)));
+            if (next != root.value) { root.value = next; root.changed(next); }
+        }
+        clicked => { self.apply-position(); }
+        changed mouse-x => { if (self.pressed) { self.apply-position(); } }
+    }
+}
+
+export component MainWindow inherits Window {
+    title: "F95 standalone client — Slint";
+    preferred-width: 1280px;
+    preferred-height: 800px;
+    min-width: 760px;
+    min-height: 520px;
+    background: #191919;
+
+    in property <[GameRowData]> game-rows;
+    in property <[BookmarkData]> bookmarks;
+    in-out property <[BookmarkData]> context-game-bookmarks;
+    in property <[SuggestionData]> include-tag-suggestions;
+    in property <[SuggestionData]> exclude-tag-suggestions;
+    in property <[SuggestionData]> prefix-suggestions;
+    in property <[SuggestionData]> selected-include-tags;
+    in property <[SuggestionData]> selected-exclude-tags;
+    in property <[SuggestionData]> selected-prefixes;
+    in-out property <bool> library-mode: false;
+    in-out property <bool> loading: true;
+    in-out property <string> status-text: "Загрузка каталога…";
+    in-out property <string> search-text;
+    in-out property <string> page-label: "Страница 1";
+    in-out property <int> ui-scale-percent: 100;
+    in-out property <int> card-scale-percent: 100;
+    in-out property <int> sort-index: 0;
+    in-out property <int> date-index: 0;
+    in-out property <string> date-label: "ЛЮБОЕ ВРЕМЯ";
+    in-out property <string> include-tag-text;
+    in-out property <string> exclude-tag-text;
+    in-out property <string> prefix-text;
+    private property <[TagRowData]> hovered-tag-rows;
+    private property <string> hovered-tag-card-id;
+    private property <length> tag-overlay-x;
+    private property <length> tag-overlay-y;
+    private property <length> tag-overlay-width;
+    private property <bool> tag-card-hovered: false;
+    private property <bool> tag-overlay-hovered: false;
+    private property <bool> tag-overlay-visible: false;
+    private property <bool> context-menu-visible: false;
+    private property <string> context-game-id;
+    private property <bool> context-game-installed: false;
+    private property <length> context-menu-x;
+    private property <length> context-menu-y;
+    private property <bool> context-bookmarks-visible: false;
+    private property <bool> delete-confirm-visible: false;
+    private property <bool> suggestion-overlay-visible: false;
+    private property <int> suggestion-overlay-kind: 0;
+    private property <int> suggestion-overlay-index: 0;
+    private property <length> suggestion-overlay-x;
+    private property <length> suggestion-overlay-y;
+    private property <length> suggestion-overlay-width;
+    private property <[SuggestionData]> suggestion-overlay-values;
+
+    callback refresh-catalog(string);
+    callback previous-page();
+    callback next-page();
+    callback toggle-library();
+    callback toggle-bookmark(string);
+    callback layout-width-changed(float);
+    callback image-needed(string);
+    callback primary-action(string);
+    callback open-thread(string);
+    callback hide-game(string);
+    callback open-folder(string);
+    callback prepare-game-bookmarks(string);
+    callback toggle-game-bookmark(string, string);
+    callback refresh-game(string);
+    callback delete-game(string);
+    callback open-settings();
+    callback open-about();
+    callback open-logs();
+    callback suggestion-query(string, int);
+    callback filter-chosen(string, int);
+    callback remove-filter(string, int);
+    callback sort-chosen(int);
+    callback date-chosen(int);
+
+    changed card-scale-percent => { root.layout-width-changed(catalog.width / 1px); }
+    changed ui-scale-percent => { root.layout-width-changed(catalog.width / 1px); }
+
+    HorizontalLayout {
+        spacing: 0px;
+        catalog := Rectangle {
+            background: #191919;
+            horizontal-stretch: 1;
+            changed width => { root.layout-width-changed(self.width / 1px); }
+            VerticalLayout {
+                spacing: 0px;
+                Rectangle {
+                    vertical-stretch: 1;
+                    if root.loading: Text {
+                        text: root.status-text;
+                        color: #b8b8b8;
+                        font-size: 17px * Theme.scale;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    if !root.loading && root.game-rows.length == 0: Text {
+                        text: root.status-text;
+                        color: #999999;
+                        font-size: 17px * Theme.scale;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    if !root.loading && root.game-rows.length > 0: ListView {
+                        viewport-x: 0px;
+                        viewport-width: self.width;
+                        for row in root.game-rows: HorizontalLayout {
+                            padding-left: 14px * Theme.scale;
+                            padding-right: 10px * Theme.scale;
+                            padding-top: 8px * Theme.scale;
+                            spacing: 10px * Theme.scale;
+                            for card in row.cards: GameCard {
+                                    game: card;
+                                    active-tag-card-id: root.hovered-tag-card-id;
+                                    image-needed(id) => { root.image-needed(id); }
+                                    primary-action(id) => { root.primary-action(id); }
+                                    open-thread(id) => { root.open-thread(id); }
+                                    hide-game(id) => { root.hide-game(id); }
+                                    open-folder(id) => { root.open-folder(id); }
+                                    context-requested(id, installed, x, y) => {
+                                        root.context-game-id = id;
+                                        root.context-game-installed = installed;
+                                        root.context-menu-x = x;
+                                        root.context-menu-y = y;
+                                        root.context-menu-visible = true;
+                                    }
+                                    tags-hovered(id, rows, x, y, width, active) => {
+                                        if (active) {
+                                            root.hovered-tag-card-id = id;
+                                            root.hovered-tag-rows = rows;
+                                            root.tag-overlay-x = x;
+                                            root.tag-overlay-y = y;
+                                            root.tag-overlay-width = width;
+                                            root.tag-card-hovered = true;
+                                            root.tag-overlay-visible = true;
+                                        } else if (root.hovered-tag-card-id == id) {
+                                            root.tag-overlay-x = x;
+                                            root.tag-overlay-y = y;
+                                            root.tag-overlay-width = width;
+                                            root.tag-card-hovered = false;
+                                        }
+                                    }
+                            }
+                            Rectangle { horizontal-stretch: 1; }
+                        }
+                    }
+                }
+                Rectangle {
+                    height: 43px * Theme.scale;
+                    border-width: 1px;
+                    border-color: #343434;
+                    background: #202020;
+                    HorizontalLayout {
+                        y: 4px * Theme.scale;
+                        height: 31px * Theme.scale;
+                        alignment: center;
+                        spacing: 14px * Theme.scale;
+                        FlatButton { width: 48px * Theme.scale; text: "◀"; clicked => { root.previous-page(); } }
+                        Text { text: root.page-label; color: #aaaaaa; font-size: 14px * Theme.scale; vertical-alignment: center; }
+                        FlatButton { width: 48px * Theme.scale; text: "▶"; clicked => { root.next-page(); } }
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            preferred-width: 260px * Theme.scale;
+            min-width: 240px;
+            max-width: 280px;
+            horizontal-stretch: 0;
+            background: #1e1e1e;
+            border-width: 1px;
+            border-color: #373737;
+            ScrollView {
+                viewport-width: self.width;
+                VerticalLayout {
+                    padding: 11px * Theme.scale;
+                    spacing: 6px * Theme.scale;
+                    Text { height: 27px * Theme.scale; text: "Фильтры"; color: #dddddd; font-size: 20px * Theme.scale; }
+                    Rectangle { height: 1px; background: #414141; }
+                    SectionTitle { left: "СОРТИРОВКА"; right: "ДАТА"; }
+                    HorizontalLayout {
+                        height: 38px * Theme.scale;
+                        spacing: 3px;
+                        FlatButton { horizontal-stretch: 1; text: "🕓"; text-font: "Segoe UI Emoji"; active: root.sort-index == 0; clicked => { root.sort-chosen(0); } }
+                        FlatButton { horizontal-stretch: 1; text: "👍"; text-font: "Segoe UI Emoji"; active: root.sort-index == 1; clicked => { root.sort-chosen(1); } }
+                        FlatButton { horizontal-stretch: 1; text: "👀"; text-font: "Segoe UI Emoji"; active: root.sort-index == 2; clicked => { root.sort-chosen(2); } }
+                        FlatButton { horizontal-stretch: 1; text: "🔤"; text-font: "Segoe UI Emoji"; active: root.sort-index == 3; clicked => { root.sort-chosen(3); } }
+                        FlatButton { horizontal-stretch: 1; text: "⭐"; text-font: "Segoe UI Emoji"; active: root.sort-index == 4; clicked => { root.sort-chosen(4); } }
+                    }
+                    SectionTitle { left: "ДАТА"; right: root.date-label; }
+                    DateStepSlider { value <=> root.date-index; changed(value) => { root.date-chosen(value); } }
+                    SectionTitle { left: "ПОИСК"; right: "АВТОР / НАЗВАНИЕ"; }
+                    LineEdit {
+                        height: 31px * Theme.scale;
+                        text <=> root.search-text;
+                        placeholder-text: "Поиск…";
+                        accepted => { root.refresh-catalog(root.search-text); }
+                    }
+                    SectionTitle { left: "ТЕГИ (МАКС 10)"; right: "ИЛИ / И"; }
+                    SuggestInput {
+                        text <=> root.include-tag-text;
+                        placeholder: "Выберите тег для фильтра";
+                        suggestions: root.include-tag-suggestions; kind: 0;
+                        query-changed(query, kind) => { root.suggestion-query(query, kind); }
+                        chosen(id, label, kind) => { root.filter-chosen(id, kind); }
+                        overlay-changed(kind, x, y, width, values, index, visible) => {
+                            root.suggestion-overlay-kind = kind; root.suggestion-overlay-x = x;
+                            root.suggestion-overlay-y = y; root.suggestion-overlay-width = width;
+                            root.suggestion-overlay-values = values; root.suggestion-overlay-index = index;
+                            root.suggestion-overlay-visible = visible;
+                        }
+                    }
+                    SelectedFilters { values: root.selected-include-tags; kind: 0; remove(id, kind) => { root.remove-filter(id, kind); } }
+                    SectionTitle { left: "ИСКЛЮЧИТЬ ТЕГИ"; right: ""; }
+                    SuggestInput {
+                        text <=> root.exclude-tag-text;
+                        placeholder: "Выберите тег для исключения";
+                        suggestions: root.exclude-tag-suggestions; kind: 1;
+                        query-changed(query, kind) => { root.suggestion-query(query, kind); }
+                        chosen(id, label, kind) => { root.filter-chosen(id, kind); }
+                        overlay-changed(kind, x, y, width, values, index, visible) => {
+                            root.suggestion-overlay-kind = kind; root.suggestion-overlay-x = x;
+                            root.suggestion-overlay-y = y; root.suggestion-overlay-width = width;
+                            root.suggestion-overlay-values = values; root.suggestion-overlay-index = index;
+                            root.suggestion-overlay-visible = visible;
+                        }
+                    }
+                    SelectedFilters { values: root.selected-exclude-tags; kind: 1; remove(id, kind) => { root.remove-filter(id, kind); } }
+                    SectionTitle { left: "ПРЕФИКСЫ (МАКС 10)"; right: ""; }
+                    SuggestInput {
+                        text <=> root.prefix-text;
+                        placeholder: "Выберите префикс";
+                        suggestions: root.prefix-suggestions; kind: 2;
+                        query-changed(query, kind) => { root.suggestion-query(query, kind); }
+                        chosen(id, label, kind) => { root.filter-chosen(id, kind); }
+                        overlay-changed(kind, x, y, width, values, index, visible) => {
+                            root.suggestion-overlay-kind = kind; root.suggestion-overlay-x = x;
+                            root.suggestion-overlay-y = y; root.suggestion-overlay-width = width;
+                            root.suggestion-overlay-values = values; root.suggestion-overlay-index = index;
+                            root.suggestion-overlay-visible = visible;
+                        }
+                    }
+                    SelectedFilters { values: root.selected-prefixes; kind: 2; remove(id, kind) => { root.remove-filter(id, kind); } }
+                    Rectangle { height: 1px; background: #383838; }
+                    Text { height: 18px * Theme.scale; text: "МОИ ЗАКЛАДКИ"; color: #777777; font-size: 13px * Theme.scale; }
+                    for bookmark in root.bookmarks: FlatButton {
+                        text: bookmark.label;
+                        active: bookmark.active;
+                        clicked => { root.toggle-bookmark(bookmark.id); }
+                    }
+                    Rectangle { height: 8px; }
+                    FlatButton { text: "Скачанные"; active: root.library-mode; clicked => { root.toggle-library(); } }
+                    FlatButton { text: "Настройки"; clicked => { root.open-settings(); } }
+                    FlatButton { text: "О программе"; clicked => { root.open-about(); } }
+                    FlatButton { text: "Логи"; clicked => { root.open-logs(); } }
+                    Rectangle { vertical-stretch: 1; }
+                }
+            }
+        }
+    }
+
+    tag-clipper := Rectangle {
+        x: catalog.absolute-position.x;
+        y: catalog.absolute-position.y;
+        width: catalog.width;
+        height: catalog.height - 43px * Theme.scale;
+        clip: true;
+        background: transparent;
+        z: 100;
+        if root.tag-overlay-visible: TagPanel {
+            x: root.tag-overlay-x;
+            y: root.tag-overlay-y - tag-clipper.absolute-position.y;
+            width: root.tag-overlay-width;
+            rows: root.hovered-tag-rows;
+            TouchArea {
+                changed has-hover => { root.tag-overlay-hovered = self.has-hover; }
+            }
+        }
+    }
+
+    if root.context-menu-visible: TouchArea {
+        z: 109;
+        clicked => { root.context-menu-visible = false; }
+    }
+
+    if root.context-menu-visible: DarkContextMenu {
+        x: min(root.width - self.width - 4px * Theme.scale,
+            max(4px * Theme.scale, root.context-menu-x));
+        y: min(root.height - self.height - 4px * Theme.scale,
+            max(4px * Theme.scale, root.context-menu-y));
+        installed: root.context-game-installed;
+        z: 110;
+        hide-game => {
+            root.context-menu-visible = false;
+            root.hide-game(root.context-game-id);
+        }
+        open-thread => {
+            root.context-menu-visible = false;
+            root.open-thread(root.context-game-id);
+        }
+        bookmarks => {
+            root.context-menu-visible = false;
+            root.prepare-game-bookmarks(root.context-game-id);
+            root.context-bookmarks-visible = true;
+        }
+        refresh-game => {
+            root.context-menu-visible = false;
+            root.refresh-game(root.context-game-id);
+        }
+        delete-game => {
+            root.context-menu-visible = false;
+            root.delete-confirm-visible = true;
+        }
+        open-folder => {
+            root.context-menu-visible = false;
+            root.open-folder(root.context-game-id);
+        }
+    }
+
+    if root.context-bookmarks-visible: TouchArea {
+        z: 119;
+        clicked => { root.context-bookmarks-visible = false; }
+    }
+    if root.context-bookmarks-visible: Rectangle {
+        x: min(root.width - self.width - 6px * Theme.scale,
+            max(6px * Theme.scale, root.context-menu-x));
+        y: min(root.height - self.height - 6px * Theme.scale,
+            max(6px * Theme.scale, root.context-menu-y));
+        width: 220px * Theme.scale;
+        height: bookmark-list.preferred-height + 12px * Theme.scale;
+        background: #202020;
+        border-width: 1px;
+        border-color: #484848;
+        border-radius: 8px * Theme.scale;
+        drop-shadow-color: #00000099;
+        drop-shadow-blur: 12px * Theme.scale;
+        z: 120;
+        bookmark-list := VerticalLayout {
+            padding: 6px * Theme.scale;
+            spacing: 3px * Theme.scale;
+            if root.context-game-bookmarks.length == 0: Text {
+                height: 30px * Theme.scale;
+                text: "Закладок пока нет";
+                color: #999999;
+                font-size: 13px * Theme.scale;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            for bookmark in root.context-game-bookmarks: FlatButton {
+                text: (bookmark.active ? "✓  " : "     ") + bookmark.label;
+                active: bookmark.active;
+                clicked => {
+                    root.toggle-game-bookmark(root.context-game-id, bookmark.id);
+                }
+            }
+        }
+    }
+
+    if root.delete-confirm-visible: Rectangle {
+        z: 129;
+        background: #00000088;
+        TouchArea { }
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: 360px * Theme.scale;
+            height: 142px * Theme.scale;
+            background: #242424;
+            border-width: 1px;
+            border-color: #555555;
+            border-radius: 9px * Theme.scale;
+            VerticalLayout {
+                padding: 14px * Theme.scale;
+                spacing: 10px * Theme.scale;
+                Text { text: "Удалить игру и её файлы?"; color: #eeeeee; font-size: 17px * Theme.scale; horizontal-alignment: center; }
+                Text { text: "Это действие нельзя отменить."; color: #aaaaaa; font-size: 13px * Theme.scale; horizontal-alignment: center; }
+                HorizontalLayout {
+                    spacing: 8px * Theme.scale;
+                    FlatButton { horizontal-stretch: 1; text: "Отмена"; clicked => { root.delete-confirm-visible = false; } }
+                    FlatButton {
+                        horizontal-stretch: 1; text: "Удалить"; danger: true;
+                        clicked => {
+                            root.delete-confirm-visible = false;
+                            root.delete-game(root.context-game-id);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if root.suggestion-overlay-visible: Rectangle {
+        x: root.suggestion-overlay-x;
+        y: min(root.height - self.height - 4px * Theme.scale, root.suggestion-overlay-y);
+        width: root.suggestion-overlay-width;
+        height: root.suggestion-overlay-values.length * 29px * Theme.scale + 8px * Theme.scale;
+        background: #202020;
+        border-width: 1px;
+        border-color: #505050;
+        border-radius: 6px * Theme.scale;
+        drop-shadow-color: #00000099;
+        drop-shadow-blur: 10px * Theme.scale;
+        z: 120;
+        VerticalLayout {
+            padding: 4px * Theme.scale;
+            spacing: 2px * Theme.scale;
+            for item[index] in root.suggestion-overlay-values: FlatButton {
+                height: 27px * Theme.scale;
+                text: item.label;
+                active: index == root.suggestion-overlay-index;
+                clicked => {
+                    root.filter-chosen(item.id, root.suggestion-overlay-kind);
+                    if (root.suggestion-overlay-kind == 0) { root.include-tag-text = ""; }
+                    else if (root.suggestion-overlay-kind == 1) { root.exclude-tag-text = ""; }
+                    else { root.prefix-text = ""; }
+                    root.suggestion-overlay-visible = false;
+                }
+            }
+        }
+    }
+
+    Timer {
+        interval: 90ms;
+        running: root.tag-overlay-visible && !root.tag-card-hovered && !root.tag-overlay-hovered;
+        triggered => {
+            root.tag-overlay-visible = false;
+            root.hovered-tag-card-id = "";
+        }
+    }
+}
+
+component SettingsPicker inherits VerticalLayout {
+    in property <string> placeholder;
+    in property <int> kind;
+    in property <[SuggestionData]> suggestions;
+    in property <int> suggestion-kind;
+    in property <[SuggestionData]> values;
+    callback query(string, int);
+    callback add(string, int);
+    callback remove(string, int);
+    in-out property <string> text;
+    spacing: 3px;
+    LineEdit {
+        height: 32px;
+        text <=> root.text;
+        placeholder-text: root.placeholder;
+        changed text => { root.query(self.text, root.kind); }
+        accepted => {
+            if (root.suggestion-kind == root.kind && root.suggestions.length > 0) {
+                root.add(root.suggestions[0].id, root.kind);
+                root.text = "";
+            }
+        }
+    }
+    if root.suggestion-kind == root.kind && root.text != "": Rectangle {
+        height: suggestion-list.preferred-height + 6px;
+        background: #202020;
+        border-width: 1px;
+        border-color: #4b4b4b;
+        border-radius: 5px;
+        suggestion-list := VerticalLayout {
+            padding: 3px;
+            spacing: 2px;
+            for suggestion in root.suggestions: FlatButton {
+                height: 26px;
+                text: suggestion.label;
+                clicked => { root.add(suggestion.id, root.kind); root.text = ""; }
+            }
+        }
+    }
+    for item in root.values: FlatButton {
+        height: 25px;
+        text: item.label + "  ×";
+        danger: true;
+        clicked => { root.remove(item.id, root.kind); }
+    }
+}
+
+export component SettingsWindow inherits Window {
+    title: "Настройки — F95 standalone client";
+    preferred-width: 560px;
+    preferred-height: 470px;
+    min-width: 440px;
+    min-height: 400px;
+    background: #1d1d1d;
+    in-out property <float> ui-scale-percent: 100;
+    in-out property <float> card-scale-percent: 100;
+    in-out property <string> cache-directory;
+    in-out property <string> temp-directory;
+    in-out property <string> games-directory;
+    in-out property <string> custom-launch;
+    in-out property <bool> cache-on-download;
+    in-out property <bool> log-to-file;
+    in-out property <bool> show-unplayed;
+    in-out property <bool> classic-library;
+    in-out property <int> language-index;
+    in-out property <int> loading-index;
+    in-out property <int> update-index;
+    in-out property <int> bookmarks-visible: 3;
+    in-out property <int> bookmark-red: 60;
+    in-out property <int> bookmark-green: 120;
+    in-out property <int> bookmark-blue: 200;
+    in property <[SuggestionData]> filter-suggestions;
+    in-out property <int> filter-suggestion-kind: -1;
+    in property <[SuggestionData]> startup-tags;
+    in property <[SuggestionData]> startup-exclude-tags;
+    in property <[SuggestionData]> startup-prefixes;
+    in property <[SuggestionData]> startup-exclude-prefixes;
+    in property <[SuggestionData]> warning-tags;
+    in property <[SuggestionData]> warning-prefixes;
+    in-out property <string> saved-message;
+    callback preview-scale(float, float);
+    callback settings-suggestion-query(string, int);
+    callback add-settings-filter(string, int);
+    callback remove-settings-filter(string, int);
+    callback choose-directory(int);
+    callback save-settings(float, float, string, string, string, string, bool, bool, bool, bool, int, int, int, int, int, int, int);
+    ScrollView {
+      viewport-width: self.width;
+      VerticalLayout {
+        padding: 22px; spacing: 10px;
+        Text { text: "Настройки"; color: #eeeeee; font-size: 25px; }
+        Rectangle { height: 1px; background: #414141; }
+        Text { text: "Папки"; color: #dddddd; font-size: 18px; }
+        SectionTitle { left: "ВРЕМЕННЫЕ ЗАГРУЗКИ"; right: ""; }
+        HorizontalLayout { height: 34px; spacing: 6px; LineEdit { text <=> root.temp-directory; } FlatButton { width: 92px; text: "Выбрать…"; clicked => { root.choose-directory(0); } } }
+        SectionTitle { left: "ПАПКА ИГР"; right: ""; }
+        HorizontalLayout { height: 34px; spacing: 6px; LineEdit { text <=> root.games-directory; } FlatButton { width: 92px; text: "Выбрать…"; clicked => { root.choose-directory(1); } } }
+        SectionTitle { left: "ПАПКА КЭША"; right: "ОБЛОЖКИ И МЕТАДАННЫЕ"; }
+        HorizontalLayout { height: 34px; spacing: 6px; LineEdit { text <=> root.cache-directory; } FlatButton { width: 92px; text: "Выбрать…"; clicked => { root.choose-directory(2); } } }
+        Rectangle { height: 1px; background: #414141; }
+        Text { text: "Закладки"; color: #dddddd; font-size: 18px; }
+        SectionTitle { left: "БЕЙДЖЕЙ НА ОБЛОЖКЕ"; right: root.bookmarks-visible; }
+        Slider { height: 30px; minimum: 1; maximum: 5; value: root.bookmarks-visible; changed value => { root.bookmarks-visible = round(self.value); } }
+        SectionTitle { left: "ЦВЕТ ЗАКЛАДКИ ПО УМОЛЧАНИЮ"; right: "RGB " + root.bookmark-red + ", " + root.bookmark-green + ", " + root.bookmark-blue; }
+        Rectangle { height: 22px; border-radius: 5px; background: rgb(root.bookmark-red, root.bookmark-green, root.bookmark-blue); border-width: 1px; border-color: #555555; }
+        SectionTitle { left: "КРАСНЫЙ"; right: root.bookmark-red; }
+        Slider { height: 25px; minimum: 0; maximum: 255; value: root.bookmark-red; changed value => { root.bookmark-red = round(self.value); } }
+        SectionTitle { left: "ЗЕЛЁНЫЙ"; right: root.bookmark-green; }
+        Slider { height: 25px; minimum: 0; maximum: 255; value: root.bookmark-green; changed value => { root.bookmark-green = round(self.value); } }
+        SectionTitle { left: "СИНИЙ"; right: root.bookmark-blue; }
+        Slider { height: 25px; minimum: 0; maximum: 255; value: root.bookmark-blue; changed value => { root.bookmark-blue = round(self.value); } }
+        Rectangle { height: 1px; background: #414141; }
+        Text { text: "Интерфейс"; color: #dddddd; font-size: 18px; }
+        SectionTitle { left: "ЯЗЫК"; right: ""; }
+        ComboBox { height: 34px; model: ["Автоматически", "English", "Русский"]; current-index <=> root.language-index; }
+        SectionTitle { left: "АНИМАЦИЯ ЗАГРУЗКИ"; right: ""; }
+        ComboBox { height: 34px; model: ["Нижняя полоса", "Круг справа снизу"]; current-index <=> root.loading-index; }
+        SectionTitle { left: "ПРОВЕРКА ОБНОВЛЕНИЙ"; right: ""; }
+        ComboBox { height: 34px; model: ["Вручную", "При запуске", "Каждые 7 дней"]; current-index <=> root.update-index; }
+        SectionTitle { left: "МАСШТАБ ИНТЕРФЕЙСА"; right: root.ui-scale-percent + "%"; }
+        Slider {
+            height: 32px; minimum: 50; maximum: 200; value <=> root.ui-scale-percent;
+            changed value => { root.preview-scale(root.ui-scale-percent, root.card-scale-percent); }
+        }
+        SectionTitle { left: "МАСШТАБ КАРТОЧЕК"; right: root.card-scale-percent + "%"; }
+        Slider {
+            height: 32px; minimum: 50; maximum: 200; value <=> root.card-scale-percent;
+            changed value => { root.preview-scale(root.ui-scale-percent, root.card-scale-percent); }
+        }
+        CheckBox { text: "Кэшировать при скачивании"; checked <=> root.cache-on-download; }
+        CheckBox { text: "Записывать предупреждения и ошибки в файл"; checked <=> root.log-to-file; }
+        CheckBox { text: "Показывать отметку непройденных игр"; checked <=> root.show-unplayed; }
+        CheckBox { text: "Классический переключатель библиотеки"; checked <=> root.classic-library; }
+        SectionTitle { left: "КОМАНДА ЗАПУСКА"; right: "{{path}} — ПУТЬ К EXE"; }
+        LineEdit { height: 34px; text <=> root.custom-launch; placeholder-text: "\"C:\\Start.exe\" {{path}}"; }
+        Rectangle { height: 1px; background: #414141; }
+        Text { text: "Фильтры при запуске"; color: #dddddd; font-size: 18px; }
+        SectionTitle { left: "ДОБАВИТЬ ТЕГИ"; right: "МАКС. 10"; }
+        SettingsPicker { kind: 0; placeholder: "Тег при запуске"; suggestions: root.filter-suggestions; suggestion-kind: root.filter-suggestion-kind; values: root.startup-tags; query(query, kind) => { root.settings-suggestion-query(query, kind); } add(id, kind) => { root.add-settings-filter(id, kind); } remove(id, kind) => { root.remove-settings-filter(id, kind); } }
+        SectionTitle { left: "ИСКЛЮЧИТЬ ТЕГИ"; right: "МАКС. 10"; }
+        SettingsPicker { kind: 1; placeholder: "Исключённый тег при запуске"; suggestions: root.filter-suggestions; suggestion-kind: root.filter-suggestion-kind; values: root.startup-exclude-tags; query(query, kind) => { root.settings-suggestion-query(query, kind); } add(id, kind) => { root.add-settings-filter(id, kind); } remove(id, kind) => { root.remove-settings-filter(id, kind); } }
+        SectionTitle { left: "ДОБАВИТЬ ПРЕФИКСЫ"; right: "МАКС. 10"; }
+        SettingsPicker { kind: 2; placeholder: "Префикс при запуске"; suggestions: root.filter-suggestions; suggestion-kind: root.filter-suggestion-kind; values: root.startup-prefixes; query(query, kind) => { root.settings-suggestion-query(query, kind); } add(id, kind) => { root.add-settings-filter(id, kind); } remove(id, kind) => { root.remove-settings-filter(id, kind); } }
+        SectionTitle { left: "ИСКЛЮЧИТЬ ПРЕФИКСЫ"; right: "МАКС. 10"; }
+        SettingsPicker { kind: 3; placeholder: "Исключённый префикс при запуске"; suggestions: root.filter-suggestions; suggestion-kind: root.filter-suggestion-kind; values: root.startup-exclude-prefixes; query(query, kind) => { root.settings-suggestion-query(query, kind); } add(id, kind) => { root.add-settings-filter(id, kind); } remove(id, kind) => { root.remove-settings-filter(id, kind); } }
+        Rectangle { height: 1px; background: #414141; }
+        Text { text: "Настраиваемые предупреждения"; color: #dddddd; font-size: 18px; }
+        SectionTitle { left: "ПРЕДУПРЕЖДАТЬ О ТЕГАХ"; right: ""; }
+        SettingsPicker { kind: 4; placeholder: "Тег предупреждения"; suggestions: root.filter-suggestions; suggestion-kind: root.filter-suggestion-kind; values: root.warning-tags; query(query, kind) => { root.settings-suggestion-query(query, kind); } add(id, kind) => { root.add-settings-filter(id, kind); } remove(id, kind) => { root.remove-settings-filter(id, kind); } }
+        SectionTitle { left: "ПРЕДУПРЕЖДАТЬ О ПРЕФИКСАХ"; right: ""; }
+        SettingsPicker { kind: 5; placeholder: "Префикс предупреждения"; suggestions: root.filter-suggestions; suggestion-kind: root.filter-suggestion-kind; values: root.warning-prefixes; query(query, kind) => { root.settings-suggestion-query(query, kind); } add(id, kind) => { root.add-settings-filter(id, kind); } remove(id, kind) => { root.remove-settings-filter(id, kind); } }
+        Text { text: root.saved-message; color: #cf6b72; font-size: 13px; }
+        FlatButton {
+            height: 36px; text: "Сохранить"; active: true;
+            clicked => { root.save-settings(
+                root.ui-scale-percent, root.card-scale-percent, root.temp-directory,
+                root.games-directory, root.cache-directory, root.custom-launch,
+                root.cache-on-download, root.log-to-file, root.show-unplayed,
+                root.classic-library, root.language-index, root.loading-index, root.update-index,
+                root.bookmarks-visible, root.bookmark-red, root.bookmark-green, root.bookmark-blue
+            ); }
+        }
+        Rectangle { height: 8px; }
+      }
+    }
+}
+
+export component LogsWindow inherits Window {
+    title: "Логи — F95 standalone client";
+    preferred-width: 900px;
+    preferred-height: 600px;
+    min-width: 520px;
+    min-height: 340px;
+    background: #1b1b1b;
+    in-out property <string> contents;
+    callback refresh();
+    callback clear();
+    VerticalLayout {
+        padding: 14px;
+        spacing: 8px;
+        HorizontalLayout {
+            height: 34px; spacing: 8px;
+            Text { text: "Логи"; color: #eeeeee; font-size: 23px; vertical-alignment: center; }
+            Rectangle { horizontal-stretch: 1; }
+            FlatButton { width: 110px; text: "Обновить"; clicked => { root.refresh(); } }
+            FlatButton { width: 100px; text: "Очистить"; danger: true; clicked => { root.clear(); } }
+        }
+        Rectangle {
+            border-width: 1px; border-color: #3d3d3d; background: #121212;
+            ScrollView {
+                viewport-width: self.width;
+                Text {
+                    width: parent.width - 20px; x: 10px; y: 9px;
+                    text: root.contents; color: #bdbdbd; font-family: "Consolas";
+                    font-size: 12px; wrap: word-wrap;
+                }
+            }
+        }
+    }
+}
+
+export component AboutWindow inherits Window {
+    title: "О программе — F95 standalone client";
+    preferred-width: 500px;
+    preferred-height: 330px;
+    min-width: 420px;
+    min-height: 280px;
+    background: #1d1d1d;
+    in property <string> version;
+    VerticalLayout {
+        padding: 28px;
+        spacing: 12px;
+        Text { text: "F95 standalone client"; color: #eeeeee; font-size: 27px; }
+        Text { text: "Версия " + root.version + " · интерфейс Slint"; color: #cf6b72; font-size: 14px; }
+        Rectangle { height: 1px; background: #414141; }
+        Text {
+            text: "Нативный клиент каталога и библиотеки F95Zone.\n\nИнтерфейс работает без браузерного движка. Slint использует retained-разметку и нативное окно.";
+            color: #b5b5b5; font-size: 14px; wrap: word-wrap;
+        }
+        Rectangle { vertical-stretch: 1; }
+        Text { text: "Сделано для удобного просмотра, загрузки и запуска игр."; color: #777777; font-size: 12px; }
+    }
+}

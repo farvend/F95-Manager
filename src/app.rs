@@ -1,35 +1,55 @@
 // Логика приложения вынесена из main.rs, чтобы убрать глубокую вложенность в конце main.
 // Рефакторинг: крупные группы полей вынесены в отдельные структуры в app/state.rs.
 
+#[cfg(feature = "legacy-egui")]
 use eframe::{App, egui};
+#[cfg(feature = "legacy-egui")]
 use std::collections::HashMap;
 
+#[cfg(feature = "legacy-egui")]
 mod about_ui;
 pub mod config;
+#[cfg(feature = "legacy-egui")]
 mod errors_ui;
+#[cfg(feature = "legacy-egui")]
 pub mod game_updates;
+#[cfg(feature = "legacy-egui")]
 mod grid;
+#[cfg(feature = "legacy-egui")]
 pub mod library;
+#[cfg(feature = "legacy-egui")]
 mod logs_ui;
 pub mod persistable;
 pub mod settings;
+#[cfg(feature = "legacy-egui")]
 mod update_ui;
 
+#[cfg(feature = "legacy-egui")]
 mod downloads;
+#[cfg(feature = "legacy-egui")]
 mod fetch;
+#[path = "app/fetch/helpers.rs"]
+pub mod fetch_helpers;
 mod runtime;
+#[cfg(feature = "legacy-egui")]
 mod state;
 
 // UI под разные состояния приложения
+#[cfg(feature = "legacy-egui")]
 mod auth_screen;
+#[cfg(feature = "legacy-egui")]
 mod main_screen;
 
+#[cfg(feature = "legacy-egui")]
 use downloads::DownloadState;
+#[cfg(feature = "legacy-egui")]
 pub use fetch::CoverMsg;
 pub use runtime::RUNTIME;
 pub use runtime::rt;
+#[cfg(feature = "legacy-egui")]
 use state::{AuthState, FiltersState, ImagesState, NetState, Screen};
 
+#[cfg(feature = "legacy-egui")]
 pub struct NoLagApp {
     page: u32,
 
@@ -41,11 +61,12 @@ pub struct NoLagApp {
     downloads: HashMap<u64, DownloadState>,
 
     library_manager: library::LibraryCardManager,
-    
+
     startup_time: std::time::Instant,
     auto_update_check_triggered: bool,
 }
 
+#[cfg(feature = "legacy-egui")]
 impl Default for NoLagApp {
     fn default() -> Self {
         crate::app::config::load_config_from_disk();
@@ -73,7 +94,7 @@ impl Default for NoLagApp {
             cache_dir
         };
         log::info!("Using cache directory: {:?}", cache_dir);
-        
+
         let provider = std::sync::Arc::new(library::CachingProvider::new(
             library::NetworkProvider::new(),
             cache_dir,
@@ -91,13 +112,14 @@ impl Default for NoLagApp {
             settings_ui: settings::SettingsUiState::default(),
             downloads: HashMap::new(),
             library_manager: library::LibraryCardManager::new(provider),
-            
+
             startup_time: std::time::Instant::now(),
             auto_update_check_triggered: false,
         }
     }
 }
 
+#[cfg(feature = "legacy-egui")]
 impl App for NoLagApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Any new logs? ensure we repaint to keep button/window fresh
@@ -134,7 +156,7 @@ impl App for NoLagApp {
         // Auto-check for game updates on startup (after 5 seconds)
         if !self.auto_update_check_triggered && self.startup_time.elapsed().as_secs() >= 5 {
             self.auto_update_check_triggered = true;
-            
+
             let should_check = {
                 let settings = settings::APP_SETTINGS.read().unwrap();
                 match settings.update_check_frequency {
@@ -157,7 +179,7 @@ impl App for NoLagApp {
 
             if should_check {
                 game_updates::ui::trigger_update_check(ctx);
-                
+
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()

@@ -1,3 +1,4 @@
+#[cfg(feature = "legacy-egui")]
 use crate::views::filters::EnumWithAlternativeNames;
 
 #[derive(strum::EnumCount, strum::EnumIter, PartialEq, Clone, strum::Display, Default, Debug)]
@@ -9,6 +10,7 @@ pub enum Sorting {
     Title,
     Rating,
 }
+#[cfg(feature = "legacy-egui")]
 impl EnumWithAlternativeNames for Sorting {
     fn alternative_name(&self) -> &'static str {
         use Sorting::*;
@@ -72,6 +74,7 @@ pub enum TagLogic {
     Or,
     And,
 }
+#[cfg(feature = "legacy-egui")]
 impl EnumWithAlternativeNames for TagLogic {
     fn alternative_name(&self) -> &'static str {
         match self {
@@ -89,6 +92,7 @@ pub enum SearchMode {
     Title,
 }
 
+#[cfg(feature = "legacy-egui")]
 impl EnumWithAlternativeNames for SearchMode {
     fn alternative_name(&self) -> &'static str {
         match self {
@@ -105,6 +109,7 @@ pub enum ViewMode {
     Downloaded,
 }
 
+#[cfg(feature = "legacy-egui")]
 impl EnumWithAlternativeNames for ViewMode {
     fn alternative_name(&self) -> &'static str {
         match self {
@@ -115,6 +120,7 @@ impl EnumWithAlternativeNames for ViewMode {
 }
 
 // Localization keys for enums used in Filters UI
+#[cfg(feature = "legacy-egui")]
 impl crate::views::filters::LocalizableName for Sorting {
     fn loc_key(&self) -> &'static str {
         match self {
@@ -127,6 +133,7 @@ impl crate::views::filters::LocalizableName for Sorting {
     }
 }
 
+#[cfg(feature = "legacy-egui")]
 impl crate::views::filters::LocalizableName for DateLimit {
     fn loc_key(&self) -> &'static str {
         match self {
@@ -143,6 +150,7 @@ impl crate::views::filters::LocalizableName for DateLimit {
     }
 }
 
+#[cfg(feature = "legacy-egui")]
 impl crate::views::filters::LocalizableName for TagLogic {
     fn loc_key(&self) -> &'static str {
         match self {
@@ -152,6 +160,7 @@ impl crate::views::filters::LocalizableName for TagLogic {
     }
 }
 
+#[cfg(feature = "legacy-egui")]
 impl crate::views::filters::LocalizableName for SearchMode {
     fn loc_key(&self) -> &'static str {
         match self {
@@ -161,6 +170,7 @@ impl crate::views::filters::LocalizableName for SearchMode {
     }
 }
 
+#[cfg(feature = "legacy-egui")]
 impl crate::views::filters::LocalizableName for ViewMode {
     fn loc_key(&self) -> &'static str {
         match self {

@@ -4,14 +4,16 @@
 pub mod helpers;
 pub mod migrate;
 pub mod store;
+#[cfg(feature = "legacy-egui")]
 pub mod ui;
 
 // Store: data types, global state, persistence, and records management
 pub use store::{
-    APP_SETTINGS, AppSettings, DownloadedGame, delete_downloaded_game, downloaded_game_exe,
-    downloaded_game_folder, hide_thread, is_pending_download, is_thread_hidden,
-    load_settings_from_disk, record_downloaded_game, record_pending_download,
-    remove_pending_download, save_settings_to_disk,
+    APP_SETTINGS, AppSettings, DownloadedGame, add_bookmark_to_game, delete_downloaded_game,
+    downloaded_game_exe, downloaded_game_folder, get_bookmarks, get_game_bookmarks, hide_thread,
+    is_pending_download, is_thread_hidden, load_settings_from_disk, record_downloaded_game,
+    record_pending_download, remove_bookmark_from_game, remove_pending_download,
+    save_settings_to_disk,
 };
 
 // Helpers: filesystem utilities, launching games, and convenience funcs
@@ -21,6 +23,7 @@ pub use helpers::{
 };
 
 // UI: egui viewport window for settings and separate eframe App
+#[cfg(feature = "legacy-egui")]
 pub use ui::{SettingsUiState, draw_settings_viewport, open_settings};
 
 /// Helper function to read settings with a closure.
