@@ -157,6 +157,7 @@ impl super::NoLagApp {
                         id,
                         super::downloads::DownloadState {
                             rx: rx_new,
+                            title: t.title.clone(),
                             progress: Some(crate::game_download::Progress::Unknown),
                             link_choices: None,
                         },
@@ -182,6 +183,7 @@ impl super::NoLagApp {
                         id,
                         super::downloads::DownloadState {
                             rx,
+                            title: t.title.clone(),
                             progress: Some(crate::game_download::Progress::Unknown),
                             link_choices: None,
                         },
@@ -210,6 +212,7 @@ impl super::NoLagApp {
                         id,
                         super::downloads::DownloadState {
                             rx,
+                            title: t.title.clone(),
                             progress: Some(crate::game_download::Progress::Unknown),
                             link_choices: None,
                         },
