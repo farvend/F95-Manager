@@ -1,25 +1,13 @@
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum MetadataCodecError {
+    #[error("Metadata deserialization failed: {0}")]
     DeserializationFailed(String),
+    #[error("Metadata serialization failed: {0}")]
     SerializationFailed(String),
 }
-
-impl std::fmt::Display for MetadataCodecError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MetadataCodecError::DeserializationFailed(msg) => {
-                write!(f, "Metadata deserialization failed: {}", msg)
-            }
-            MetadataCodecError::SerializationFailed(msg) => {
-                write!(f, "Metadata serialization failed: {}", msg)
-            }
-        }
-    }
-}
-
-impl std::error::Error for MetadataCodecError {}
 
 /// Cached metadata structure matching the JSON format in cache/<id>/meta.json
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

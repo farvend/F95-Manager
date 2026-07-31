@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use std::path::{Path, PathBuf};
+use thiserror::Error;
 use url::Url;
 
 use super::{
@@ -11,41 +12,18 @@ use super::{
 pub type ProductionCachingProvider<P> =
     CachingProvider<P, RealFileSystem, RealImageCodec, RealMetadataCodec>;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum CacheError {
-    CreateDirFailed(std::io::Error),
-    EncodeFailed(ImageCodecError),
-    WriteFailed(std::io::Error),
-    MetadataEncodeFailed(MetadataCodecError),
-    MetadataWriteFailed(std::io::Error),
-}
-
-impl std::fmt::Display for CacheError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CacheError::CreateDirFailed(e) => write!(f, "Failed to create cache directory: {}", e),
-            CacheError::EncodeFailed(e) => write!(f, "Failed to encode image: {}", e),
-            CacheError::WriteFailed(e) => write!(f, "Failed to write to cache: {}", e),
-            CacheError::MetadataEncodeFailed(e) => {
-                write!(f, "Failed to encode metadata: {}", e)
-            }
-            CacheError::MetadataWriteFailed(e) => {
-                write!(f, "Failed to write metadata to cache: {}", e)
-            }
-        }
-    }
-}
-
-impl std::error::Error for CacheError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            CacheError::CreateDirFailed(e) => Some(e),
-            CacheError::EncodeFailed(e) => Some(e),
-            CacheError::WriteFailed(e) => Some(e),
-            CacheError::MetadataEncodeFailed(e) => Some(e),
-            CacheError::MetadataWriteFailed(e) => Some(e),
-        }
-    }
+    #[error("Failed to create cache directory: {0}")]
+    CreateDirFailed(#[source] std::io::Error),
+    #[error("Failed to encode image: {0}")]
+    EncodeFailed(#[source] ImageCodecError),
+    #[error("Failed to write to cache: {0}")]
+    WriteFailed(#[source] std::io::Error),
+    #[error("Failed to encode metadata: {0}")]
+    MetadataEncodeFailed(#[source] MetadataCodecError),
+    #[error("Failed to write metadata to cache: {0}")]
+    MetadataWriteFailed(#[source] std::io::Error),
 }
 
 #[async_trait]
@@ -138,7 +116,11 @@ impl<P: CardImageProvider, FS: FileSystem, IC: ImageCodec, MC: MetadataCodec>
             .cache_dir
             .join(card.thread_id.to_string())
             .join("cover.png");
-        log::trace!("Generated cover path for thread {}: {:?}", card.thread_id, path);
+        log::trace!(
+            "Generated cover path for thread {}: {:?}",
+            card.thread_id,
+            path
+        );
         path
     }
 
@@ -157,24 +139,15 @@ impl<P: CardImageProvider, FS: FileSystem, IC: ImageCodec, MC: MetadataCodec>
     }
 
     fn meta_path(&self, thread_id: u64) -> PathBuf {
-        self.cache_dir
-            .join(thread_id.to_string())
-            .join("meta.json")
+        self.cache_dir.join(thread_id.to_string()).join("meta.json")
     }
 
     pub async fn load_meta(&self, thread_id: u64) -> Option<CachedThreadMeta> {
         let path = self.meta_path(thread_id);
-        log::debug!(
-            "Metadata cache check for thread {}: {:?}",
-            thread_id,
-            path
-        );
+        log::debug!("Metadata cache check for thread {}: {:?}", thread_id, path);
 
         if !self.fs.exists(&path).await {
-            log::debug!(
-                "Metadata cache miss (not exists) for thread {}",
-                thread_id
-            );
+            log::debug!("Metadata cache miss (not exists) for thread {}", thread_id);
             return None;
         }
 
@@ -182,11 +155,7 @@ impl<P: CardImageProvider, FS: FileSystem, IC: ImageCodec, MC: MetadataCodec>
             Ok(b) => b,
             Err(e) => {
                 if e.kind() != std::io::ErrorKind::NotFound {
-                    log::warn!(
-                        "Metadata cache read error for thread {}: {}",
-                        thread_id,
-                        e
-                    );
+                    log::warn!("Metadata cache read error for thread {}: {}", thread_id, e);
                 }
                 return None;
             }
@@ -345,8 +314,8 @@ impl<P, FS, IC, MC> std::fmt::Debug for CachingProvider<P, FS, IC, MC> {
 mod tests {
     use super::*;
     use std::collections::HashMap;
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     pub fn test_card(thread_id: u64) -> LibraryCard {
         LibraryCard {
@@ -407,7 +376,7 @@ mod tests {
     impl CardImageProvider for MockCardImageProvider {
         async fn fetch_cover(&self, card: &LibraryCard) -> Result<ImageData, ProviderError> {
             self.call_count.fetch_add(1, Ordering::SeqCst);
-            
+
             if self.should_fail {
                 return Err(ProviderError::Network("Mock failure".to_string()));
             }
@@ -424,7 +393,7 @@ mod tests {
             idx: usize,
         ) -> Result<ImageData, ProviderError> {
             self.call_count.fetch_add(1, Ordering::SeqCst);
-            
+
             if self.should_fail {
                 return Err(ProviderError::Network("Mock failure".to_string()));
             }
@@ -441,8 +410,8 @@ mod tests {
         use super::*;
         use crate::app::library::fs::tests::MockFileSystem;
         use crate::app::library::image_codec::tests::MockImageCodec;
-        use crate::app::library::metadata_codec::tests::MockMetadataCodec;
         use crate::app::library::metadata_codec::RealMetadataCodec;
+        use crate::app::library::metadata_codec::tests::MockMetadataCodec;
         use std::path::PathBuf;
 
         #[tokio::test]
@@ -450,11 +419,11 @@ mod tests {
             let card = test_card(12345);
             let test_data = test_image_data(100, 100);
             let codec = MockImageCodec::new();
-            
+
             let encoded = codec.encode(&test_data).unwrap();
             let cache_path = PathBuf::from("cache/12345/cover.png");
             let mock_fs = MockFileSystem::with_file(&cache_path, &encoded);
-            
+
             let mock_provider = MockCardImageProvider::new();
             let caching: CachingProvider<
                 MockCardImageProvider,
@@ -470,7 +439,7 @@ mod tests {
             );
 
             let result = caching.fetch_cover(&card).await.unwrap();
-            
+
             assert_eq!(result.width, test_data.width);
             assert_eq!(result.height, test_data.height);
             assert_eq!(mock_provider.call_count(), 0);
@@ -480,26 +449,30 @@ mod tests {
         async fn cache_miss_fetches_from_inner_and_saves() {
             let card = test_card(12345);
             let test_data = test_image_data(100, 100);
-            
+
             let mock_fs = MockFileSystem::new();
             let codec = MockImageCodec::new();
             let mock_provider = MockCardImageProvider::with_cover(12345, test_data.clone());
-            
-            let caching: CachingProvider<MockCardImageProvider, MockFileSystem, MockImageCodec, MockMetadataCodec> = 
-                CachingProvider::new(
-                    mock_provider.clone(),
-                    PathBuf::from("cache"),
-                    mock_fs.clone(),
-                    codec,
-                    MockMetadataCodec::new(),
-                );
+
+            let caching: CachingProvider<
+                MockCardImageProvider,
+                MockFileSystem,
+                MockImageCodec,
+                MockMetadataCodec,
+            > = CachingProvider::new(
+                mock_provider.clone(),
+                PathBuf::from("cache"),
+                mock_fs.clone(),
+                codec,
+                MockMetadataCodec::new(),
+            );
 
             let result = caching.fetch_cover(&card).await.unwrap();
-            
+
             assert_eq!(result.width, test_data.width);
             assert_eq!(result.height, test_data.height);
             assert_eq!(mock_provider.call_count(), 1);
-            
+
             let cache_path = PathBuf::from("cache/12345/cover.png");
             assert!(mock_fs.get_file(&cache_path).is_some());
         }
@@ -509,23 +482,27 @@ mod tests {
             let card = test_card(12345);
             let test_data = test_image_data(200, 150);
             let codec = MockImageCodec::new();
-            
+
             let encoded = codec.encode(&test_data).unwrap();
             let cache_path = PathBuf::from("cache/12345/screen_1.png");
             let mock_fs = MockFileSystem::with_file(&cache_path, &encoded);
-            
+
             let mock_provider = MockCardImageProvider::new();
-            let caching: CachingProvider<MockCardImageProvider, MockFileSystem, MockImageCodec, MockMetadataCodec> = 
-                CachingProvider::new(
-                    mock_provider.clone(),
-                    PathBuf::from("cache"),
-                    mock_fs,
-                    codec,
-                    MockMetadataCodec::new(),
-                );
+            let caching: CachingProvider<
+                MockCardImageProvider,
+                MockFileSystem,
+                MockImageCodec,
+                MockMetadataCodec,
+            > = CachingProvider::new(
+                mock_provider.clone(),
+                PathBuf::from("cache"),
+                mock_fs,
+                codec,
+                MockMetadataCodec::new(),
+            );
 
             let result = caching.fetch_screen(&card, 0).await.unwrap();
-            
+
             assert_eq!(result.width, test_data.width);
             assert_eq!(result.height, test_data.height);
             assert_eq!(mock_provider.call_count(), 0);
@@ -535,10 +512,10 @@ mod tests {
         async fn screen_cache_miss_and_save() {
             let card = test_card(12345);
             let test_data = test_image_data(200, 150);
-            
+
             let mock_fs = MockFileSystem::new();
             let codec = MockImageCodec::new();
-            
+
             let mut screens = HashMap::new();
             screens.insert((12345u64, 0usize), test_data.clone());
             let mock_provider = MockCardImageProvider {
@@ -547,22 +524,26 @@ mod tests {
                 call_count: Arc::new(AtomicUsize::new(0)),
                 should_fail: false,
             };
-            
-            let caching: CachingProvider<MockCardImageProvider, MockFileSystem, MockImageCodec, MockMetadataCodec> = 
-                CachingProvider::new(
-                    mock_provider.clone(),
-                    PathBuf::from("cache"),
-                    mock_fs.clone(),
-                    codec,
-                    MockMetadataCodec::new(),
-                );
+
+            let caching: CachingProvider<
+                MockCardImageProvider,
+                MockFileSystem,
+                MockImageCodec,
+                MockMetadataCodec,
+            > = CachingProvider::new(
+                mock_provider.clone(),
+                PathBuf::from("cache"),
+                mock_fs.clone(),
+                codec,
+                MockMetadataCodec::new(),
+            );
 
             let result = caching.fetch_screen(&card, 0).await.unwrap();
-            
+
             assert_eq!(result.width, test_data.width);
             assert_eq!(result.height, test_data.height);
             assert_eq!(mock_provider.call_count(), 1);
-            
+
             let cache_path = PathBuf::from("cache/12345/screen_1.png");
             assert!(mock_fs.get_file(&cache_path).is_some());
         }
@@ -571,25 +552,29 @@ mod tests {
         async fn corrupted_cache_invalid_format_fetches_from_inner() {
             let card = test_card(12345);
             let test_data = test_image_data(100, 100);
-            
+
             let cache_path = PathBuf::from("cache/12345/cover.png");
             let mock_fs = MockFileSystem::with_file(&cache_path, b"not a valid image");
-            
+
             let mut codec = MockImageCodec::new();
             codec.should_fail_decode = true;
-            
+
             let mock_provider = MockCardImageProvider::with_cover(12345, test_data.clone());
-            let caching: CachingProvider<MockCardImageProvider, MockFileSystem, MockImageCodec, MockMetadataCodec> = 
-                CachingProvider::new(
-                    mock_provider.clone(),
-                    PathBuf::from("cache"),
-                    mock_fs,
-                    codec,
-                    MockMetadataCodec::new(),
-                );
+            let caching: CachingProvider<
+                MockCardImageProvider,
+                MockFileSystem,
+                MockImageCodec,
+                MockMetadataCodec,
+            > = CachingProvider::new(
+                mock_provider.clone(),
+                PathBuf::from("cache"),
+                mock_fs,
+                codec,
+                MockMetadataCodec::new(),
+            );
 
             let result = caching.fetch_cover(&card).await.unwrap();
-            
+
             assert_eq!(result.width, test_data.width);
             assert_eq!(mock_provider.call_count(), 1);
         }
@@ -598,24 +583,28 @@ mod tests {
         async fn corrupted_cache_truncated_file() {
             let card = test_card(12345);
             let test_data = test_image_data(100, 100);
-            
+
             let cache_path = PathBuf::from("cache/12345/cover.png");
             let mock_fs = MockFileSystem::with_file(&cache_path, &[1, 2, 3]);
-            
+
             let codec = MockImageCodec::new();
             let mock_provider = MockCardImageProvider::with_cover(12345, test_data.clone());
-            
-            let caching: CachingProvider<MockCardImageProvider, MockFileSystem, MockImageCodec, MockMetadataCodec> = 
-                CachingProvider::new(
-                    mock_provider.clone(),
-                    PathBuf::from("cache"),
-                    mock_fs,
-                    codec,
-                    MockMetadataCodec::new(),
-                );
+
+            let caching: CachingProvider<
+                MockCardImageProvider,
+                MockFileSystem,
+                MockImageCodec,
+                MockMetadataCodec,
+            > = CachingProvider::new(
+                mock_provider.clone(),
+                PathBuf::from("cache"),
+                mock_fs,
+                codec,
+                MockMetadataCodec::new(),
+            );
 
             let result = caching.fetch_cover(&card).await.unwrap();
-            
+
             assert_eq!(result.width, test_data.width);
             assert_eq!(mock_provider.call_count(), 1);
         }
@@ -625,25 +614,29 @@ mod tests {
             let card = test_card(12345);
             let expected_data = test_image_data(100, 100);
             let wrong_data = test_image_data(50, 50);
-            
+
             let codec = MockImageCodec::new();
             let encoded_wrong = codec.encode(&wrong_data).unwrap();
-            
+
             let cache_path = PathBuf::from("cache/12345/cover.png");
             let mock_fs = MockFileSystem::with_file(&cache_path, &encoded_wrong);
-            
+
             let mock_provider = MockCardImageProvider::with_cover(12345, expected_data.clone());
-            let caching: CachingProvider<MockCardImageProvider, MockFileSystem, MockImageCodec, MockMetadataCodec> = 
-                CachingProvider::new(
-                    mock_provider.clone(),
-                    PathBuf::from("cache"),
-                    mock_fs,
-                    codec,
-                    MockMetadataCodec::new(),
-                );
+            let caching: CachingProvider<
+                MockCardImageProvider,
+                MockFileSystem,
+                MockImageCodec,
+                MockMetadataCodec,
+            > = CachingProvider::new(
+                mock_provider.clone(),
+                PathBuf::from("cache"),
+                mock_fs,
+                codec,
+                MockMetadataCodec::new(),
+            );
 
             let result = caching.fetch_cover(&card).await.unwrap();
-            
+
             assert_eq!(result.width, 50);
             assert_eq!(mock_provider.call_count(), 0);
         }
@@ -652,25 +645,29 @@ mod tests {
         async fn fs_read_error_fetches_from_inner() {
             let card = test_card(12345);
             let test_data = test_image_data(100, 100);
-            
+
             let cache_path = PathBuf::from("cache/12345/cover.png");
             let mock_fs = MockFileSystem::new();
             mock_fs.set_error(&cache_path, std::io::ErrorKind::PermissionDenied);
-            
+
             let codec = MockImageCodec::new();
             let mock_provider = MockCardImageProvider::with_cover(12345, test_data.clone());
-            
-            let caching: CachingProvider<MockCardImageProvider, MockFileSystem, MockImageCodec, MockMetadataCodec> = 
-                CachingProvider::new(
-                    mock_provider.clone(),
-                    PathBuf::from("cache"),
-                    mock_fs,
-                    codec,
-                    MockMetadataCodec::new(),
-                );
+
+            let caching: CachingProvider<
+                MockCardImageProvider,
+                MockFileSystem,
+                MockImageCodec,
+                MockMetadataCodec,
+            > = CachingProvider::new(
+                mock_provider.clone(),
+                PathBuf::from("cache"),
+                mock_fs,
+                codec,
+                MockMetadataCodec::new(),
+            );
 
             let result = caching.fetch_cover(&card).await.unwrap();
-            
+
             assert_eq!(result.width, test_data.width);
             assert_eq!(mock_provider.call_count(), 1);
         }
@@ -679,25 +676,29 @@ mod tests {
         async fn fs_write_error_still_returns_data() {
             let card = test_card(12345);
             let test_data = test_image_data(100, 100);
-            
+
             let cache_path = PathBuf::from("cache/12345/cover.png");
             let mock_fs = MockFileSystem::new();
             mock_fs.set_error(&cache_path, std::io::ErrorKind::Other);
-            
+
             let codec = MockImageCodec::new();
             let mock_provider = MockCardImageProvider::with_cover(12345, test_data.clone());
-            
-            let caching: CachingProvider<MockCardImageProvider, MockFileSystem, MockImageCodec, MockMetadataCodec> = 
-                CachingProvider::new(
-                    mock_provider.clone(),
-                    PathBuf::from("cache"),
-                    mock_fs.clone(),
-                    codec,
-                    MockMetadataCodec::new(),
-                );
+
+            let caching: CachingProvider<
+                MockCardImageProvider,
+                MockFileSystem,
+                MockImageCodec,
+                MockMetadataCodec,
+            > = CachingProvider::new(
+                mock_provider.clone(),
+                PathBuf::from("cache"),
+                mock_fs.clone(),
+                codec,
+                MockMetadataCodec::new(),
+            );
 
             let result = caching.fetch_cover(&card).await.unwrap();
-            
+
             assert_eq!(result.width, test_data.width);
             assert!(mock_fs.get_file(&cache_path).is_none());
         }
@@ -706,25 +707,29 @@ mod tests {
         async fn fs_create_dir_error() {
             let card = test_card(12345);
             let test_data = test_image_data(100, 100);
-            
+
             let dir_path = PathBuf::from("cache/12345");
             let mock_fs = MockFileSystem::new();
             mock_fs.set_error(&dir_path, std::io::ErrorKind::PermissionDenied);
-            
+
             let codec = MockImageCodec::new();
             let mock_provider = MockCardImageProvider::with_cover(12345, test_data.clone());
-            
-            let caching: CachingProvider<MockCardImageProvider, MockFileSystem, MockImageCodec, MockMetadataCodec> = 
-                CachingProvider::new(
-                    mock_provider.clone(),
-                    PathBuf::from("cache"),
-                    mock_fs,
-                    codec,
-                    MockMetadataCodec::new(),
-                );
+
+            let caching: CachingProvider<
+                MockCardImageProvider,
+                MockFileSystem,
+                MockImageCodec,
+                MockMetadataCodec,
+            > = CachingProvider::new(
+                mock_provider.clone(),
+                PathBuf::from("cache"),
+                mock_fs,
+                codec,
+                MockMetadataCodec::new(),
+            );
 
             let result = caching.fetch_cover(&card).await;
-            
+
             assert!(result.is_ok());
         }
 
@@ -733,29 +738,33 @@ mod tests {
             let card = test_card(12345);
             let test_data = test_image_data(100, 100);
             let codec = MockImageCodec::new();
-            
+
             let encoded = codec.encode(&test_data).unwrap();
             let cache_path = PathBuf::from("cache/12345/cover.png");
             let mock_fs = MockFileSystem::with_file(&cache_path, &encoded);
-            
+
             let mock_provider = MockCardImageProvider::new();
-            let caching: CachingProvider<MockCardImageProvider, MockFileSystem, MockImageCodec, MockMetadataCodec> = 
-                CachingProvider::new(
-                    mock_provider.clone(),
-                    PathBuf::from("cache"),
-                    mock_fs.clone(),
-                    MockImageCodec::new(),
-                    MockMetadataCodec::new(),
-                );
+            let caching: CachingProvider<
+                MockCardImageProvider,
+                MockFileSystem,
+                MockImageCodec,
+                MockMetadataCodec,
+            > = CachingProvider::new(
+                mock_provider.clone(),
+                PathBuf::from("cache"),
+                mock_fs.clone(),
+                MockImageCodec::new(),
+                MockMetadataCodec::new(),
+            );
 
             let card_clone = card.clone();
             let caching_clone = caching.clone();
-            
+
             let (result1, result2) = tokio::join!(
                 caching.fetch_cover(&card),
                 caching_clone.fetch_cover(&card_clone)
             );
-            
+
             assert!(result1.is_ok());
             assert!(result2.is_ok());
             assert_eq!(result1.unwrap().width, test_data.width);
@@ -766,28 +775,32 @@ mod tests {
         async fn concurrent_read_and_write() {
             let card = test_card(12345);
             let test_data = test_image_data(100, 100);
-            
+
             let mock_fs = MockFileSystem::new();
             let codec = MockImageCodec::new();
             let mock_provider = MockCardImageProvider::with_cover(12345, test_data.clone());
-            
-            let caching: CachingProvider<MockCardImageProvider, MockFileSystem, MockImageCodec, MockMetadataCodec> = 
-                CachingProvider::new(
-                    mock_provider.clone(),
-                    PathBuf::from("cache"),
-                    mock_fs.clone(),
-                    codec,
-                    MockMetadataCodec::new(),
-                );
+
+            let caching: CachingProvider<
+                MockCardImageProvider,
+                MockFileSystem,
+                MockImageCodec,
+                MockMetadataCodec,
+            > = CachingProvider::new(
+                mock_provider.clone(),
+                PathBuf::from("cache"),
+                mock_fs.clone(),
+                codec,
+                MockMetadataCodec::new(),
+            );
 
             let card_clone = card.clone();
             let caching_clone = caching.clone();
-            
+
             let (result1, result2) = tokio::join!(
                 caching.fetch_cover(&card),
                 caching_clone.fetch_cover(&card_clone)
             );
-            
+
             assert!(result1.is_ok());
             assert!(result2.is_ok());
         }
@@ -798,10 +811,10 @@ mod tests {
             let card2 = test_card(222);
             let test_data1 = test_image_data(100, 100);
             let test_data2 = test_image_data(200, 200);
-            
+
             let mock_fs = MockFileSystem::new();
             let codec = MockImageCodec::new();
-            
+
             let mut covers = HashMap::new();
             covers.insert(111, test_data1.clone());
             covers.insert(222, test_data2.clone());
@@ -811,26 +824,30 @@ mod tests {
                 call_count: Arc::new(AtomicUsize::new(0)),
                 should_fail: false,
             };
-            
-            let caching: CachingProvider<MockCardImageProvider, MockFileSystem, MockImageCodec, MockMetadataCodec> = 
-                CachingProvider::new(
-                    mock_provider.clone(),
-                    PathBuf::from("cache"),
-                    mock_fs.clone(),
-                    codec,
-                    MockMetadataCodec::new(),
-                );
+
+            let caching: CachingProvider<
+                MockCardImageProvider,
+                MockFileSystem,
+                MockImageCodec,
+                MockMetadataCodec,
+            > = CachingProvider::new(
+                mock_provider.clone(),
+                PathBuf::from("cache"),
+                mock_fs.clone(),
+                codec,
+                MockMetadataCodec::new(),
+            );
 
             let caching_clone = caching.clone();
-            
+
             let (result1, result2) = tokio::join!(
                 caching.fetch_cover(&card1),
                 caching_clone.fetch_cover(&card2)
             );
-            
+
             assert!(result1.is_ok());
             assert!(result2.is_ok());
-            
+
             let path1 = PathBuf::from("cache/111/cover.png");
             let path2 = PathBuf::from("cache/222/cover.png");
             assert!(mock_fs.get_file(&path1).is_some());
@@ -843,14 +860,14 @@ mod tests {
         async fn real_cache_verification() {
             use crate::app::library::fs::RealFileSystem;
             use crate::app::library::image_codec::RealImageCodec;
-            
+
             // This test verifies the entire cache loading pipeline works with real files
             let cache_dir = PathBuf::from("cache");
             let test_thread_id = 100153; // Known cache directory
-            
+
             let fs = RealFileSystem;
             let codec = RealImageCodec;
-            
+
             // Test 1: Verify cache directory exists
             let thread_cache_dir = cache_dir.join(test_thread_id.to_string());
             println!("Checking cache directory: {:?}", thread_cache_dir);
@@ -859,26 +876,29 @@ mod tests {
                 "Cache directory should exist: {:?}",
                 thread_cache_dir
             );
-            
+
             // Test 2: Verify cover.png exists
             let cover_path = thread_cache_dir.join("cover.png");
             println!("Checking cover path: {:?}", cover_path);
             let exists = fs.exists(&cover_path).await;
             println!("Cover exists: {}", exists);
             assert!(exists, "Cover should exist: {:?}", cover_path);
-            
+
             // Test 3: Try to read the file
             println!("Reading cover file...");
             let bytes = fs.read(&cover_path).await.expect("Should read cover file");
             println!("Read {} bytes", bytes.len());
             assert!(bytes.len() > 0, "Cover file should not be empty");
-            
+
             // Test 4: Try to decode the image
             println!("Decoding image...");
             let image_data = codec.decode(&bytes).expect("Should decode PNG");
             println!("Decoded image: {}x{}", image_data.width, image_data.height);
-            assert!(image_data.width > 0 && image_data.height > 0, "Image should have valid dimensions");
-            
+            assert!(
+                image_data.width > 0 && image_data.height > 0,
+                "Image should have valid dimensions"
+            );
+
             println!("✓ All checks passed! Cache loading works correctly.");
         }
     }

@@ -8,6 +8,7 @@ use crate::ui_constants::download::{DOWNLOAD_WEIGHT, UNZIP_WEIGHT};
 
 pub(super) struct DownloadState {
     pub(super) rx: mpsc::Receiver<GameDownloadStatus>,
+    pub(super) title: String,
     pub(super) progress: Option<Progress>,
     pub(super) link_choices: Option<Vec<DownloadLink>>,
 }
@@ -37,7 +38,10 @@ fn handle_progress(
             if phase == "Unzip" {
                 log::error!("error during {}: {e}", phase);
             }
-            super::errors_ui::append_error(format!("{} error (thread {}): {}", phase, id, e));
+            super::errors_ui::append_error(format!(
+                "{} error ({}, thread {}): {}",
+                phase, state.title, id, e
+            ));
             state.progress = Some(Progress::Error(e));
             ctx.request_repaint();
         }

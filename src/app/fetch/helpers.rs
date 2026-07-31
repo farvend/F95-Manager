@@ -1,5 +1,5 @@
-use crate::parser::game_info::ThreadId;
 use crate::parser::F95Thread;
+use crate::parser::game_info::ThreadId;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};

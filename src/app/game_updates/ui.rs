@@ -1,9 +1,9 @@
 use eframe::egui;
 use lazy_static::lazy_static;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::RwLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use super::check::{check_all_updates, GameUpdateInfo};
+use super::check::{GameUpdateInfo, check_all_updates};
 
 lazy_static! {
     pub static ref GAMES_WITH_UPDATES: RwLock<Vec<GameUpdateInfo>> = RwLock::new(Vec::new());
@@ -31,7 +31,7 @@ pub fn trigger_update_check(ctx: &egui::Context) {
     let ctx_clone = ctx.clone();
     crate::app::rt().spawn(async move {
         let updates = check_all_updates().await;
-        
+
         if let Ok(mut progress) = CHECK_PROGRESS.write() {
             *progress = (updates.len(), updates.len());
         }

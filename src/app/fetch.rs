@@ -114,7 +114,9 @@ impl super::NoLagApp {
                                         .clone()
                                 };
                                 tokio::spawn(async move {
-                                    if let Err(e) = helpers::save_to_cache(&cache_dir, id, &th_clone) {
+                                    if let Err(e) =
+                                        helpers::save_to_cache(&cache_dir, id, &th_clone)
+                                    {
                                         log::warn!("Failed to save cache for thread {}: {}", id, e);
                                     }
                                 });

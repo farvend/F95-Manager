@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 
 use super::open::reveal_in_file_manager;
 use crate::app::settings::store::{
-    downloaded_game_exe, downloaded_game_folder, record_downloaded_game, save_settings_to_disk,
-    APP_SETTINGS,
+    APP_SETTINGS, downloaded_game_exe, downloaded_game_folder, record_downloaded_game,
+    save_settings_to_disk,
 };
 
 #[cfg(target_os = "windows")]
@@ -250,11 +250,7 @@ pub fn run_downloaded_game(thread_id: u64) {
             (Some(r), Some(b)) => {
                 let rd = depth_from(&folder, &r).unwrap_or(usize::MAX);
                 let bd = depth_from(&folder, &b).unwrap_or(usize::MAX);
-                if bd < rd {
-                    b
-                } else {
-                    r
-                }
+                if bd < rd { b } else { r }
             }
             (Some(r), None) => r,
             (None, Some(b)) => b,
