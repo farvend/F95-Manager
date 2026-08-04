@@ -1,0 +1,137 @@
+import { LineEdit } from "std-widgets.slint";
+import { SuggestionData, Theme } from "../shared.slint";
+
+export component SectionTitle inherits HorizontalLayout {
+    in property <string> left;
+    in property <string> right;
+    height: 18px * Theme.scale;
+    Text { text: root.left; color: #777777; font-size: 13px * Theme.scale; }
+    Rectangle { horizontal-stretch: 1; }
+    Text { text: root.right; color: #a6a6a6; font-size: 13px * Theme.scale; }
+}
+
+export component SuggestInput inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder;
+    in property <[SuggestionData]> suggestions;
+    in property <int> kind;
+    in-out property <int> selected-index: 0;
+    callback query-changed(string, int);
+    callback chosen(string, string, int);
+    callback overlay-changed(int, length, length, length, [SuggestionData], int, bool);
+    height: 31px * Theme.scale;
+    horizontal-stretch: 1;
+    changed absolute-position => {
+        root.overlay-changed(root.kind, root.absolute-position.x,
+            root.absolute-position.y + root.height, root.width, root.suggestions,
+            root.selected-index, root.text != "" && root.suggestions.length > 0);
+    }
+    changed suggestions => {
+        root.selected-index = min(max(root.selected-index, 0), max(0, root.suggestions.length - 1));
+        root.overlay-changed(root.kind, root.absolute-position.x,
+            root.absolute-position.y + root.height, root.width, root.suggestions,
+            root.selected-index, root.text != "" && root.suggestions.length > 0);
+    }
+    LineEdit {
+        width: parent.width;
+        height: 31px * Theme.scale;
+        text <=> root.text;
+        placeholder-text: root.placeholder;
+        changed text => {
+            root.selected-index = 0;
+            root.query-changed(self.text, root.kind);
+        }
+        key-pressed(event) => {
+            if (event.text == Key.DownArrow && root.suggestions.length > 0) {
+                root.selected-index = min(root.suggestions.length - 1, root.selected-index + 1);
+                root.overlay-changed(root.kind, root.absolute-position.x,
+                    root.absolute-position.y + root.height, root.width, root.suggestions,
+                    root.selected-index, true);
+                accept
+            } else if (event.text == Key.UpArrow && root.suggestions.length > 0) {
+                root.selected-index = max(0, root.selected-index - 1);
+                root.overlay-changed(root.kind, root.absolute-position.x,
+                    root.absolute-position.y + root.height, root.width, root.suggestions,
+                    root.selected-index, true);
+                accept
+            } else if (event.text == Key.Return && root.suggestions.length > 0) {
+                let item = root.suggestions[root.selected-index];
+                root.chosen(item.id, item.label, root.kind);
+                root.text = "";
+                root.overlay-changed(root.kind, root.absolute-position.x,
+                    root.absolute-position.y + root.height, root.width, root.suggestions,
+                    root.selected-index, false);
+                accept
+            } else {
+                reject
+            }
+        }
+    }
+}
+
+export component SelectedFilters inherits VerticalLayout {
+    in property <[SuggestionData]> values;
+    in property <int> kind;
+    callback remove(string, int);
+    horizontal-stretch: 1;
+    spacing: 3px * Theme.scale;
+    for item in root.values: HorizontalLayout {
+        height: 25px * Theme.scale;
+        spacing: 0px;
+        Rectangle {
+            width: chip-text.preferred-width + 16px * Theme.scale;
+            border-radius: 5px * Theme.scale;
+            border-width: 1px;
+            border-color: #704044;
+            background: chip-touch.pressed ? #3a3031 : chip-touch.has-hover ? #303030 : #292929;
+            chip-text := Text {
+                text: item.label + "  ×";
+                color: #e68b90;
+                font-size: 13px * Theme.scale;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            chip-touch := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.remove(item.id, root.kind); }
+            }
+        }
+        Rectangle { horizontal-stretch: 1; }
+    }
+}
+
+export component DateStepSlider inherits Rectangle {
+    in-out property <int> value: 0;
+    callback changed(int);
+    height: 38px * Theme.scale;
+    background: #202020;
+    border-width: 1px;
+    border-color: #4a4a4a;
+    border-radius: 7px * Theme.scale;
+    private property <length> track-left: 16px * Theme.scale;
+    private property <length> track-right: root.width - 16px * Theme.scale;
+    private property <length> thumb-x: root.track-left + (root.track-right - root.track-left) * root.value / 8;
+
+    Rectangle { x: root.track-left; y: parent.height / 2 - 3px * Theme.scale; width: root.track-right - root.track-left; height: 6px * Theme.scale; border-radius: 3px * Theme.scale; background: #161616; border-width: 1px; border-color: #3c3c3c; }
+    Rectangle { x: root.track-left; y: parent.height / 2 - 3px * Theme.scale; width: max(0px, root.thumb-x - root.track-left); height: 6px * Theme.scale; border-radius: 3px * Theme.scale; background: #6d343777; }
+    for tick[index] in 9: Rectangle { x: root.track-left + (root.track-right - root.track-left) * index / 8; y: parent.height / 2 - 5px * Theme.scale; width: 1px; height: 10px * Theme.scale; background: #666666; }
+    Rectangle {
+        x: root.thumb-x - 13px * Theme.scale; y: 5px * Theme.scale;
+        width: 26px * Theme.scale; height: parent.height - 10px * Theme.scale;
+        border-radius: 6px * Theme.scale; background: step-touch.has-hover ? #454545 : #393939;
+        border-width: 1px; border-color: #555555;
+        Rectangle { x: parent.width / 2 - 3px * Theme.scale; y: 7px * Theme.scale; width: 1px; height: parent.height - 14px * Theme.scale; background: #6b6b6b; }
+        Rectangle { x: parent.width / 2 + 3px * Theme.scale; y: 7px * Theme.scale; width: 1px; height: parent.height - 14px * Theme.scale; background: #6b6b6b; }
+    }
+    step-touch := TouchArea {
+        mouse-cursor: pointer;
+        function apply-position() {
+            let next = round(max(0, min(8, (self.mouse-x - root.track-left) / max(1px, root.track-right - root.track-left) * 8)));
+            if (next != root.value) { root.value = next; root.changed(next); }
+        }
+        clicked => { self.apply-position(); }
+        changed mouse-x => { if (self.pressed) { self.apply-position(); } }
+    }
+}
+

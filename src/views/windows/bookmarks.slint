@@ -1,0 +1,89 @@
+import { LineEdit, Slider, ScrollView } from "std-widgets.slint";
+import { BookmarkEditorData, FlatButton, Theme, Translations } from "../shared.slint";
+
+export component BookmarksWindow inherits Window {
+    title: Translations.settings-bookmarks + " — F95 standalone client";
+    preferred-width: 620px;
+    preferred-height: 480px;
+    min-width: 500px;
+    min-height: 360px;
+    background: #1d1d1d;
+    in property <[BookmarkEditorData]> items;
+    in-out property <string> selected-id;
+    in-out property <string> emoji;
+    in-out property <string> label;
+    in-out property <int> red: 60;
+    in-out property <int> green: 120;
+    in-out property <int> blue: 200;
+    in-out property <bool> delete-confirm-visible: false;
+    callback select(string);
+    callback save(string, string, string, int, int, int);
+    callback delete(string);
+    callback create-new();
+
+    HorizontalLayout {
+        padding: 14px * Theme.scale;
+        spacing: 12px * Theme.scale;
+        Rectangle {
+            width: 250px * Theme.scale; background: #202020; border-width: 1px; border-color: #414141;
+            ScrollView {
+                viewport-width: self.width;
+                VerticalLayout {
+                    padding: 6px; spacing: 4px;
+                    FlatButton { text: "+ " + Translations.bookmarks-new; active: root.selected-id == ""; clicked => { root.create-new(); } }
+                    for item in root.items: FlatButton {
+                        text: item.emoji + "  " + item.label;
+                        active: root.selected-id == item.id;
+                        clicked => { root.select(item.id); }
+                    }
+                }
+            }
+        }
+        VerticalLayout {
+            spacing: 7px * Theme.scale;
+            Text { text: root.selected-id == "" ? Translations.bookmarks-new : Translations.bookmarks-edit; color: #eeeeee; font-size: 21px * Theme.scale; }
+            Text { text: Translations.bookmarks-emoji; color: #aaaaaa; font-size: 13px * Theme.scale; }
+            LineEdit { height: 33px * Theme.scale; text <=> root.emoji; }
+            Text { text: Translations.bookmarks-name; color: #aaaaaa; font-size: 13px * Theme.scale; }
+            LineEdit { height: 33px * Theme.scale; text <=> root.label; }
+            Text { text: Translations.bookmarks-color + ": RGB " + root.red + ", " + root.green + ", " + root.blue; color: #aaaaaa; font-size: 13px * Theme.scale; }
+            Rectangle { height: 24px; background: rgb(root.red, root.green, root.blue); border-radius: 5px; border-width: 1px; border-color: #555555; }
+            Slider { height: 25px; minimum: 0; maximum: 255; value: root.red; changed value => { root.red = round(self.value); } }
+            Slider { height: 25px; minimum: 0; maximum: 255; value: root.green; changed value => { root.green = round(self.value); } }
+            Slider { height: 25px; minimum: 0; maximum: 255; value: root.blue; changed value => { root.blue = round(self.value); } }
+            Rectangle { vertical-stretch: 1; }
+            HorizontalLayout {
+                height: 34px; spacing: 6px;
+                if root.selected-id != "": FlatButton { horizontal-stretch: 1; text: Translations.common-delete; danger: true; clicked => { root.delete-confirm-visible = true; } }
+                FlatButton { horizontal-stretch: 1; text: root.selected-id == "" ? Translations.bookmarks-create : Translations.bookmarks-save; active: true; clicked => { root.save(root.selected-id, root.emoji, root.label, root.red, root.green, root.blue); } }
+            }
+        }
+    }
+    if root.delete-confirm-visible: Rectangle {
+        background: #00000099;
+        z: 100;
+        TouchArea { }
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: min(430px, parent.width - 30px);
+            height: 140px;
+            background: #252525;
+            border-width: 1px;
+            border-color: #555555;
+            border-radius: 8px;
+            VerticalLayout {
+                padding: 14px;
+                spacing: 10px;
+                Text { text: Translations.bookmarks-delete-confirm; color: #eeeeee; font-size: 15px; wrap: word-wrap; horizontal-alignment: center; }
+                Rectangle { vertical-stretch: 1; }
+                HorizontalLayout {
+                    height: 32px;
+                    spacing: 7px;
+                    FlatButton { horizontal-stretch: 1; text: Translations.common-cancel; clicked => { root.delete-confirm-visible = false; } }
+                    FlatButton { horizontal-stretch: 1; text: Translations.common-delete; danger: true; clicked => { root.delete(root.selected-id); root.delete-confirm-visible = false; } }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,45 @@
+import { TagRowData, Theme } from "../shared.slint";
+
+export component TagPanel inherits Rectangle {
+    in property <[TagRowData]> rows;
+    private property <float> card-factor: Theme.scale * Theme.card-scale;
+    background: #232323;
+    border-width: 1px;
+    border-color: #454545;
+    border-radius: 10px * root.card-factor;
+    height: tag-layout.preferred-height + 18px * root.card-factor;
+    tag-layout := VerticalLayout {
+        padding-left: 9px * root.card-factor;
+        padding-right: 9px * root.card-factor;
+        padding-top: 12px * root.card-factor;
+        padding-bottom: 6px * root.card-factor;
+        spacing: 3px * root.card-factor;
+        for tag-row in root.rows: HorizontalLayout {
+            height: 20px * root.card-factor;
+            spacing: 4px * root.card-factor;
+            for tag in tag-row.tags: Rectangle {
+                width: tag-text.preferred-width + 8px * root.card-factor;
+                border-radius: 4px * root.card-factor;
+                background: #cf4f57;
+                tag-text := Text {
+                    text: tag;
+                    color: #f4eeee;
+                    font-size: 12px * root.card-factor;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+            Rectangle { horizontal-stretch: 1; }
+        }
+    }
+    Rectangle {
+        x: 0px;
+        y: 0px;
+        width: parent.width;
+        height: 11px * root.card-factor;
+        background: #232323;
+        z: 2;
+        Rectangle { x: 0px; width: 1px; background: #454545; }
+        Rectangle { x: parent.width - 1px; width: 1px; background: #454545; }
+    }
+}

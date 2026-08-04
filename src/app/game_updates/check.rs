@@ -1,7 +1,7 @@
 use std::time::Duration;
 use tokio::task::JoinSet;
 
-use crate::app::fetch::helpers::load_from_cache;
+use crate::app::fetch_helpers::load_from_cache;
 use crate::app::settings::store::APP_SETTINGS;
 use crate::parser::game_info::thread_meta::fetch_thread_meta;
 

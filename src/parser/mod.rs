@@ -291,13 +291,12 @@ where
         Str(String),
         Num(f64),
     }
-    
+
     match VersionValue::deserialize(deserializer)? {
         VersionValue::Str(s) => Ok(s),
         VersionValue::Num(n) => Ok(n.to_string()),
     }
 }
-
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct F95Thread {

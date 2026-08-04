@@ -1,0 +1,24 @@
+import { Translations } from "../shared.slint";
+
+export component AboutWindow inherits Window {
+    title: Translations.about-title + " — F95 standalone client";
+    preferred-width: 500px;
+    preferred-height: 330px;
+    min-width: 420px;
+    min-height: 280px;
+    background: #1d1d1d;
+    in property <string> version;
+    VerticalLayout {
+        padding: 28px;
+        spacing: 12px;
+        Text { text: "F95 standalone client"; color: #eeeeee; font-size: 27px; }
+        Text { text: Translations.about-version; color: #cf6b72; font-size: 14px; }
+        Rectangle { height: 1px; background: #414141; }
+        Text {
+            text: Translations.about-description;
+            color: #b5b5b5; font-size: 14px; wrap: word-wrap;
+        }
+        Rectangle { vertical-stretch: 1; }
+        Text { text: Translations.about-footer; color: #777777; font-size: 12px; }
+    }
+}

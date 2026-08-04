@@ -2,10 +2,7 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 
 use crate::parser::game_info::link::DownloadLink;
-use crate::parser::{
-    F95Thread,
-    game_info::{F95PageUrl, Platform, PlatformDownloads, ThreadId},
-};
+use crate::parser::game_info::{F95PageUrl, Platform};
 
 #[derive(Debug, Clone)]
 pub enum Progress {
@@ -59,9 +56,8 @@ pub fn create_download_task(page: F95PageUrl) -> mpsc::Receiver<GameDownloadStat
                 return;
             }
         };
-        dbg!(&downloads);
-
-        // Auto-select platform based on host OS; fall back to any available platform with links
+        // Pick links for the current OS automatically. Manual choice is only a
+        // fallback when the parser could not classify a suitable platform.
         let preferred_platform = if cfg!(target_os = "windows") {
             Platform::WINDOWS
         } else if cfg!(target_os = "linux") {
@@ -74,7 +70,6 @@ pub fn create_download_task(page: F95PageUrl) -> mpsc::Receiver<GameDownloadStat
             Platform::WINDOWS
         };
 
-        // Try preferred platform first, then common priority, then any with most links
         let selected = downloads
             .iter()
             .find(|e| e.platform().contains(preferred_platform));
@@ -82,41 +77,47 @@ pub fn create_download_task(page: F95PageUrl) -> mpsc::Receiver<GameDownloadStat
         let links = match selected {
             Some(pd) if !pd.links().is_empty() => pd.links(),
             _ => {
-                let message = format!(
-                    "No suitable platform downloads found. Available: {:?}",
-                    downloads.iter().map(|e| e.platform()).collect::<Vec<_>>()
-                );
-                let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(message)));
+                let fallback_links = downloads
+                    .iter()
+                    .flat_map(|downloads| downloads.links().iter().cloned())
+                    .collect::<Vec<_>>();
+                if fallback_links.is_empty() {
+                    let message = format!(
+                        "No suitable platform downloads found. Available: {:?}",
+                        downloads.iter().map(|e| e.platform()).collect::<Vec<_>>()
+                    );
+                    let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(message)));
+                } else {
+                    let _ = tx.send(GameDownloadStatus::SelectLinks(fallback_links));
+                }
                 return;
             }
         };
 
-        let mut errors = vec![];
+        let mut errors = Vec::new();
         for link in links {
             match link.download().await {
                 Ok(mut download_recv) => {
                     while let Some(status) = download_recv.recv().await {
                         if tx.send(status).is_err() {
-                            return; // Получатель отключился
+                            return;
                         }
                     }
                     return;
                 }
-                Err(err) => {
-                    log::error!("Error downloading: {err:?}");
-                    let err = format!("{err:?}");
-                    errors.push(err);
+                Err(error) => {
+                    log::error!("Error downloading: {error:?}");
+                    errors.push(format!("{error:?}"));
                 }
             }
         }
 
-        // Если ни одна ссылка не сработала
-        let error_text = if errors.len() == 0 {
+        let error = if errors.is_empty() {
             "For some reason no download links was found".to_string()
         } else {
             format!("Errors trying download from hostings: {errors:?}")
         };
-        let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(error_text)));
+        let _ = tx.send(GameDownloadStatus::Downloading(Progress::Error(error)));
     });
 
     rx

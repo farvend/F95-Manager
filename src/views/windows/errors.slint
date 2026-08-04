@@ -1,0 +1,33 @@
+import { ScrollView } from "std-widgets.slint";
+import { FlatButton, Theme, Translations } from "../shared.slint";
+
+export component ErrorsWindow inherits Window {
+    title: Translations.errors-title + " — F95 standalone client";
+    preferred-width: 800px;
+    preferred-height: 450px;
+    min-width: 480px;
+    min-height: 300px;
+    background: #1b1b1b;
+    in-out property <string> contents;
+    in property <int> error-count;
+    callback clear();
+    callback copy();
+    VerticalLayout {
+        padding: 14px * Theme.scale;
+        spacing: 8px * Theme.scale;
+        HorizontalLayout {
+            height: 34px * Theme.scale;
+            Text { text: Translations.errors-title + " (" + root.error-count + ")"; color: #eeeeee; font-size: 22px * Theme.scale; vertical-alignment: center; }
+            Rectangle { horizontal-stretch: 1; }
+            FlatButton { width: 100px * Theme.scale; text: Translations.logs-copy; clicked => { root.copy(); } }
+            FlatButton { width: 100px * Theme.scale; text: Translations.errors-clear; danger: true; clicked => { root.clear(); } }
+        }
+        Rectangle {
+            background: #121212; border-width: 1px; border-color: #3d3d3d;
+            ScrollView {
+                viewport-width: self.width;
+                Text { x: 10px; y: 9px; width: parent.width - 20px; text: root.contents; color: #e08c8c; font-family: "Consolas"; font-size: 12px; wrap: word-wrap; }
+            }
+        }
+    }
+}

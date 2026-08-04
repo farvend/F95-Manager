@@ -111,15 +111,12 @@ impl F95Page {
 
         for platform_downloads in parts.iter().skip(1) {
             let fragment = scraper::Html::parse_fragment(platform_downloads);
-            let platform = match fragment
+            let platform = fragment
                 .root_element()
                 .text()
                 .map(Platform::from)
                 .find(|platform| !platform.is_empty())
-            {
-                Some(platform) => platform,
-                None => continue,
-            };
+                .unwrap_or(Platform::OTHER);
 
             let url_captures: Vec<_> = RE_LINK.captures_iter(platform_downloads).collect();
             found_download_urls |= !url_captures.is_empty();

@@ -26,6 +26,10 @@ fn default_card_scale_percent() -> u16 {
     100
 }
 
+fn default_image_cache_games() -> u16 {
+    12
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Bookmark {
     pub id: String,
@@ -108,13 +112,13 @@ pub struct AppSettings {
     // Loading indicator animation type
     #[serde(default)]
     pub loading_anim: LoadingAnim,
-    // UI language (None = auto/system). Stored as "en"/"ru" or null; legacy "auto" maps to null.
+    // Language selection. Legacy null values map to Automatic.
     #[serde(
         default,
-        serialize_with = "serialize_language_opt",
-        deserialize_with = "deserialize_language_opt"
+        serialize_with = "serialize_language_choice",
+        deserialize_with = "deserialize_language_choice"
     )]
-    pub language: Option<crate::localization::SupportedLang>,
+    pub language: crate::localization::LanguageChoice,
     // Whether to persist logs to a file (warn and error only). Default: true for backward compatibility
     #[serde(default = "default_log_to_file")]
     pub log_to_file: bool,
@@ -140,6 +144,9 @@ pub struct AppSettings {
     pub ui_scale_percent: u16,
     #[serde(default = "default_card_scale_percent")]
     pub card_scale_percent: u16,
+    /// Number of games whose decoded screenshots may remain in RAM.
+    #[serde(default = "default_image_cache_games")]
+    pub image_cache_games: u16,
 }
 
 impl Persistable for AppSettings {}
@@ -162,7 +169,7 @@ impl Default for AppSettings {
             custom_launch: String::new(),
             cache_on_download: false,
             loading_anim: LoadingAnim::BottomBar,
-            language: None,
+            language: crate::localization::LanguageChoice::Automatic,
             log_to_file: default_log_to_file(),
             autosave_selected_tags: false,
             update_check_frequency: UpdateCheckFrequency::default(),
@@ -175,6 +182,7 @@ impl Default for AppSettings {
             filter_bookmarks: Vec::new(),
             ui_scale_percent: default_ui_scale_percent(),
             card_scale_percent: default_card_scale_percent(),
+            image_cache_games: default_image_cache_games(),
         }
     }
 }
@@ -184,9 +192,9 @@ fn default_log_to_file() -> bool {
 }
 
 //// Serde helpers for language field to keep backward compatibility with older JSONs.
-fn deserialize_language_opt<'de, D>(
+fn deserialize_language_choice<'de, D>(
     deserializer: D,
-) -> Result<Option<crate::localization::SupportedLang>, D::Error>
+) -> Result<crate::localization::LanguageChoice, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -195,27 +203,26 @@ where
         Some(s) => {
             let s = s.to_ascii_lowercase();
             match s.as_str() {
-                "en" => Some(crate::localization::SupportedLang::English),
-                "ru" => Some(crate::localization::SupportedLang::Russian),
-                // treat "auto" or any unknown as None
-                _ => None,
+                "en" => crate::localization::LanguageChoice::English,
+                "ru" => crate::localization::LanguageChoice::Russian,
+                _ => crate::localization::LanguageChoice::Automatic,
             }
         }
-        None => None,
+        None => crate::localization::LanguageChoice::Automatic,
     })
 }
 
-fn serialize_language_opt<S>(
-    value: &Option<crate::localization::SupportedLang>,
+fn serialize_language_choice<S>(
+    value: &crate::localization::LanguageChoice,
     serializer: S,
 ) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
     match value {
-        Some(crate::localization::SupportedLang::English) => serializer.serialize_some("en"),
-        Some(crate::localization::SupportedLang::Russian) => serializer.serialize_some("ru"),
-        None => serializer.serialize_none(),
+        crate::localization::LanguageChoice::Automatic => serializer.serialize_some("auto"),
+        crate::localization::LanguageChoice::English => serializer.serialize_some("en"),
+        crate::localization::LanguageChoice::Russian => serializer.serialize_some("ru"),
     }
 }
 
@@ -620,5 +627,6 @@ mod tests {
         assert!(settings.filter_bookmarks.is_empty());
         assert_eq!(settings.ui_scale_percent, 100);
         assert_eq!(settings.card_scale_percent, 100);
+        assert_eq!(settings.image_cache_games, 12);
     }
 }

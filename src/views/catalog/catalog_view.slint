@@ -1,0 +1,89 @@
+import { ListView } from "std-widgets.slint";
+import { GameRowData, TagRowData, Theme, FlatButton } from "../shared.slint";
+import { GameCard } from "../cards/game_card.slint";
+
+export component CatalogView inherits Rectangle {
+    in property <[GameRowData]> game-rows;
+    // Keep the viewport outside ListView: replacing game-rows must not reset
+    // the visible part of the catalog/library.
+    in-out property <length> scroll-y: 0px;
+    in property <bool> loading;
+    in property <string> status-text;
+    in property <string> page-label;
+    in property <string> active-tag-card-id;
+    callback layout-width-changed(float);
+    callback previous-page();
+    callback next-page();
+    callback image-needed(string);
+    callback primary-action(string);
+    callback open-thread(string);
+    callback hide-game(string);
+    callback open-folder(string);
+    callback context-requested(string, bool, bool, length, length);
+    callback tags-hovered(string, [TagRowData], length, length, length, bool);
+            background: #191919;
+            horizontal-stretch: 1;
+            changed width => { root.layout-width-changed(self.width / 1px); }
+            VerticalLayout {
+                spacing: 0px;
+                Rectangle {
+                    vertical-stretch: 1;
+                    if root.loading: Text {
+                        text: root.status-text;
+                        color: #b8b8b8;
+                        font-size: 17px * Theme.scale;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    if !root.loading && root.game-rows.length == 0: Text {
+                        text: root.status-text;
+                        color: #999999;
+                        font-size: 17px * Theme.scale;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    if !root.loading && root.game-rows.length > 0: ListView {
+                        viewport-x: 0px;
+                        viewport-y <=> root.scroll-y;
+                        viewport-width: self.width;
+                        for row in root.game-rows: HorizontalLayout {
+                            padding-left: 14px * Theme.scale;
+                            padding-right: 10px * Theme.scale;
+                            padding-top: 8px * Theme.scale;
+                            spacing: 10px * Theme.scale;
+                            for card in row.cards: GameCard {
+                                    game: card;
+                                    active-tag-card-id: root.active-tag-card-id;
+                                    image-needed(id) => { root.image-needed(id); }
+                                    primary-action(id) => { root.primary-action(id); }
+                                    open-thread(id) => { root.open-thread(id); }
+                                    hide-game(id) => { root.hide-game(id); }
+                                    open-folder(id) => { root.open-folder(id); }
+                                    context-requested(id, installed, pending-removable, x, y) => {
+                                        root.context-requested(id, installed, pending-removable, x, y);
+                                    }
+                                    tags-hovered(id, rows, x, y, width, active) => {
+                                        root.tags-hovered(id, rows, x, y, width, active);
+                                    }
+                            }
+                            Rectangle { horizontal-stretch: 1; }
+                        }
+                    }
+                }
+                Rectangle {
+                    height: 43px * Theme.scale;
+                    border-width: 1px;
+                    border-color: #343434;
+                    background: #202020;
+                    HorizontalLayout {
+                        y: 4px * Theme.scale;
+                        height: 31px * Theme.scale;
+                        alignment: center;
+                        spacing: 14px * Theme.scale;
+                        FlatButton { width: 48px * Theme.scale; text: "◀"; clicked => { root.previous-page(); } }
+                        Text { text: root.page-label; color: #aaaaaa; font-size: 14px * Theme.scale; vertical-alignment: center; }
+                        FlatButton { width: 48px * Theme.scale; text: "▶"; clicked => { root.next-page(); } }
+                    }
+                }
+            }
+}

@@ -1,0 +1,34 @@
+import { FlatButton, Theme, Translations } from "../shared.slint";
+
+export component DarkContextMenu inherits Rectangle {
+    in property <bool> installed;
+    in property <bool> pending-removable;
+    callback hide-game();
+    callback open-thread();
+    callback bookmarks();
+    callback refresh-game();
+    callback delete-game();
+    callback open-folder();
+    callback remove-pending();
+    width: 154px * Theme.scale;
+    height: (installed ? 200px : pending-removable ? 104px : 72px) * Theme.scale;
+    background: #202020;
+    border-width: 1px;
+    border-color: #484848;
+    border-radius: 8px * Theme.scale;
+    drop-shadow-color: #00000099;
+    drop-shadow-blur: 12px * Theme.scale;
+    drop-shadow-offset-y: 3px * Theme.scale;
+
+    VerticalLayout {
+        padding: 5px * Theme.scale;
+        spacing: 2px * Theme.scale;
+        FlatButton { text: Translations.common-hide; clicked => { root.hide-game(); } }
+        FlatButton { text: Translations.common-open-f95; clicked => { root.open-thread(); } }
+        if root.installed: FlatButton { text: "🏷 " + Translations.common-bookmarks + "…"; text-font: "Segoe UI Emoji"; clicked => { root.bookmarks(); } }
+        if root.installed: FlatButton { text: "↻ " + Translations.context-refresh; text-font: "Segoe UI Symbol"; clicked => { root.refresh-game(); } }
+        if root.installed: FlatButton { text: Translations.common-delete; danger: true; clicked => { root.delete-game(); } }
+        if root.installed: FlatButton { text: Translations.common-open-folder; clicked => { root.open-folder(); } }
+        if root.pending-removable: FlatButton { text: Translations.context-remove-library; danger: true; clicked => { root.remove-pending(); } }
+    }
+}

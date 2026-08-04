@@ -15,6 +15,7 @@ pub struct ThreadMeta {
     pub cover: String,
     pub screens: Vec<String>,
     pub tag_ids: Vec<u32>,
+    pub prefix_ids: Vec<u32>,
     pub creator: String,
     pub version: String,
 }
@@ -60,6 +61,9 @@ lazy_static! {
     ).unwrap();
     static ref RE_TAG_BLOCK: Regex = Regex::new(r#"(?s)<span class="js-tagList">(.+?)</span>"#).unwrap();
     static ref RE_TAG_TEXT: Regex = Regex::new(r#">([^<>]+)<"#).unwrap();
+    static ref RE_TITLE_BLOCK: Regex =
+        Regex::new(r#"(?s)<h1 class="p-title-value">(.+?)</h1>"#).unwrap();
+    static ref RE_PREFIX_ID: Regex = Regex::new(r#"[?&]prefix_id=(\d+)"#).unwrap();
 }
 
 /// Fetch thread page and extract cover, screenshots and tag IDs.
@@ -86,6 +90,32 @@ pub async fn fetch_thread_meta(thread_id: u64) -> Result<ThreadMeta, FetchThread
     }
 
     let text = resp.text().await.map_err(FetchThreadMetaError::ReadText)?;
+
+    let mut prefix_ids = RE_TITLE_BLOCK
+        .captures(&text)
+        .and_then(|capture| capture.get(1))
+        .map(|title| {
+            RE_PREFIX_ID
+                .captures_iter(title.as_str())
+                .filter_map(|capture| capture.get(1)?.as_str().parse::<u32>().ok())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let engine_ids = TAGS
+        .prefixes
+        .games
+        .iter()
+        .find(|group| group.name == "Engine")
+        .map(|group| {
+            group
+                .prefixes
+                .iter()
+                .map(|prefix| prefix.id as u32)
+                .collect::<std::collections::HashSet<_>>()
+        })
+        .unwrap_or_default();
+    prefix_ids.sort_by_key(|id| !engine_ids.contains(id));
+    prefix_ids.dedup();
 
     let full_title_html = match RE_OG_TITLE
         .captures(&text)
@@ -206,6 +236,7 @@ pub async fn fetch_thread_meta(thread_id: u64) -> Result<ThreadMeta, FetchThread
         cover,
         screens,
         tag_ids,
+        prefix_ids,
         version,
         creator,
     })

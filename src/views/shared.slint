@@ -1,0 +1,220 @@
+import { CheckBox, ComboBox, LineEdit, Slider, ScrollView, ListView } from "std-widgets.slint";
+
+export struct TagRowData {
+    tags: [string],
+}
+
+export struct CardBadgeData {
+    label: string,
+    tooltip: string,
+    red: int,
+    green: int,
+    blue: int,
+}
+
+export enum DownloadDisplayMode { bottom-bar, circle-bottom-right }
+export enum DownloadVisualState { idle, indeterminate, determinate, error, paused }
+
+export struct GameCardData {
+    id: string,
+    title: string,
+    creator: string,
+    version: string,
+    prefix: string,
+    date: string,
+    likes: string,
+    views: string,
+    rating: string,
+    cover: image,
+    screens: [image],
+    screen-loaded: [bool],
+    screen-count: int,
+    screens-ready: bool,
+    tag-rows: [TagRowData],
+    installed: bool,
+    pending-removable: bool,
+    warning-count: int,
+    warning-details: string,
+    bookmark-badges: [CardBadgeData],
+    unplayed: bool,
+    download-state: DownloadVisualState,
+    download-progress: float,
+    download-display-mode: DownloadDisplayMode,
+    download-error: string,
+}
+
+export struct GameRowData {
+    cards: [GameCardData],
+}
+
+export struct BookmarkData {
+    id: string,
+    label: string,
+    active: bool,
+}
+
+export struct BookmarkEditorData {
+    id: string,
+    emoji: string,
+    label: string,
+    red: int,
+    green: int,
+    blue: int,
+}
+
+export struct SuggestionData {
+    id: string,
+    label: string,
+}
+
+export struct LogLineData {
+    text: string,
+    red: int,
+    green: int,
+    blue: int,
+}
+
+export component FlatButton inherits Rectangle {
+    in property <string> text;
+    in property <string> text-font: "Segoe UI";
+    in property <bool> active: false;
+    in property <bool> danger: false;
+    callback clicked;
+    height: 31px * Theme.scale;
+    border-radius: 5px * Theme.scale;
+    border-width: 1px;
+    border-color: active ? #824247 : #444444;
+    background: touch.pressed ? #3a3031 : touch.has-hover ? #303030 : active ? #392627 : #292929;
+    Text {
+        text: root.text;
+        font-family: root.text-font;
+        color: root.danger ? #e68b90 : root.active ? #e96b72 : #bdbdbd;
+        font-size: 13px * Theme.scale;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export global Theme {
+    in-out property <float> scale: 1.0;
+    in-out property <float> card-scale: 1.0;
+    in-out property <length> card-width: 320px;
+}
+
+// Filled from the existing Fluent resources by src/app/ui/translations.rs.
+export global Translations {
+    in-out property <string> app-title;
+    in-out property <string> auth-title;
+    in-out property <string> auth-username;
+    in-out property <string> auth-password;
+    in-out property <string> auth-login;
+    in-out property <string> auth-authorizing;
+    in-out property <string> auth-cookies;
+    in-out property <string> auth-use-cookies;
+    in-out property <string> auth-info;
+    in-out property <string> loading;
+    in-out property <string> catalog-empty;
+    in-out property <string> library-empty;
+    in-out property <string> filters-title;
+    in-out property <string> filters-sorting;
+    in-out property <string> filters-date;
+    in-out property <string> filters-search;
+    in-out property <string> filters-tags;
+    in-out property <string> filters-exclude-tags;
+    in-out property <string> filters-prefixes;
+    in-out property <string> filters-search-placeholder;
+    in-out property <string> filters-tag-placeholder;
+    in-out property <string> filters-exclude-tag-placeholder;
+    in-out property <string> filters-prefix-placeholder;
+    in-out property <string> filters-bookmarks;
+    in-out property <string> filters-downloaded;
+    in-out property <string> logic-or;
+    in-out property <string> logic-and;
+    in-out property <string> filters-unplayed;
+    in-out property <string> view-catalog;
+    in-out property <string> view-downloaded;
+    in-out property <string> search-title;
+    in-out property <string> search-creator;
+    in-out property <string> common-settings;
+    in-out property <string> common-about;
+    in-out property <string> common-logs;
+    in-out property <string> common-refresh;
+    in-out property <string> common-cancel;
+    in-out property <string> common-delete;
+    in-out property <string> common-hide;
+    in-out property <string> common-open-f95;
+    in-out property <string> common-bookmarks;
+    in-out property <string> common-open-folder;
+    in-out property <string> context-remove-library;
+    in-out property <string> context-refresh;
+    in-out property <string> no-bookmarks;
+    in-out property <string> delete-title;
+    in-out property <string> delete-warning;
+    in-out property <string> settings-title;
+    in-out property <string> settings-folders;
+    in-out property <string> settings-temp-folder;
+    in-out property <string> settings-games-folder;
+    in-out property <string> settings-cache-folder;
+    in-out property <string> settings-cover-metadata;
+    in-out property <string> settings-choose;
+    in-out property <string> settings-bookmarks;
+    in-out property <string> settings-bookmark-cover-count;
+    in-out property <string> settings-bookmark-color;
+    in-out property <string> settings-color-red;
+    in-out property <string> settings-color-green;
+    in-out property <string> settings-color-blue;
+    in-out property <string> settings-interface;
+    in-out property <string> settings-language;
+    in-out property <[string]> settings-language-options;
+    in-out property <string> settings-loading-animation;
+    in-out property <[string]> settings-loading-options;
+    in-out property <string> settings-ui-scale;
+    in-out property <string> settings-card-scale;
+    in-out property <string> settings-image-cache-games;
+    in-out property <string> settings-log-file;
+    in-out property <string> settings-show-unplayed;
+    in-out property <string> settings-classic-library;
+    in-out property <string> settings-custom-launch;
+    in-out property <string> settings-startup-filters;
+    in-out property <string> settings-add-tags;
+    in-out property <string> settings-exclude-tags;
+    in-out property <string> settings-add-prefixes;
+    in-out property <string> settings-exclude-prefixes;
+    in-out property <string> settings-max-ten;
+    in-out property <string> settings-startup-tag-placeholder;
+    in-out property <string> settings-startup-exclude-tag-placeholder;
+    in-out property <string> settings-startup-prefix-placeholder;
+    in-out property <string> settings-startup-exclude-prefix-placeholder;
+    in-out property <string> settings-warnings;
+    in-out property <string> settings-warning-tags;
+    in-out property <string> settings-warning-prefixes;
+    in-out property <string> settings-warning-tag-placeholder;
+    in-out property <string> settings-warning-prefix-placeholder;
+    in-out property <string> settings-save;
+    in-out property <string> logs-title;
+    in-out property <string> logs-clear;
+    in-out property <string> logs-copy;
+    in-out property <string> errors-title;
+    in-out property <string> errors-clear;
+    in-out property <string> download-select-link;
+    in-out property <string> migration-confirm;
+    in-out property <string> migration-move;
+    in-out property <string> migration-progress;
+    in-out property <string> bookmarks-new;
+    in-out property <string> bookmarks-edit;
+    in-out property <string> bookmarks-create;
+    in-out property <string> bookmarks-save;
+    in-out property <string> bookmarks-emoji;
+    in-out property <string> bookmarks-name;
+    in-out property <string> bookmarks-color;
+    in-out property <string> bookmarks-delete-confirm;
+    in-out property <string> about-title;
+    in-out property <string> about-version;
+    in-out property <string> about-description;
+    in-out property <string> about-footer;
+}

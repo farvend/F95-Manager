@@ -103,6 +103,26 @@ mod tests {
     }
 
     #[test]
+    fn unknown_platform_keeps_links_for_manual_selection() {
+        let page = F95Page(
+            r#"
+                <div style="text-align: center">
+                    <b>DOWNLOAD</b><br>
+                    <b>Browser build:</b>
+                    <a href="https://files.catbox.moe/example.zip">CATBOX</a><br>
+                </div>
+            "#
+            .to_string(),
+        );
+
+        let downloads = page.get_download_links().unwrap();
+
+        assert_eq!(downloads.len(), 1);
+        assert_eq!(*downloads[0].platform(), Platform::OTHER);
+        assert_eq!(downloads[0].links().len(), 1);
+    }
+
+    #[test]
     #[ignore = "Requires big HTML files with potentially sensitive data"]
     fn test_all_pages() {
         let pages_dir =

@@ -1,0 +1,38 @@
+export component DownloadCircle inherits Rectangle {
+    in property <float> progress;
+    in property <bool> indeterminate;
+
+    border-radius: self.width / 2;
+    border-width: 1px;
+    border-color: #505050;
+    background: #00000078;
+
+    Path {
+        private property <float> start: root.indeterminate
+            ? mod(animation-tick(), 625ms) / 625ms : 0;
+        private property <float> amount: root.indeterminate
+            ? 0.35 : min(0.9999, max(0, root.progress));
+        private property <float> radius: 49;
+
+        width: 100%;
+        height: 100%;
+        viewbox-width: 100;
+        viewbox-height: 100;
+        fill: #d65761;
+
+        MoveTo { x: 50; y: 50; }
+        LineTo {
+            x: 50 - parent.radius * sin(-parent.start * 360deg);
+            y: 50 - parent.radius * cos(-parent.start * 360deg);
+        }
+        ArcTo {
+            radius-x: parent.radius;
+            radius-y: parent.radius;
+            x: 50 - parent.radius * sin(-(parent.start + parent.amount) * 360deg);
+            y: 50 - parent.radius * cos(-(parent.start + parent.amount) * 360deg);
+            sweep: parent.amount > 0;
+            large-arc: parent.amount > 0.5;
+        }
+        Close {}
+    }
+}

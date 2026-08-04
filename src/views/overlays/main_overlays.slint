@@ -1,0 +1,275 @@
+import { BookmarkData, SuggestionData, TagRowData, Theme, Translations, FlatButton } from "../shared.slint";
+import { DarkContextMenu } from "../cards/context_menu.slint";
+import { TagPanel } from "../cards/tag_panel.slint";
+
+export component MainOverlays inherits Rectangle {
+    background: transparent;
+
+    in property <length> catalog-x;
+    in property <length> catalog-y;
+    in property <length> catalog-width;
+    in property <length> catalog-height;
+
+    in property <[TagRowData]> hovered-tag-rows;
+    in-out property <string> hovered-tag-card-id;
+    in property <length> tag-overlay-x;
+    in property <length> tag-overlay-y;
+    in property <length> tag-overlay-width;
+    in-out property <bool> tag-card-hovered;
+    in-out property <bool> tag-overlay-hovered;
+    in-out property <bool> tag-overlay-visible;
+
+    in-out property <bool> context-menu-visible;
+    in property <string> context-game-id;
+    in property <bool> context-game-installed;
+    in property <bool> context-game-pending-removable;
+    in property <length> context-menu-x;
+    in property <length> context-menu-y;
+    in-out property <bool> context-bookmarks-visible;
+    in-out property <bool> delete-confirm-visible;
+    in property <[BookmarkData]> context-game-bookmarks;
+
+    in-out property <bool> suggestion-overlay-visible;
+    in property <int> suggestion-overlay-kind;
+    in property <int> suggestion-overlay-index;
+    in property <length> suggestion-overlay-x;
+    in property <length> suggestion-overlay-y;
+    in property <length> suggestion-overlay-width;
+    in property <[SuggestionData]> suggestion-overlay-values;
+    in-out property <string> include-tag-text;
+    in-out property <string> exclude-tag-text;
+    in-out property <string> prefix-text;
+    in-out property <string> exclude-prefix-text;
+    in-out property <bool> download-link-visible;
+    in property <string> download-link-game-id;
+    in property <[SuggestionData]> download-links;
+
+    callback hide-game(string);
+    callback open-thread(string);
+    callback prepare-game-bookmarks(string);
+    callback toggle-game-bookmark(string, string);
+    callback refresh-game(string);
+    callback delete-game(string);
+    callback open-folder(string);
+    callback filter-chosen(string, int);
+    callback choose-download-link(string, string);
+    callback cancel-download-link(string);
+    callback remove-pending(string);
+
+    tag-clipper := Rectangle {
+        x: root.catalog-x;
+        y: root.catalog-y;
+        width: root.catalog-width;
+        height: root.catalog-height - 43px * Theme.scale;
+        clip: true;
+        background: transparent;
+        z: 100;
+
+        if root.tag-overlay-visible: TagPanel {
+            x: root.tag-overlay-x;
+            y: root.tag-overlay-y - tag-clipper.absolute-position.y;
+            width: root.tag-overlay-width;
+            rows: root.hovered-tag-rows;
+            TouchArea {
+                changed has-hover => { root.tag-overlay-hovered = self.has-hover; }
+            }
+        }
+    }
+
+    if root.context-menu-visible: TouchArea {
+        z: 109;
+        clicked => { root.context-menu-visible = false; }
+    }
+
+    if root.context-menu-visible: DarkContextMenu {
+        x: min(root.width - self.width - 4px * Theme.scale,
+            max(4px * Theme.scale, root.context-menu-x));
+        y: min(root.height - self.height - 4px * Theme.scale,
+            max(4px * Theme.scale, root.context-menu-y));
+        installed: root.context-game-installed;
+        pending-removable: root.context-game-pending-removable;
+        z: 110;
+        hide-game => {
+            root.context-menu-visible = false;
+            root.hide-game(root.context-game-id);
+        }
+        open-thread => {
+            root.context-menu-visible = false;
+            root.open-thread(root.context-game-id);
+        }
+        bookmarks => {
+            root.context-menu-visible = false;
+            root.prepare-game-bookmarks(root.context-game-id);
+            root.context-bookmarks-visible = true;
+        }
+        refresh-game => {
+            root.context-menu-visible = false;
+            root.refresh-game(root.context-game-id);
+        }
+        delete-game => {
+            root.context-menu-visible = false;
+            root.delete-confirm-visible = true;
+        }
+        open-folder => {
+            root.context-menu-visible = false;
+            root.open-folder(root.context-game-id);
+        }
+        remove-pending => {
+            root.context-menu-visible = false;
+            root.remove-pending(root.context-game-id);
+        }
+    }
+
+    if root.context-bookmarks-visible: TouchArea {
+        z: 119;
+        clicked => { root.context-bookmarks-visible = false; }
+    }
+
+    if root.context-bookmarks-visible: Rectangle {
+        x: min(root.width - self.width - 6px * Theme.scale,
+            max(6px * Theme.scale, root.context-menu-x));
+        y: min(root.height - self.height - 6px * Theme.scale,
+            max(6px * Theme.scale, root.context-menu-y));
+        width: 220px * Theme.scale;
+        height: bookmark-list.preferred-height + 12px * Theme.scale;
+        background: #202020;
+        border-width: 1px;
+        border-color: #484848;
+        border-radius: 8px * Theme.scale;
+        drop-shadow-color: #00000099;
+        drop-shadow-blur: 12px * Theme.scale;
+        z: 120;
+
+        bookmark-list := VerticalLayout {
+            padding: 6px * Theme.scale;
+            spacing: 3px * Theme.scale;
+            if root.context-game-bookmarks.length == 0: Text {
+                height: 30px * Theme.scale;
+                text: Translations.no-bookmarks;
+                color: #999999;
+                font-size: 13px * Theme.scale;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            for bookmark in root.context-game-bookmarks: FlatButton {
+                text: (bookmark.active ? "✓  " : "     ") + bookmark.label;
+                active: bookmark.active;
+                clicked => { root.toggle-game-bookmark(root.context-game-id, bookmark.id); }
+            }
+        }
+    }
+
+    if root.delete-confirm-visible: Rectangle {
+        z: 129;
+        background: #00000088;
+        TouchArea { }
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: 360px * Theme.scale;
+            height: 142px * Theme.scale;
+            background: #242424;
+            border-width: 1px;
+            border-color: #555555;
+            border-radius: 9px * Theme.scale;
+            VerticalLayout {
+                padding: 14px * Theme.scale;
+                spacing: 10px * Theme.scale;
+                Text { text: Translations.delete-title; color: #eeeeee; font-size: 17px * Theme.scale; horizontal-alignment: center; }
+                Text { text: Translations.delete-warning; color: #aaaaaa; font-size: 13px * Theme.scale; horizontal-alignment: center; }
+                HorizontalLayout {
+                    spacing: 8px * Theme.scale;
+                    FlatButton { horizontal-stretch: 1; text: Translations.common-cancel; clicked => { root.delete-confirm-visible = false; } }
+                    FlatButton {
+                        horizontal-stretch: 1;
+                        text: Translations.common-delete;
+                        danger: true;
+                        clicked => {
+                            root.delete-confirm-visible = false;
+                            root.delete-game(root.context-game-id);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if root.download-link-visible: Rectangle {
+        z: 139;
+        background: #00000088;
+        TouchArea { }
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: min(520px * Theme.scale, parent.width - 40px * Theme.scale);
+            height: min(420px * Theme.scale, link-list.preferred-height + 82px * Theme.scale);
+            background: #242424;
+            border-width: 1px;
+            border-color: #555555;
+            border-radius: 9px * Theme.scale;
+            VerticalLayout {
+                padding: 14px * Theme.scale;
+                spacing: 7px * Theme.scale;
+                Text { text: Translations.download-select-link; color: #eeeeee; font-size: 17px * Theme.scale; }
+                link-list := VerticalLayout {
+                    spacing: 4px * Theme.scale;
+                    for link in root.download-links: FlatButton {
+                        height: 31px * Theme.scale;
+                        text: link.label;
+                        clicked => {
+                            root.download-link-visible = false;
+                            root.choose-download-link(root.download-link-game-id, link.id);
+                        }
+                    }
+                }
+                FlatButton {
+                    text: Translations.common-cancel;
+                    clicked => {
+                        root.download-link-visible = false;
+                        root.cancel-download-link(root.download-link-game-id);
+                    }
+                }
+            }
+        }
+    }
+
+    if root.suggestion-overlay-visible: Rectangle {
+        x: root.suggestion-overlay-x;
+        y: min(root.height - self.height - 4px * Theme.scale, root.suggestion-overlay-y);
+        width: root.suggestion-overlay-width;
+        height: root.suggestion-overlay-values.length * 29px * Theme.scale + 8px * Theme.scale;
+        background: #202020;
+        border-width: 1px;
+        border-color: #505050;
+        border-radius: 6px * Theme.scale;
+        drop-shadow-color: #00000099;
+        drop-shadow-blur: 10px * Theme.scale;
+        z: 120;
+        VerticalLayout {
+            padding: 4px * Theme.scale;
+            spacing: 2px * Theme.scale;
+            for item[index] in root.suggestion-overlay-values: FlatButton {
+                height: 27px * Theme.scale;
+                text: item.label;
+                active: index == root.suggestion-overlay-index;
+                clicked => {
+                    root.filter-chosen(item.id, root.suggestion-overlay-kind);
+                    if (root.suggestion-overlay-kind == 0) { root.include-tag-text = ""; }
+                    else if (root.suggestion-overlay-kind == 1) { root.exclude-tag-text = ""; }
+                    else if (root.suggestion-overlay-kind == 2) { root.prefix-text = ""; }
+                    else { root.exclude-prefix-text = ""; }
+                    root.suggestion-overlay-visible = false;
+                }
+            }
+        }
+    }
+
+    Timer {
+        interval: 90ms;
+        running: root.tag-overlay-visible && !root.tag-card-hovered && !root.tag-overlay-hovered;
+        triggered => {
+            root.tag-overlay-visible = false;
+            root.hovered-tag-card-id = "";
+        }
+    }
+}

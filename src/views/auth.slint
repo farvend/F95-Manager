@@ -1,0 +1,40 @@
+import { LineEdit } from "std-widgets.slint";
+import { FlatButton, Theme, Translations } from "shared.slint";
+
+export component AuthView inherits Rectangle {
+    in-out property <string> username;
+    in-out property <string> password;
+    in-out property <string> cookies;
+    in property <string> error;
+    in property <bool> busy;
+    callback login(string, string);
+    callback use-cookies(string, string);
+    background: #191919;
+
+    Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: max(24px, (parent.height - self.height) / 2);
+        width: min(520px * Theme.scale, parent.width - 32px);
+        height: content.preferred-height + 34px * Theme.scale;
+        background: #232323;
+        border-width: 1px;
+        border-color: #484848;
+        border-radius: 10px * Theme.scale;
+        content := VerticalLayout {
+            padding: 17px * Theme.scale;
+            spacing: 8px * Theme.scale;
+            Text { text: Translations.auth-title; color: #eeeeee; font-size: 24px * Theme.scale; }
+            Text { text: Translations.auth-username; color: #aaaaaa; font-size: 13px * Theme.scale; }
+            LineEdit { height: 34px * Theme.scale; text <=> root.username; enabled: !root.busy; }
+            Text { text: Translations.auth-password; color: #aaaaaa; font-size: 13px * Theme.scale; }
+            LineEdit { height: 34px * Theme.scale; text <=> root.password; input-type: InputType.password; enabled: !root.busy; accepted => { root.login(root.username, root.password); } }
+            FlatButton { text: root.busy ? Translations.auth-authorizing : Translations.auth-login; active: true; clicked => { if (!root.busy) { root.login(root.username, root.password); } } }
+            Rectangle { height: 1px; background: #414141; }
+            Text { text: Translations.auth-cookies; color: #aaaaaa; font-size: 13px * Theme.scale; wrap: word-wrap; }
+            LineEdit { height: 34px * Theme.scale; text <=> root.cookies; enabled: !root.busy; accepted => { root.use-cookies(root.cookies, root.username); } }
+            FlatButton { text: Translations.auth-use-cookies; clicked => { if (!root.busy) { root.use-cookies(root.cookies, root.username); } } }
+            if root.error != "": Text { text: root.error; color: #e47a82; font-size: 13px * Theme.scale; wrap: word-wrap; }
+            Text { text: Translations.auth-info; color: #777777; font-size: 12px * Theme.scale; wrap: word-wrap; }
+        }
+    }
+}

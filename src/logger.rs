@@ -1,5 +1,5 @@
 // Simple in-app GUI logger that mirrors log records to stderr and
-// stores a bounded buffer for display inside the egui UI, with level info.
+// stores a bounded buffer for display inside the UI, with level info.
 // Now also writes only warn+ lines to log.txt and installs a panic/error handler.
 
 use lazy_static::lazy_static;

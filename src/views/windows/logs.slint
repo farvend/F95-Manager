@@ -1,0 +1,42 @@
+import { ScrollView } from "std-widgets.slint";
+import { FlatButton, LogLineData, Translations } from "../shared.slint";
+
+export component LogsWindow inherits Window {
+    title: Translations.logs-title + " — F95 standalone client";
+    preferred-width: 900px;
+    preferred-height: 600px;
+    min-width: 520px;
+    min-height: 340px;
+    background: #1b1b1b;
+    in-out property <string> contents;
+    in property <[LogLineData]> lines;
+    callback refresh();
+    callback clear();
+    callback copy();
+    VerticalLayout {
+        padding: 14px;
+        spacing: 8px;
+        HorizontalLayout {
+            height: 34px; spacing: 8px;
+            Text { text: Translations.logs-title; color: #eeeeee; font-size: 23px; vertical-alignment: center; }
+            Rectangle { horizontal-stretch: 1; }
+            FlatButton { width: 110px; text: Translations.common-refresh; clicked => { root.refresh(); } }
+            FlatButton { width: 100px; text: Translations.logs-copy; clicked => { root.copy(); } }
+            FlatButton { width: 100px; text: Translations.logs-clear; danger: true; clicked => { root.clear(); } }
+        }
+        Rectangle {
+            border-width: 1px; border-color: #3d3d3d; background: #121212;
+            ScrollView {
+                viewport-width: self.width;
+                VerticalLayout {
+                    x: 10px; y: 9px; width: parent.width - 20px; spacing: 1px;
+                    for line in root.lines: Text {
+                        height: self.preferred-height;
+                        text: line.text; color: rgb(line.red, line.green, line.blue);
+                        font-family: "Consolas"; font-size: 12px; wrap: word-wrap;
+                    }
+                }
+            }
+        }
+    }
+}

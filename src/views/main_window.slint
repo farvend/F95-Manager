@@ -1,0 +1,291 @@
+import { GameRowData, BookmarkData, SuggestionData, TagRowData, Theme, Translations } from "shared.slint";
+export { Theme as AppTheme, Translations as AppTranslations } from "shared.slint";
+import { CatalogView } from "catalog/catalog_view.slint";
+import { FiltersPanel } from "filters/filters_panel.slint";
+import { MainOverlays } from "overlays/main_overlays.slint";
+import { AuthView } from "auth.slint";
+export { SettingsWindow, LanguageChoice, LoadingIndicatorChoice } from "windows/settings.slint";
+export { LogsWindow } from "windows/logs.slint";
+export { AboutWindow } from "windows/about.slint";
+export { ErrorsWindow } from "windows/errors.slint";
+export { BookmarksWindow } from "windows/bookmarks.slint";
+
+export component MainWindow inherits Window {
+    title: Translations.app-title;
+    preferred-width: 1280px;
+    preferred-height: 800px;
+    min-width: 760px;
+    min-height: 520px;
+    background: #191919;
+    in-out property <bool> authenticated: true;
+    in-out property <bool> auth-busy: false;
+    in-out property <string> auth-error;
+    in-out property <string> auth-username;
+    in-out property <string> auth-password;
+    in-out property <string> auth-cookies;
+    in-out property <int> error-count: 0;
+
+    in property <[GameRowData]> game-rows;
+    in property <[BookmarkData]> bookmarks;
+    in-out property <[BookmarkData]> context-game-bookmarks;
+    in property <[SuggestionData]> include-tag-suggestions;
+    in property <[SuggestionData]> exclude-tag-suggestions;
+    in property <[SuggestionData]> prefix-suggestions;
+    in property <[SuggestionData]> exclude-prefix-suggestions;
+    in property <[SuggestionData]> selected-include-tags;
+    in property <[SuggestionData]> selected-exclude-tags;
+    in property <[SuggestionData]> selected-prefixes;
+    in property <[SuggestionData]> selected-exclude-prefixes;
+    in-out property <bool> library-mode: false;
+    in-out property <bool> loading: true;
+    in-out property <string> status-text: Translations.loading;
+    in-out property <string> search-text;
+    in-out property <string> page-label;
+    in-out property <int> ui-scale-percent: 100;
+    in-out property <int> card-scale-percent: 100;
+    in-out property <int> sort-index: 0;
+    in-out property <int> date-index: 0;
+    in-out property <string> date-label;
+    in-out property <string> include-tag-text;
+    in-out property <string> exclude-tag-text;
+    in-out property <string> prefix-text;
+    in-out property <string> exclude-prefix-text;
+    in-out property <int> include-logic: 0;
+    in-out property <int> search-mode: 0;
+    in-out property <bool> unplayed-only: false;
+    in-out property <bool> classic-library: false;
+    in-out property <length> catalog-scroll-y: 0px;
+    in-out property <bool> download-link-visible: false;
+    in-out property <string> download-link-game-id;
+    in property <[SuggestionData]> download-links;
+
+    private property <[TagRowData]> hovered-tag-rows;
+    private property <string> hovered-tag-card-id;
+    private property <length> tag-overlay-x;
+    private property <length> tag-overlay-y;
+    private property <length> tag-overlay-width;
+    private property <bool> tag-card-hovered: false;
+    private property <bool> tag-overlay-hovered: false;
+    private property <bool> tag-overlay-visible: false;
+    private property <bool> context-menu-visible: false;
+    private property <string> context-game-id;
+    private property <bool> context-game-installed: false;
+    private property <bool> context-game-pending-removable: false;
+    private property <length> context-menu-x;
+    private property <length> context-menu-y;
+    private property <bool> context-bookmarks-visible: false;
+    private property <bool> delete-confirm-visible: false;
+    private property <bool> suggestion-overlay-visible: false;
+    private property <int> suggestion-overlay-kind: 0;
+    private property <int> suggestion-overlay-index: 0;
+    private property <length> suggestion-overlay-x;
+    private property <length> suggestion-overlay-y;
+    private property <length> suggestion-overlay-width;
+    private property <[SuggestionData]> suggestion-overlay-values;
+    private property <length> catalog-x-value;
+    private property <length> catalog-y-value;
+    private property <length> catalog-width-value: root.width;
+    private property <length> catalog-height-value: root.height;
+
+    callback refresh-catalog(string);
+    callback previous-page();
+    callback next-page();
+    callback toggle-library();
+    callback toggle-bookmark(string);
+    callback layout-width-changed(float);
+    callback image-needed(string);
+    callback primary-action(string);
+    callback open-thread(string);
+    callback hide-game(string);
+    callback open-folder(string);
+    callback prepare-game-bookmarks(string);
+    callback toggle-game-bookmark(string, string);
+    callback refresh-game(string);
+    callback delete-game(string);
+    callback open-settings();
+    callback open-about();
+    callback open-logs();
+    callback suggestion-query(string, int);
+    callback filter-chosen(string, int);
+    callback remove-filter(string, int);
+    callback sort-chosen(int);
+    callback date-chosen(int);
+    callback filter-mode-chosen(int, int);
+    callback toggle-unplayed();
+    callback choose-download-link(string, string);
+    callback cancel-download-link(string);
+    callback login(string, string);
+    callback use-cookies(string, string);
+    callback open-errors();
+    callback remove-pending(string);
+
+    changed card-scale-percent => { root.layout-width-changed(root.catalog-width-value / 1px); }
+    changed ui-scale-percent => { root.layout-width-changed(root.catalog-width-value / 1px); }
+
+    if !root.authenticated: AuthView {
+        username <=> root.auth-username;
+        password <=> root.auth-password;
+        cookies <=> root.auth-cookies;
+        error: root.auth-error;
+        busy: root.auth-busy;
+        login(username, password) => { root.login(username, password); }
+        use-cookies(cookies, username) => { root.use-cookies(cookies, username); }
+    }
+
+    if root.authenticated: HorizontalLayout {
+        spacing: 0px;
+
+        catalog := CatalogView {
+            horizontal-stretch: 1;
+            game-rows: root.game-rows;
+            scroll-y <=> root.catalog-scroll-y;
+            loading: root.loading;
+            status-text: root.status-text;
+            page-label: root.page-label;
+            active-tag-card-id: root.hovered-tag-card-id;
+            changed absolute-position => { root.catalog-x-value = self.absolute-position.x; root.catalog-y-value = self.absolute-position.y; }
+            changed width => { root.catalog-width-value = self.width; }
+            changed height => { root.catalog-height-value = self.height; }
+            layout-width-changed(width) => { root.layout-width-changed(width); }
+            previous-page => { root.previous-page(); }
+            next-page => { root.next-page(); }
+            image-needed(id) => { root.image-needed(id); }
+            primary-action(id) => { root.primary-action(id); }
+            open-thread(id) => { root.open-thread(id); }
+            hide-game(id) => { root.hide-game(id); }
+            open-folder(id) => { root.open-folder(id); }
+            context-requested(id, installed, pending-removable, x, y) => {
+                root.context-game-id = id;
+                root.context-game-installed = installed;
+                root.context-game-pending-removable = pending-removable;
+                root.context-menu-x = x;
+                root.context-menu-y = y;
+                root.context-menu-visible = true;
+            }
+            tags-hovered(id, rows, x, y, width, active) => {
+                if (active) {
+                    root.hovered-tag-card-id = id;
+                    root.hovered-tag-rows = rows;
+                    root.tag-overlay-x = x;
+                    root.tag-overlay-y = y;
+                    root.tag-overlay-width = width;
+                    root.tag-card-hovered = true;
+                    root.tag-overlay-visible = true;
+                } else if (root.hovered-tag-card-id == id) {
+                    root.tag-overlay-x = x;
+                    root.tag-overlay-y = y;
+                    root.tag-overlay-width = width;
+                    root.tag-card-hovered = false;
+                }
+            }
+        }
+
+        FiltersPanel {
+            bookmarks: root.bookmarks;
+            include-tag-suggestions: root.include-tag-suggestions;
+            exclude-tag-suggestions: root.exclude-tag-suggestions;
+            prefix-suggestions: root.prefix-suggestions;
+            exclude-prefix-suggestions: root.exclude-prefix-suggestions;
+            selected-include-tags: root.selected-include-tags;
+            selected-exclude-tags: root.selected-exclude-tags;
+            selected-prefixes: root.selected-prefixes;
+            selected-exclude-prefixes: root.selected-exclude-prefixes;
+            library-mode <=> root.library-mode;
+            search-text <=> root.search-text;
+            sort-index <=> root.sort-index;
+            date-index <=> root.date-index;
+            date-label: root.date-label;
+            include-tag-text <=> root.include-tag-text;
+            exclude-tag-text <=> root.exclude-tag-text;
+            prefix-text <=> root.prefix-text;
+            exclude-prefix-text <=> root.exclude-prefix-text;
+            include-logic <=> root.include-logic;
+            search-mode <=> root.search-mode;
+            unplayed-only <=> root.unplayed-only;
+            classic-library: root.classic-library;
+            refresh-catalog(query) => { root.refresh-catalog(query); }
+            toggle-library => { root.toggle-library(); }
+            toggle-bookmark(id) => { root.toggle-bookmark(id); }
+            open-settings => { root.open-settings(); }
+            open-about => { root.open-about(); }
+            open-logs => { root.open-logs(); }
+            suggestion-query(query, kind) => { root.suggestion-query(query, kind); }
+            filter-chosen(id, kind) => { root.filter-chosen(id, kind); }
+            remove-filter(id, kind) => { root.remove-filter(id, kind); }
+            sort-chosen(index) => { root.sort-chosen(index); }
+            date-chosen(index) => { root.date-chosen(index); }
+            mode-chosen(kind, value) => { root.filter-mode-chosen(kind, value); }
+            toggle-unplayed => { root.toggle-unplayed(); }
+            suggestion-overlay-changed(kind, x, y, width, values, index, visible) => {
+                root.suggestion-overlay-kind = kind;
+                root.suggestion-overlay-x = x;
+                root.suggestion-overlay-y = y;
+                root.suggestion-overlay-width = width;
+                root.suggestion-overlay-values = values;
+                root.suggestion-overlay-index = index;
+                root.suggestion-overlay-visible = visible;
+            }
+        }
+    }
+
+    if root.authenticated: MainOverlays {
+        catalog-x: root.catalog-x-value;
+        catalog-y: root.catalog-y-value;
+        catalog-width: root.catalog-width-value;
+        catalog-height: root.catalog-height-value;
+        hovered-tag-rows: root.hovered-tag-rows;
+        hovered-tag-card-id <=> root.hovered-tag-card-id;
+        tag-overlay-x: root.tag-overlay-x;
+        tag-overlay-y: root.tag-overlay-y;
+        tag-overlay-width: root.tag-overlay-width;
+        tag-card-hovered <=> root.tag-card-hovered;
+        tag-overlay-hovered <=> root.tag-overlay-hovered;
+        tag-overlay-visible <=> root.tag-overlay-visible;
+        context-menu-visible <=> root.context-menu-visible;
+        context-game-id: root.context-game-id;
+        context-game-installed: root.context-game-installed;
+        context-game-pending-removable: root.context-game-pending-removable;
+        context-menu-x: root.context-menu-x;
+        context-menu-y: root.context-menu-y;
+        context-bookmarks-visible <=> root.context-bookmarks-visible;
+        delete-confirm-visible <=> root.delete-confirm-visible;
+        context-game-bookmarks: root.context-game-bookmarks;
+        suggestion-overlay-visible <=> root.suggestion-overlay-visible;
+        suggestion-overlay-kind: root.suggestion-overlay-kind;
+        suggestion-overlay-index: root.suggestion-overlay-index;
+        suggestion-overlay-x: root.suggestion-overlay-x;
+        suggestion-overlay-y: root.suggestion-overlay-y;
+        suggestion-overlay-width: root.suggestion-overlay-width;
+        suggestion-overlay-values: root.suggestion-overlay-values;
+        include-tag-text <=> root.include-tag-text;
+        exclude-tag-text <=> root.exclude-tag-text;
+        prefix-text <=> root.prefix-text;
+        exclude-prefix-text <=> root.exclude-prefix-text;
+        download-link-visible <=> root.download-link-visible;
+        download-link-game-id: root.download-link-game-id;
+        download-links: root.download-links;
+        hide-game(id) => { root.hide-game(id); }
+        open-thread(id) => { root.open-thread(id); }
+        prepare-game-bookmarks(id) => { root.prepare-game-bookmarks(id); }
+        toggle-game-bookmark(game-id, bookmark-id) => { root.toggle-game-bookmark(game-id, bookmark-id); }
+        refresh-game(id) => { root.refresh-game(id); }
+        delete-game(id) => { root.delete-game(id); }
+        open-folder(id) => { root.open-folder(id); }
+        filter-chosen(id, kind) => { root.filter-chosen(id, kind); }
+        choose-download-link(game-id, link-id) => { root.choose-download-link(game-id, link-id); }
+        cancel-download-link(game-id) => { root.cancel-download-link(game-id); }
+        remove-pending(game-id) => { root.remove-pending(game-id); }
+    }
+
+    if root.authenticated && root.error-count > 0: Rectangle {
+        x: parent.width - self.width - 12px * Theme.scale;
+        y: parent.height - self.height - 12px * Theme.scale;
+        width: error-text.preferred-width + 18px * Theme.scale;
+        height: 32px * Theme.scale;
+        background: #a03c3c;
+        border-radius: 5px * Theme.scale;
+        z: 200;
+        error-text := Text { text: Translations.errors-title + " (" + root.error-count + ")"; color: white; font-size: 13px * Theme.scale; horizontal-alignment: center; vertical-alignment: center; }
+        TouchArea { mouse-cursor: pointer; clicked => { root.open-errors(); } }
+    }
+}

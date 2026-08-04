@@ -3,15 +3,10 @@ name = "F95_manager"
 version = "1.8.0"
 edition = "2024"
 
-[features]
-default = []
-legacy-egui = ["dep:eframe"]
-
 [dependencies]
 clap = "4.5.45"
 derive_more = {version = "2.0.1", features = ["full"]}
-eframe = { version = "0.27", optional = true, default-features = false, features = ["wgpu", "glow", "default_fonts"] }
-slint = { version = "1.17.1", default-features = false, features = ["std", "backend-winit", "renderer-software", "renderer-femtovg", "compat-1-2"] }
+slint = { version = "1.17.1", default-features = false, features = ["std", "backend-winit", "renderer-software", "renderer-femtovg", "compat-1-2", "unstable-winit-030"] }
 reqwest = { version = "0.12.23", features = ["json", "rustls-tls", "stream", "cookies"] }
 serde = { version = "1.0.219", features = ["derive"] }
 strum = {version = "0.27.2", features = ["derive"]}
@@ -46,6 +41,7 @@ url = "2.5"
 async-trait = "0.1"
 
 dotenvy = "0.15"
+clipboard-win = "5.4.1"
 
 [build-dependencies]
 slint-build = "1.17.1"

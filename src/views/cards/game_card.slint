@@ -1,0 +1,342 @@
+import { DownloadDisplayMode, DownloadVisualState, GameCardData, TagRowData, Theme } from "../shared.slint";
+import { DownloadCircle } from "download_progress.slint";
+
+export component GameCard inherits Rectangle {
+    in property <GameCardData> game;
+    in property <string> active-tag-card-id;
+    callback image-needed(string);
+    callback primary-action(string);
+    callback open-thread(string);
+    callback hide-game(string);
+    callback open-folder(string);
+    callback context-requested(string, bool, bool, length, length);
+    callback tags-hovered(string, [TagRowData], length, length, length, bool);
+    in-out property <int> selected-screen: -1;
+    private property <float> card-factor: Theme.scale * Theme.card-scale;
+    private property <length> cover-height: (root.width - 18px * root.card-factor) * 9 / 16;
+    private property <length> base-height: 9px * root.card-factor + root.cover-height
+        + (root.game.screen-count > 0 ? 8px * root.card-factor : 0px)
+        + 8px * root.card-factor + title-text.preferred-height
+        + 8px * root.card-factor + creator-text.preferred-height
+        + 8px * root.card-factor + 34px * root.card-factor + 9px * root.card-factor;
+    // Overlap the tag panel with the straightened bottom edge so both pieces
+    // render as one continuous card instead of leaving a row-background gap.
+    private property <length> tag-panel-y: root.absolute-position.y + root.base-height
+        - 10px * root.card-factor;
+    // The action button has its own TouchArea. Treat it as part of the card,
+    // otherwise entering the button makes the parent hover disappear and the
+    // button hides itself from under the pointer.
+    private property <bool> card-hovered: hover.has-hover || action-touch.has-hover;
+    private property <bool> tags-open: root.game.tag-rows.length > 0
+        && (root.card-hovered || root.active-tag-card-id == root.game.id);
+    private property <string> badge-tooltip: "";
+    private property <int> hovered-badge: -1;
+    width: Theme.card-width;
+    height: root.base-height;
+    border-radius: 10px * root.card-factor;
+    border-width: 1px;
+    border-color: #454545;
+    background: #232323;
+    clip: false;
+    cache-rendering-hint: true;
+    z: 1;
+
+    hover := TouchArea {
+        pointer-event(event) => {
+            if (event.button == PointerEventButton.right && event.kind == PointerEventKind.down) {
+                root.context-requested(root.game.id, root.game.installed, root.game.pending-removable,
+                    self.absolute-position.x + self.mouse-x,
+                    self.absolute-position.y + self.mouse-y);
+            }
+        }
+        changed has-hover => {
+            if (self.has-hover && root.game.tag-rows.length > 0) {
+                root.tags-hovered(root.game.id, root.game.tag-rows, root.x,
+                    root.tag-panel-y,
+                    root.width, true);
+            } else if (!self.has-hover) {
+                root.tags-hovered(root.game.id, root.game.tag-rows, root.x,
+                    root.tag-panel-y,
+                    root.width, false);
+            }
+            if (!self.has-hover && !action-touch.has-hover) { root.selected-screen = -1; }
+        }
+        changed mouse-x => {
+            if (self.has-hover && root.game.screen-count > 0) {
+                let target = min(root.game.screen-count - 1,
+                    max(0, floor(self.mouse-x / root.width * root.game.screen-count)));
+                root.selected-screen = target;
+            }
+        }
+    }
+
+    changed absolute-position => {
+        if ((root.card-hovered || root.active-tag-card-id == root.game.id)
+            && root.game.tag-rows.length > 0) {
+            root.tags-hovered(root.game.id, root.game.tag-rows, root.x,
+                root.tag-panel-y,
+                root.width, hover.has-hover);
+        }
+    }
+
+    VerticalLayout {
+        padding: 9px * root.card-factor;
+        spacing: 8px * root.card-factor;
+        Rectangle {
+            height: root.cover-height;
+            background: #121212;
+            clip: true;
+            Image {
+                width: parent.width;
+                height: parent.height;
+                source: root.selected-screen >= 0 && root.selected-screen < root.game.screens.length
+                    && root.selected-screen < root.game.screen-loaded.length
+                    && root.game.screen-loaded[root.selected-screen]
+                    ? root.game.screens[root.selected-screen] : root.game.cover;
+                image-fit: cover;
+            }
+            HorizontalLayout {
+                x: 8px * root.card-factor;
+                y: parent.height - self.height - 8px * root.card-factor;
+                height: 25px * root.card-factor;
+                spacing: 4px * root.card-factor;
+                if root.game.prefix != "": Rectangle {
+                    width: prefix-text.preferred-width + 12px * root.card-factor;
+                    border-radius: 5px * root.card-factor;
+                    background: #4b4b4bdd;
+                    prefix-text := Text {
+                        text: root.game.prefix;
+                        color: #dddddd;
+                        font-size: 13px * root.card-factor;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+                if root.game.warning-count > 0: Rectangle {
+                    width: 25px * root.card-factor;
+                    border-radius: 5px * root.card-factor;
+                    background: #aa2828;
+                    Text { text: root.game.warning-count; color: white; font-size: 12px * root.card-factor; horizontal-alignment: center; vertical-alignment: center; }
+                    warning-touch := TouchArea {
+                        mouse-cursor: pointer;
+                        changed has-hover => {
+                            if (self.has-hover) {
+                                root.hovered-badge = -2;
+                                root.badge-tooltip = root.game.warning-details;
+                            } else if (root.hovered-badge == -2) {
+                                root.hovered-badge = -1;
+                                root.badge-tooltip = "";
+                            }
+                        }
+                    }
+                }
+                if root.game.unplayed: Rectangle {
+                    width: 25px * root.card-factor;
+                    border-radius: 5px * root.card-factor;
+                    background: #202020dd;
+                    Text { text: "✨"; font-family: "Segoe UI Emoji"; font-size: 12px * root.card-factor; horizontal-alignment: center; vertical-alignment: center; }
+                }
+                for badge[index] in root.game.bookmark-badges: Rectangle {
+                    width: 25px * root.card-factor;
+                    border-radius: 5px * root.card-factor;
+                    background: rgb(badge.red, badge.green, badge.blue);
+                    Text { text: badge.label; font-family: "Segoe UI Emoji"; color: white; font-size: 12px * root.card-factor; horizontal-alignment: center; vertical-alignment: center; }
+                    badge-touch := TouchArea {
+                        mouse-cursor: pointer;
+                        changed has-hover => {
+                            if (self.has-hover) {
+                                root.hovered-badge = index;
+                                root.badge-tooltip = badge.tooltip;
+                            } else if (root.hovered-badge == index) {
+                                root.hovered-badge = -1;
+                                root.badge-tooltip = "";
+                            }
+                        }
+                    }
+                }
+            }
+            if root.badge-tooltip != "": Rectangle {
+                x: 8px * root.card-factor;
+                y: max(5px * root.card-factor,
+                    parent.height - 37px * root.card-factor - self.height);
+                width: min(parent.width - 16px * root.card-factor,
+                    max(120px * root.card-factor,
+                        badge-tooltip-text.preferred-width + 16px * root.card-factor));
+                height: badge-tooltip-text.preferred-height + 12px * root.card-factor;
+                border-radius: 5px * root.card-factor;
+                border-width: 1px;
+                border-color: #505050;
+                background: #202020f2;
+                z: 20;
+                badge-tooltip-text := Text {
+                    x: 8px * root.card-factor;
+                    y: 6px * root.card-factor;
+                    width: parent.width - 16px * root.card-factor;
+                    text: root.badge-tooltip;
+                    color: #dddddd;
+                    font-size: 12px * root.card-factor;
+                    wrap: word-wrap;
+                }
+            }
+            if root.game.download-state == DownloadVisualState.indeterminate
+                && root.game.download-display-mode == DownloadDisplayMode.bottom-bar: Rectangle {
+                y: parent.height - self.height;
+                width: parent.width;
+                height: 2px * root.card-factor;
+                background: #d65761;
+                opacity: 0.5 + 0.5 * sin(360deg * animation-tick() / 1s);
+                z: 30;
+            }
+            if root.game.download-state == DownloadVisualState.determinate
+                && root.game.download-display-mode == DownloadDisplayMode.bottom-bar: Rectangle {
+                y: parent.height - self.height;
+                width: parent.width * root.game.download-progress;
+                height: 2px * root.card-factor;
+                background: #d65761;
+                z: 30;
+            }
+            if (root.game.download-state == DownloadVisualState.indeterminate
+                    || root.game.download-state == DownloadVisualState.determinate)
+                && root.game.download-display-mode == DownloadDisplayMode.circle-bottom-right: DownloadCircle {
+                x: parent.width - self.width - 8px * root.card-factor;
+                y: parent.height - self.height - 8px * root.card-factor;
+                width: 20px * root.card-factor;
+                height: 20px * root.card-factor;
+                progress: root.game.download-progress;
+                indeterminate: root.game.download-state == DownloadVisualState.indeterminate;
+                z: 30;
+            }
+            if root.game.download-state == DownloadVisualState.error: Rectangle {
+                x: parent.width - self.width - 8px * root.card-factor;
+                y: parent.height - self.height - 8px * root.card-factor;
+                width: 25px * root.card-factor;
+                height: 25px * root.card-factor;
+                border-radius: 5px * root.card-factor;
+                background: #aa2828;
+                z: 31;
+                Text { text: "!"; color: white; font-size: 14px * root.card-factor; horizontal-alignment: center; vertical-alignment: center; }
+                error-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    changed has-hover => {
+                        if (self.has-hover) {
+                            root.hovered-badge = -3;
+                            root.badge-tooltip = root.game.download-error;
+                        } else if (root.hovered-badge == -3) {
+                            root.hovered-badge = -1;
+                            root.badge-tooltip = "";
+                        }
+                    }
+                }
+            }
+            if root.game.version != "": Rectangle {
+                x: parent.width - self.width - 8px * root.card-factor;
+                y: 8px * root.card-factor;
+                width: version-text.preferred-width + 18px * root.card-factor;
+                height: 29px * root.card-factor;
+                border-radius: 9px * root.card-factor;
+                background: #434343ee;
+                version-text := Text {
+                    text: root.game.version;
+                    color: #dddddd;
+                    font-size: 12px * root.card-factor;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+            Rectangle {
+                x: 8px * root.card-factor;
+                y: 8px * root.card-factor;
+                width: 38px * root.card-factor;
+                height: 31px * root.card-factor;
+                border-radius: 7px * root.card-factor;
+                background: #303030dd;
+                opacity: root.card-hovered ? 1 : 0;
+                Text {
+                    text: root.game.installed ? "▶" : "↓";
+                    font-family: "Segoe UI Symbol";
+                    color: #dddddd;
+                    font-size: 16px * root.card-factor;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                action-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    changed has-hover => {
+                        if (self.has-hover && root.game.tag-rows.length > 0) {
+                            root.tags-hovered(root.game.id, root.game.tag-rows, root.x,
+                                root.tag-panel-y,
+                                root.width, true);
+                        } else if (!self.has-hover && !hover.has-hover) {
+                            root.tags-hovered(root.game.id, root.game.tag-rows, root.x,
+                                root.tag-panel-y,
+                                root.width, false);
+                            root.selected-screen = -1;
+                        }
+                    }
+                    clicked => { root.primary-action(root.game.id); }
+                }
+            }
+        }
+        if root.card-hovered && root.game.screen-count > 0: Rectangle {
+            height: 6px * root.card-factor;
+            background: transparent;
+            HorizontalLayout {
+                spacing: 0px;
+                for marker[index] in root.game.screen-count: Rectangle {
+                    height: index == root.selected-screen ? 3px * root.card-factor : 2px * root.card-factor;
+                    border-radius: 0px;
+                    background: index == root.selected-screen ? #e6e6e6 : #696969;
+                }
+            }
+        }
+        title-text := Text {
+            text: root.game.title;
+            color: #dddddd;
+            font-size: 20px * root.card-factor;
+            font-weight: 400;
+            wrap: word-wrap;
+        }
+        creator-text := Text {
+            text: root.game.creator;
+            color: #aaaaaa;
+            font-size: 12px * root.card-factor;
+            overflow: elide;
+        }
+        Rectangle {
+            height: 34px * root.card-factor;
+            width: meta.preferred-width + 18px * root.card-factor;
+            border-radius: 8px * root.card-factor;
+            background: #292929;
+            meta := Text {
+                text: "◷ " + root.game.date + "   ♨ " + root.game.likes + "   ↝ " + root.game.views + "   ☆ " + root.game.rating;
+                font-family: "Segoe UI Symbol";
+                color: #999999;
+                font-size: 11px * root.card-factor;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+
+    if root.tags-open: Rectangle {
+        x: 0px;
+        y: root.height - 10px * root.card-factor;
+        width: root.width;
+        height: 11px * root.card-factor;
+        background: #232323;
+        z: 2;
+        Rectangle { x: 0px; width: 1px; background: #454545; }
+        Rectangle { x: parent.width - 1px; width: 1px; background: #454545; }
+    }
+
+    // Do not start a new network/decode job for every card that merely passes
+    // underneath a stationary cursor while the list is being scrolled.
+    Timer {
+        interval: 140ms;
+        running: root.card-hovered;
+        triggered => {
+            if (root.card-hovered) { root.image-needed(root.game.id); }
+        }
+    }
+
+}

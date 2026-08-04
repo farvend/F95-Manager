@@ -159,6 +159,10 @@ pub fn apply_meta(
     th.creator = meta.creator;
     th.version = meta.version;
 
+    if !meta.prefix_ids.is_empty() {
+        th.prefixes = meta.prefix_ids;
+    }
+
     if tags_len > 0 && th.tags.is_empty() {
         th.tags = meta.tag_ids;
     }
@@ -180,6 +184,18 @@ struct CachedThreadMeta {
     cover_url: String,
     screens: Vec<String>,
     tag_ids: Vec<u32>,
+    #[serde(default)]
+    prefix_ids: Vec<u32>,
+    #[serde(default)]
+    date: String,
+    #[serde(default)]
+    views: u64,
+    #[serde(default)]
+    likes: u64,
+    #[serde(default)]
+    rating: f32,
+    #[serde(default)]
+    ts: u64,
 }
 
 /// Get the path to the meta.json file for a thread
@@ -237,18 +253,18 @@ pub fn load_from_cache(cache_dir: &Path, thread_id: u64) -> Option<F95Thread> {
         title: cached.title,
         creator: cached.creator,
         version: cached.version,
-        views: 0,
-        likes: 0,
-        prefixes: Vec::new(),
+        views: cached.views,
+        likes: cached.likes,
+        prefixes: cached.prefix_ids,
         tags: cached.tag_ids,
-        rating: 0.0,
+        rating: cached.rating,
         cover: cached.cover_url,
         screens: filtered_screens,
-        date: String::new(),
+        date: cached.date,
         watched: false,
         ignored: false,
         is_new: false,
-        ts: 0,
+        ts: cached.ts,
     })
 }
 
@@ -268,6 +284,12 @@ pub fn save_to_cache(cache_dir: &Path, thread_id: u64, thread: &F95Thread) -> st
         cover_url: thread.cover.clone(),
         screens: thread.screens.clone(),
         tag_ids: thread.tags.clone(),
+        prefix_ids: thread.prefixes.clone(),
+        date: thread.date.clone(),
+        views: thread.views,
+        likes: thread.likes,
+        rating: thread.rating,
+        ts: thread.ts,
     };
 
     // Serialize to JSON

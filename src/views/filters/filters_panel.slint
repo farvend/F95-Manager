@@ -1,0 +1,161 @@
+import { LineEdit, ScrollView } from "std-widgets.slint";
+import { BookmarkData, SuggestionData, Theme, Translations, FlatButton } from "../shared.slint";
+import { SectionTitle, SuggestInput, SelectedFilters, DateStepSlider } from "components.slint";
+
+export component FiltersPanel inherits Rectangle {
+    in property <[BookmarkData]> bookmarks;
+    in property <[SuggestionData]> include-tag-suggestions;
+    in property <[SuggestionData]> exclude-tag-suggestions;
+    in property <[SuggestionData]> prefix-suggestions;
+    in property <[SuggestionData]> exclude-prefix-suggestions;
+    in property <[SuggestionData]> selected-include-tags;
+    in property <[SuggestionData]> selected-exclude-tags;
+    in property <[SuggestionData]> selected-prefixes;
+    in property <[SuggestionData]> selected-exclude-prefixes;
+    in-out property <bool> library-mode;
+    in-out property <string> search-text;
+    in-out property <int> sort-index;
+    in-out property <int> date-index;
+    in property <string> date-label;
+    in-out property <string> include-tag-text;
+    in-out property <string> exclude-tag-text;
+    in-out property <string> prefix-text;
+    in-out property <string> exclude-prefix-text;
+    in-out property <int> include-logic: 0;
+    in-out property <int> search-mode: 0;
+    in-out property <bool> unplayed-only: false;
+    in property <bool> classic-library: false;
+    private property <bool> search-dirty: false;
+    callback refresh-catalog(string);
+    callback toggle-library();
+    callback toggle-bookmark(string);
+    callback open-settings();
+    callback open-about();
+    callback open-logs();
+    callback suggestion-query(string, int);
+    callback filter-chosen(string, int);
+    callback remove-filter(string, int);
+    callback sort-chosen(int);
+    callback date-chosen(int);
+    callback mode-chosen(int, int);
+    callback toggle-unplayed();
+    callback suggestion-overlay-changed(int, length, length, length, [SuggestionData], int, bool);
+
+            preferred-width: 260px * Theme.scale;
+            min-width: 240px;
+            max-width: 280px;
+            horizontal-stretch: 0;
+            background: #1e1e1e;
+            border-width: 1px;
+            border-color: #373737;
+            ScrollView {
+                viewport-width: self.width;
+                VerticalLayout {
+                    padding: 11px * Theme.scale;
+                    spacing: 6px * Theme.scale;
+                    Text { height: 27px * Theme.scale; text: Translations.filters-title; color: #dddddd; font-size: 20px * Theme.scale; }
+                    Rectangle { height: 1px; background: #414141; }
+                    SectionTitle { left: Translations.filters-sorting; right: Translations.filters-date; }
+                    HorizontalLayout {
+                        height: 38px * Theme.scale;
+                        spacing: 3px;
+                        FlatButton { horizontal-stretch: 1; text: "🕓"; text-font: "Segoe UI Emoji"; active: root.sort-index == 0; clicked => { root.sort-chosen(0); } }
+                        FlatButton { horizontal-stretch: 1; text: "👍"; text-font: "Segoe UI Emoji"; active: root.sort-index == 1; clicked => { root.sort-chosen(1); } }
+                        FlatButton { horizontal-stretch: 1; text: "👀"; text-font: "Segoe UI Emoji"; active: root.sort-index == 2; clicked => { root.sort-chosen(2); } }
+                        FlatButton { horizontal-stretch: 1; text: "🔤"; text-font: "Segoe UI Emoji"; active: root.sort-index == 3; clicked => { root.sort-chosen(3); } }
+                        FlatButton { horizontal-stretch: 1; text: "⭐"; text-font: "Segoe UI Emoji"; active: root.sort-index == 4; clicked => { root.sort-chosen(4); } }
+                    }
+                    SectionTitle { left: Translations.filters-date; right: root.date-label; }
+                    DateStepSlider { value <=> root.date-index; changed(value) => { root.date-chosen(value); } }
+                    TouchArea {
+                        height: 18px * Theme.scale;
+                        clicked => { root.search-mode = root.search-mode == 0 ? 1 : 0; root.mode-chosen(1, root.search-mode); }
+                        SectionTitle { left: Translations.filters-search; right: root.search-mode == 0 ? Translations.search-title : Translations.search-creator; }
+                    }
+                    LineEdit {
+                        height: 31px * Theme.scale;
+                        text <=> root.search-text;
+                        placeholder-text: Translations.filters-search-placeholder;
+                        changed text => { root.search-dirty = true; }
+                        accepted => { root.search-dirty = false; root.refresh-catalog(root.search-text); }
+                    }
+                    TouchArea {
+                        height: 18px * Theme.scale;
+                        clicked => { root.include-logic = root.include-logic == 0 ? 1 : 0; root.mode-chosen(0, root.include-logic); }
+                        SectionTitle { left: Translations.filters-tags; right: root.include-logic == 0 ? Translations.logic-or + " / " + Translations.logic-and : Translations.logic-and + " / " + Translations.logic-or; }
+                    }
+                    SuggestInput {
+                        text <=> root.include-tag-text;
+                        placeholder: Translations.filters-tag-placeholder;
+                        suggestions: root.include-tag-suggestions; kind: 0;
+                        query-changed(query, kind) => { root.suggestion-query(query, kind); }
+                        chosen(id, label, kind) => { root.filter-chosen(id, kind); }
+                        overlay-changed(kind, x, y, width, values, index, visible) => {
+                            root.suggestion-overlay-changed(kind, x, y, width, values, index, visible);
+                        }
+                    }
+                    SelectedFilters { values: root.selected-include-tags; kind: 0; remove(id, kind) => { root.remove-filter(id, kind); } }
+                    SectionTitle { left: Translations.filters-exclude-tags; right: ""; }
+                    SuggestInput {
+                        text <=> root.exclude-tag-text;
+                        placeholder: Translations.filters-exclude-tag-placeholder;
+                        suggestions: root.exclude-tag-suggestions; kind: 1;
+                        query-changed(query, kind) => { root.suggestion-query(query, kind); }
+                        chosen(id, label, kind) => { root.filter-chosen(id, kind); }
+                        overlay-changed(kind, x, y, width, values, index, visible) => {
+                            root.suggestion-overlay-changed(kind, x, y, width, values, index, visible);
+                        }
+                    }
+                    SelectedFilters { values: root.selected-exclude-tags; kind: 1; remove(id, kind) => { root.remove-filter(id, kind); } }
+                    SectionTitle { left: Translations.filters-prefixes; right: ""; }
+                    SuggestInput {
+                        text <=> root.prefix-text;
+                        placeholder: Translations.filters-prefix-placeholder;
+                        suggestions: root.prefix-suggestions; kind: 2;
+                        query-changed(query, kind) => { root.suggestion-query(query, kind); }
+                        chosen(id, label, kind) => { root.filter-chosen(id, kind); }
+                        overlay-changed(kind, x, y, width, values, index, visible) => {
+                            root.suggestion-overlay-changed(kind, x, y, width, values, index, visible);
+                        }
+                    }
+                    SelectedFilters { values: root.selected-prefixes; kind: 2; remove(id, kind) => { root.remove-filter(id, kind); } }
+                    SectionTitle { left: Translations.settings-exclude-prefixes; right: ""; }
+                    SuggestInput {
+                        text <=> root.exclude-prefix-text;
+                        placeholder: Translations.settings-startup-exclude-prefix-placeholder;
+                        suggestions: root.exclude-prefix-suggestions; kind: 3;
+                        query-changed(query, kind) => { root.suggestion-query(query, kind); }
+                        chosen(id, label, kind) => { root.filter-chosen(id, kind); }
+                        overlay-changed(kind, x, y, width, values, index, visible) => {
+                            root.suggestion-overlay-changed(kind, x, y, width, values, index, visible);
+                        }
+                    }
+                    SelectedFilters { values: root.selected-exclude-prefixes; kind: 3; remove(id, kind) => { root.remove-filter(id, kind); } }
+                    Rectangle { height: 1px; background: #383838; }
+                    Text { height: 18px * Theme.scale; text: Translations.filters-bookmarks; color: #777777; font-size: 13px * Theme.scale; }
+                    for bookmark in root.bookmarks: FlatButton {
+                        text: bookmark.label;
+                        active: bookmark.active;
+                        clicked => { root.toggle-bookmark(bookmark.id); }
+                    }
+                    Rectangle { height: 8px; }
+                    if root.library-mode: FlatButton { text: Translations.filters-unplayed; active: root.unplayed-only; clicked => { root.toggle-unplayed(); } }
+                    if root.classic-library: FlatButton { text: Translations.filters-downloaded; active: root.library-mode; clicked => { root.toggle-library(); } }
+                    if !root.classic-library: HorizontalLayout {
+                        height: 31px * Theme.scale; spacing: 3px;
+                        FlatButton { horizontal-stretch: 1; text: Translations.view-catalog; active: !root.library-mode; clicked => { if (root.library-mode) { root.toggle-library(); } } }
+                        FlatButton { horizontal-stretch: 1; text: Translations.view-downloaded; active: root.library-mode; clicked => { if (!root.library-mode) { root.toggle-library(); } } }
+                    }
+                    FlatButton { text: Translations.common-settings; clicked => { root.open-settings(); } }
+                    FlatButton { text: Translations.common-about; clicked => { root.open-about(); } }
+                    FlatButton { text: Translations.common-logs; clicked => { root.open-logs(); } }
+                    Rectangle { vertical-stretch: 1; }
+        }
+}
+
+Timer {
+    interval: 350ms;
+    running: root.search-dirty;
+    triggered => { root.search-dirty = false; root.refresh-catalog(root.search-text); }
+}
+    }

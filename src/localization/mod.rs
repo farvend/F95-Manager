@@ -7,8 +7,17 @@ use unic_langid::{LanguageIdentifier, langid};
 
 type Bundle = FluentBundle<FluentResource>;
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub enum SupportedLang {
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+enum SupportedLang {
+    English,
+    Russian,
+}
+
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub enum LanguageChoice {
+    #[default]
+    #[serde(rename = "auto")]
+    Automatic,
     #[serde(rename = "en")]
     English,
     #[serde(rename = "ru")]
@@ -18,12 +27,15 @@ pub enum SupportedLang {
 // Map incoming strings to enum without allocating, ignoring case and suffixes like "-US"/"_RU".
 impl From<&str> for SupportedLang {
     fn from(code: &str) -> Self {
-        let mut string = code.to_string();
-        if let Some(idx) = string.find(['-', '_']) {
-            string = string[..idx].to_string();
+        let language = code
+            .split(['-', '_'])
+            .next()
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        match language.as_str() {
+            "ru" => SupportedLang::Russian,
+            _ => SupportedLang::English,
         }
-        string.make_ascii_lowercase();
-        SupportedLang::English
     }
 }
 
@@ -86,25 +98,27 @@ fn try_format(bundle: &Bundle, id: &str, args: Option<&FluentArgs>) -> Option<St
 }
 
 /// Initialize localization system. If preferred_lang is None, system locale will be used.
-pub fn initialize_localization(
-    preferred_lang: Option<SupportedLang>,
-) -> Result<(), LocalizationError> {
-    match preferred_lang {
-        Some(lang) => set_current_language(lang)?,
-        None => set_language_auto()?,
+pub fn initialize_localization(choice: LanguageChoice) -> Result<(), LocalizationError> {
+    set_language_choice(choice)
+}
+
+pub fn set_language_choice(choice: LanguageChoice) -> Result<(), LocalizationError> {
+    match choice {
+        LanguageChoice::Automatic => set_language_auto(),
+        LanguageChoice::English => set_current_language(SupportedLang::English),
+        LanguageChoice::Russian => set_current_language(SupportedLang::Russian),
     }
-    Ok(())
 }
 
 /// Explicitly set current language.
-pub fn set_current_language(lang: SupportedLang) -> Result<(), LocalizationError> {
+fn set_current_language(lang: SupportedLang) -> Result<(), LocalizationError> {
     let lock = lang_lock();
     *lock.write().expect("lang write lock") = lang;
     Ok(())
 }
 
 /// Set language from system locale (auto-detect).
-pub fn set_language_auto() -> Result<(), LocalizationError> {
+fn set_language_auto() -> Result<(), LocalizationError> {
     let detected = detect_system_lang();
     let lock = lang_lock();
     *lock.write().expect("lang write lock") = detected;
@@ -112,7 +126,7 @@ pub fn set_language_auto() -> Result<(), LocalizationError> {
 }
 
 /// Return current language as enum.
-pub fn get_current_language() -> SupportedLang {
+fn get_current_language() -> SupportedLang {
     let lock = lang_lock();
     *lock.read().expect("lang read lock")
 }
@@ -148,4 +162,26 @@ pub fn translate_with(message_id: &str, args: &[(&str, String)]) -> String {
     }
 
     format!("[missing: {}]", message_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SupportedLang, make_bundle, try_format};
+
+    #[test]
+    fn locale_code_selects_supported_language() {
+        assert_eq!(SupportedLang::from("ru-RU"), SupportedLang::Russian);
+        assert_eq!(SupportedLang::from("ru_AM"), SupportedLang::Russian);
+        assert_eq!(SupportedLang::from("en-US"), SupportedLang::English);
+        assert_eq!(SupportedLang::from("de-DE"), SupportedLang::English);
+    }
+
+    #[test]
+    fn both_embedded_translation_bundles_are_valid() {
+        for language in [SupportedLang::English, SupportedLang::Russian] {
+            let bundle = make_bundle(language);
+            assert!(try_format(&bundle, "filters-title", None).is_some());
+            assert!(try_format(&bundle, "settings-startup-filters", None).is_some());
+        }
+    }
 }
