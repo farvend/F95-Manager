@@ -68,10 +68,10 @@ fn sanitize_relative_path(name: &str, strip_prefix: Option<&str>) -> Option<Path
     }
 
     let mut s = name.replace('\\', "/");
-    if let Some(prefix) = strip_prefix {
-        if s.starts_with(prefix) {
-            s = s[prefix.len()..].to_string();
-        }
+    if let Some(prefix) = strip_prefix
+        && s.starts_with(prefix)
+    {
+        s = s[prefix.len()..].to_string();
     }
     while s.starts_with('/') {
         s.remove(0);
@@ -85,10 +85,9 @@ fn sanitize_relative_path(name: &str, strip_prefix: Option<&str>) -> Option<Path
         match comp {
             Normal(os) => {
                 let piece = os.to_string_lossy();
-                if let Some(clean) = sanitize_component_str(&piece) {
+                {
+                    let clean = sanitize_component_str(&piece)?;
                     out.push(clean);
-                } else {
-                    return None;
                 }
             }
             CurDir => {}
@@ -215,10 +214,10 @@ fn unzip_streaming(
         if f.is_dir() {
             continue;
         }
-        if let Some(rel) = sanitize_relative_path(f.name(), strip_prefix.as_deref()) {
-            if !rel.as_os_str().is_empty() {
-                total_bytes = total_bytes.saturating_add(f.size());
-            }
+        if let Some(rel) = sanitize_relative_path(f.name(), strip_prefix.as_deref())
+            && !rel.as_os_str().is_empty()
+        {
+            total_bytes = total_bytes.saturating_add(f.size());
         }
     }
 
@@ -452,33 +451,6 @@ pub fn extract_archive(
     Err(format!("Unsupported archive format: {}", name_lower))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tokio::sync::mpsc::unbounded_channel;
-
-    #[test]
-    fn installs_standalone_executable_without_extracting_it() {
-        let root =
-            std::env::temp_dir().join(format!("f95-standalone-exe-test-{}", uuid::Uuid::new_v4()));
-        let downloads = root.join("downloads");
-        let games = root.join("games");
-        fs::create_dir_all(&downloads).unwrap();
-        let source = downloads.join("noaika_novsync_test.exe");
-        fs::write(&source, b"test executable").unwrap();
-        let (sender, _receiver) = unbounded_channel();
-
-        let (dest_dir, executable) = extract_archive(&source, &games, &sender).unwrap();
-        let executable = executable.unwrap();
-
-        assert_eq!(dest_dir, games.join("noaika_novsync_test"));
-        assert_eq!(executable, dest_dir.join("noaika_novsync_test.exe"));
-        assert_eq!(fs::read(executable).unwrap(), b"test executable");
-
-        fs::remove_dir_all(root).unwrap();
-    }
-}
-
 fn extract_with_unrar(
     archive_path: &Path,
     dest_base: &Path,
@@ -528,4 +500,31 @@ fn extract_with_unrar(
     }
 
     Ok((dest_dir.clone(), find_first_exe(&dest_dir)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::mpsc::unbounded_channel;
+
+    #[test]
+    fn installs_standalone_executable_without_extracting_it() {
+        let root =
+            std::env::temp_dir().join(format!("f95-standalone-exe-test-{}", uuid::Uuid::new_v4()));
+        let downloads = root.join("downloads");
+        let games = root.join("games");
+        fs::create_dir_all(&downloads).unwrap();
+        let source = downloads.join("noaika_novsync_test.exe");
+        fs::write(&source, b"test executable").unwrap();
+        let (sender, _receiver) = unbounded_channel();
+
+        let (dest_dir, executable) = extract_archive(&source, &games, &sender).unwrap();
+        let executable = executable.unwrap();
+
+        assert_eq!(dest_dir, games.join("noaika_novsync_test"));
+        assert_eq!(executable, dest_dir.join("noaika_novsync_test.exe"));
+        assert_eq!(fs::read(executable).unwrap(), b"test executable");
+
+        fs::remove_dir_all(root).unwrap();
+    }
 }

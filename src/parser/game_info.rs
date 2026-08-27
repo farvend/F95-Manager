@@ -18,7 +18,7 @@ pub mod thread_meta;
 pub mod types;
 
 // Re-exports to keep external API unchanged
-pub use hosting::{Hosting, HostingSubset};
-pub use link::{DirectDownloadLink, DownloadLink, DownloadLinkInfo};
-pub use page::{F95PageUrl, GetLinksError};
+pub use hosting::HostingSubset;
+pub use link::DownloadLink;
+pub use page::F95PageUrl;
 pub use types::{Platform, PlatformDownloads, ThreadId};

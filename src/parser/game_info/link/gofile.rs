@@ -36,7 +36,7 @@ pub async fn resolve_gofile_file(
 
     // Gofile replaced the old `wt` query parameter with a time-limited
     // X-Website-Token derived from the account token and request headers.
-    let website_token = website_token(&token, SystemTime::now());
+    let website_token = website_token(token, SystemTime::now());
     let url = format!(
         "https://api.gofile.io/contents/{id}?contentFilter=&page=1&pageSize=1000&sortField=name&sortDirection=1"
     );
@@ -57,8 +57,8 @@ pub async fn resolve_gofile_file(
     let url = data
         .data
         .children
-        .iter()
-        .filter_map(|(_, node)| match node {
+        .values()
+        .filter_map(|node| match node {
             GofileNode::File { link, .. } => Some(link.clone()),
             _ => None,
         })
@@ -107,11 +107,13 @@ fn website_token(account_token: &str, now: SystemTime) -> String {
 }
 
 #[derive(serde::Deserialize)]
+#[allow(dead_code)]
 struct GofileAuth {
     status: String,
     data: GofileAuthData,
 }
 #[derive(serde::Deserialize)]
+#[allow(dead_code)]
 struct GofileAuthData {
     id: String,
     #[serde(rename = "rootFolder")]
@@ -123,6 +125,7 @@ struct GofileAuthData {
 // Gofile types to reflect the GoFile API JSON structure
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
+#[allow(dead_code)]
 enum GofileNode {
     #[serde(rename = "folder")]
     #[serde(rename_all = "camelCase")]
@@ -160,6 +163,7 @@ enum GofileNode {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 struct GofileMetadata {
     total_count: u32,
     total_pages: u32,
@@ -170,6 +174,7 @@ struct GofileMetadata {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 struct GofileData {
     can_access: bool,
     id: String,
@@ -187,6 +192,7 @@ struct GofileData {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 struct GofileFiles {
     status: String,
     data: GofileData,

@@ -65,9 +65,7 @@ impl FuturesAsyncWrite for MegaFileWriter {
                 }
                 Poll::Ready(Ok(n))
             }
-            Poll::Ready(Err(e)) => {
-                Poll::Ready(Err(futures_io::Error::new(futures_io::ErrorKind::Other, e)))
-            }
+            Poll::Ready(Err(e)) => Poll::Ready(Err(futures_io::Error::other(e))),
             Poll::Pending => Poll::Pending,
         }
     }
@@ -80,9 +78,7 @@ impl FuturesAsyncWrite for MegaFileWriter {
         let mut pinned = Pin::new(&mut this.file);
         match TokioAsyncWrite::poll_flush(pinned.as_mut(), cx) {
             Poll::Ready(Ok(())) => Poll::Ready(Ok(())),
-            Poll::Ready(Err(e)) => {
-                Poll::Ready(Err(futures_io::Error::new(futures_io::ErrorKind::Other, e)))
-            }
+            Poll::Ready(Err(e)) => Poll::Ready(Err(futures_io::Error::other(e))),
             Poll::Pending => Poll::Pending,
         }
     }
@@ -95,16 +91,13 @@ impl FuturesAsyncWrite for MegaFileWriter {
         let mut pinned = Pin::new(&mut this.file);
         match TokioAsyncWrite::poll_shutdown(pinned.as_mut(), cx) {
             Poll::Ready(Ok(())) => Poll::Ready(Ok(())),
-            Poll::Ready(Err(e)) => {
-                Poll::Ready(Err(futures_io::Error::new(futures_io::ErrorKind::Other, e)))
-            }
+            Poll::Ready(Err(e)) => Poll::Ready(Err(futures_io::Error::other(e))),
             Poll::Pending => Poll::Pending,
         }
     }
 }
 
 pub use self::direct::DirectDownloadLink;
-pub use self::info::DownloadLinkInfo;
 
 #[derive(Debug, Clone)]
 pub enum DownloadLink {
@@ -358,7 +351,7 @@ impl DownloadLink {
             }
         };
 
-        let filename_fallback = resp.url().path().split('/').last();
+        let filename_fallback = resp.url().path().split('/').next_back();
 
         // Extract filename
         let header = resp
@@ -368,15 +361,7 @@ impl DownloadLink {
             .or(filename_fallback)
             .ok_or(DownloadError::MissingHeader("content-disposition"))?;
         let filename = header
-            .replace('"', "")
-            .replace('\\', "")
-            .replace('/', "")
-            .replace(':', "")
-            .replace('*', "")
-            .replace('?', "")
-            .replace('<', "")
-            .replace('>', "")
-            .replace('|', "")
+            .replace(['"', '\\', '/', ':', '*', '?', '<', '>', '|'], "")
             .split('=')
             .nth(1)
             .or(filename_fallback)

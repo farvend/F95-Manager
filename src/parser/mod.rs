@@ -12,8 +12,7 @@
 // Endpoint sample:
 // https://f95zone.to/sam/latest_alpha/latest_data.php?cmd=list&cat=games&page=1&sort=date
 
-use lazy_static::lazy_static;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer};
 use std::fmt;
 
 use crate::{
@@ -84,10 +83,6 @@ impl F95Filters {
         self.noprefixes = prefixes;
         self
     }
-    pub fn with_date_days(mut self, days: Option<u32>) -> Self {
-        self.date_days = days;
-        self
-    }
     pub fn with_date_limit(mut self, limit: DateLimit) -> Self {
         self.date_days = match limit {
             DateLimit::Anytime => None,
@@ -117,7 +112,7 @@ pub fn normalize_url(s: &str) -> String {
     }
 }
 
-//// Download an image (cover/screenshot) with Referer and return RGBA8 bytes + size.
+/// Download an image (cover/screenshot) with Referer and return RGBA8 bytes + size.
 pub async fn fetch_image_f95_with_ref(
     url: &str,
     referer: &str,
@@ -299,6 +294,7 @@ where
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[allow(dead_code)]
 pub struct F95Thread {
     pub thread_id: ThreadId,
     pub title: String,
@@ -327,6 +323,7 @@ pub struct Pagination {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[allow(dead_code)]
 pub struct F95Msg {
     pub data: Vec<F95Thread>,
     pub pagination: Pagination,
@@ -354,29 +351,6 @@ struct Root {
 /// reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 pub async fn fetch_list_page(page: u32, filters: &F95Filters) -> Result<F95Msg, F95Error> {
     let client = crate::net::client();
-
-    #[derive(Serialize, Debug)]
-    struct Query<'a> {
-        cmd: &'a str,
-        cat: &'a str,
-        page: u32,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        sort: Option<String>,
-        search: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        #[serde(rename = "tags[]")]
-        tags: Option<Vec<u32>>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        notags: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        prefixes: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        noprefixes: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        date: Option<u32>,
-        #[serde(rename = "_")]
-        cache_buster: u64,
-    }
 
     let tags = if filters.include_tags.is_empty() {
         None

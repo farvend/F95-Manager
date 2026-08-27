@@ -10,12 +10,14 @@ pub enum DirectRequest {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct DownloadLinkInfo {
     pub url: Url,
     pub method: reqwest::Method,
     pub headers: HeaderMap<HeaderValue>,
 }
 
+#[allow(dead_code)]
 impl DownloadLinkInfo {
     pub fn build(self, client: reqwest::Client) -> reqwest::RequestBuilder {
         let url = self.url;

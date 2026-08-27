@@ -223,10 +223,10 @@ pub async fn fetch_thread_meta(thread_id: u64) -> Result<ThreadMeta, FetchThread
                 continue;
             }
             let lname = name.to_lowercase();
-            if seen_tags.insert(lname.clone()) {
-                if let Some(id) = reverse.get(&lname) {
-                    tag_ids.push(*id);
-                }
+            if seen_tags.insert(lname.clone())
+                && let Some(id) = reverse.get(&lname)
+            {
+                tag_ids.push(*id);
             }
         }
     }
