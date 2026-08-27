@@ -15,7 +15,6 @@ export component GameCard inherits Rectangle {
     private property <float> card-factor: Theme.scale * Theme.card-scale;
     private property <length> cover-height: (root.width - 18px * root.card-factor) * 9 / 16;
     private property <length> base-height: 9px * root.card-factor + root.cover-height
-        + (root.game.screen-count > 0 ? 8px * root.card-factor : 0px)
         + 8px * root.card-factor + title-text.preferred-height
         + 8px * root.card-factor + creator-text.preferred-height
         + 8px * root.card-factor + 34px * root.card-factor + 9px * root.card-factor;
@@ -94,6 +93,21 @@ export component GameCard inherits Rectangle {
                     && root.game.screen-loaded[root.selected-screen]
                     ? root.game.screens[root.selected-screen] : root.game.cover;
                 image-fit: cover;
+            }
+            if root.card-hovered && root.game.screen-count > 0: Rectangle {
+                y: parent.height - self.height;
+                width: parent.width;
+                height: 2px * root.card-factor;
+                background: #696969;
+                z: 29;
+                for marker[index] in root.game.screen-count: Rectangle {
+                    x: parent.width * index / root.game.screen-count;
+                    width: parent.width / root.game.screen-count
+                        + (index + 1 < root.game.screen-count ? 1px : 0px);
+                    height: parent.height;
+                    border-radius: 0px;
+                    background: index == root.selected-screen ? #e6e6e6 : #696969;
+                }
             }
             HorizontalLayout {
                 x: 8px * root.card-factor;
@@ -274,18 +288,6 @@ export component GameCard inherits Rectangle {
                         }
                     }
                     clicked => { root.primary-action(root.game.id); }
-                }
-            }
-        }
-        if root.card-hovered && root.game.screen-count > 0: Rectangle {
-            height: 6px * root.card-factor;
-            background: transparent;
-            HorizontalLayout {
-                spacing: 0px;
-                for marker[index] in root.game.screen-count: Rectangle {
-                    height: index == root.selected-screen ? 3px * root.card-factor : 2px * root.card-factor;
-                    border-radius: 0px;
-                    background: index == root.selected-screen ? #e6e6e6 : #696969;
                 }
             }
         }
