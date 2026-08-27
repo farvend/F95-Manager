@@ -379,12 +379,21 @@ pub(super) fn request_screens(id: u64, state: SharedState, weak: slint::Weak<Mai
                 failed = true;
                 continue;
             };
-            let decoded = if cached.is_file() {
-                tokio::task::spawn_blocking(move || decode_image_path(cached, target_size))
+            let mut decoded = if cached.is_file() {
+                let path = cached.clone();
+                tokio::task::spawn_blocking(move || decode_image_path(path, target_size))
                     .await
                     .ok()
                     .flatten()
             } else {
+                None
+            };
+            if decoded.is_none() {
+                // A failed cache write can leave a truncated image behind.
+                // Remove it before downloading so later hovers can recover.
+                if cached.is_file() {
+                    let _ = tokio::fs::remove_file(&cached).await;
+                }
                 let pixels = crate::parser::fetch_image_f95(&url).await.ok().and_then(
                     |(width, height, rgba)| {
                         resize_cover_pixels(width as u32, height as u32, rgba, target_size)
@@ -393,8 +402,8 @@ pub(super) fn request_screens(id: u64, state: SharedState, weak: slint::Weak<Mai
                 if let Some(pixels) = pixels.as_ref() {
                     save_image_pixels(&cached, pixels);
                 }
-                pixels
-            };
+                decoded = pixels;
+            }
             if let Some(decoded) = decoded {
                 let state_for_ui = state.clone();
                 let _ = weak.upgrade_in_event_loop(move |ui| {
