@@ -58,20 +58,15 @@ pub enum LoadingAnim {
     CircleBottomRight,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum UpdateCheckFrequency {
     #[serde(rename = "manual")]
+    #[default]
     Manual,
     #[serde(rename = "on_startup")]
     OnStartup,
     #[serde(rename = "every_n_days")]
     EveryNDays(u32),
-}
-
-impl Default for UpdateCheckFrequency {
-    fn default() -> Self {
-        Self::Manual
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -191,7 +186,7 @@ fn default_log_to_file() -> bool {
     true
 }
 
-//// Serde helpers for language field to keep backward compatibility with older JSONs.
+/// Serde helpers for language field to keep backward compatibility with older JSONs.
 fn deserialize_language_choice<'de, D>(
     deserializer: D,
 ) -> Result<crate::localization::LanguageChoice, D::Error>
@@ -334,10 +329,12 @@ pub fn hide_thread(thread_id: u64) {
 }
 
 // Check if a thread is hidden
+#[allow(dead_code)]
 pub fn is_thread_hidden(thread_id: u64) -> bool {
     super::with_settings(|st| st.hidden_threads.contains(&thread_id))
 }
 
+#[allow(dead_code)]
 pub fn is_pending_download(thread_id: u64) -> bool {
     super::with_settings(|st| st.pending_downloads.contains(&thread_id))
 }
@@ -489,6 +486,7 @@ pub fn get_bookmark(id: &str) -> Option<Bookmark> {
         .cloned()
 }
 
+#[allow(dead_code)]
 pub fn add_bookmark_to_game(thread_id: u64, bookmark_id: &str) {
     {
         let mut st = APP_SETTINGS.write().unwrap();
@@ -496,15 +494,15 @@ pub fn add_bookmark_to_game(thread_id: u64, bookmark_id: &str) {
             .downloaded_games
             .iter_mut()
             .find(|g| g.thread_id == thread_id)
+            && !game.bookmark_ids.iter().any(|bid| bid == bookmark_id)
         {
-            if !game.bookmark_ids.iter().any(|bid| bid == bookmark_id) {
-                game.bookmark_ids.push(bookmark_id.to_string());
-            }
+            game.bookmark_ids.push(bookmark_id.to_string());
         }
     }
     save_settings_to_disk();
 }
 
+#[allow(dead_code)]
 pub fn remove_bookmark_from_game(thread_id: u64, bookmark_id: &str) {
     {
         let mut st = APP_SETTINGS.write().unwrap();
@@ -519,6 +517,7 @@ pub fn remove_bookmark_from_game(thread_id: u64, bookmark_id: &str) {
     save_settings_to_disk();
 }
 
+#[allow(dead_code)]
 pub fn get_game_bookmarks(thread_id: u64) -> Vec<Bookmark> {
     let st = APP_SETTINGS.read().unwrap();
     if let Some(game) = st

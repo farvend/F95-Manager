@@ -38,18 +38,14 @@ impl MetadataCodec for RealMetadataCodec {
 
         // Filter screens to only include image files (handle legacy cache with .zip etc)
         let image_extensions = ["png", "jpg", "jpeg", "gif", "webp", "bmp"];
-        cached.screens = cached
-            .screens
-            .into_iter()
-            .filter(|url| {
-                if let Some(ext_start) = url.rfind('.') {
-                    let ext = &url[ext_start + 1..];
-                    image_extensions.contains(&ext.to_lowercase().as_str())
-                } else {
-                    false
-                }
-            })
-            .collect();
+        cached.screens.retain(|url| {
+            if let Some(ext_start) = url.rfind('.') {
+                let ext = &url[ext_start + 1..];
+                image_extensions.contains(&ext.to_lowercase().as_str())
+            } else {
+                false
+            }
+        });
 
         Ok(cached)
     }

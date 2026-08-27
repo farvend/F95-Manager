@@ -1,5 +1,8 @@
 pub mod config;
+// These subsystems have their own tests but are not wired into the current UI yet.
+#[allow(dead_code)]
 pub mod game_updates;
+#[allow(dead_code)]
 pub mod library;
 pub mod persistable;
 pub mod settings;

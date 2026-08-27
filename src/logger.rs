@@ -183,11 +183,11 @@ pub fn set_file_logging_enabled(enabled: bool) {
             log::info!("File logging enabled");
         }
     } else {
-        if let Ok(mut lf) = LOG_FILE.lock() {
-            if lf.is_some() {
-                *lf = None;
-                log::info!("File logging disabled");
-            }
+        if let Ok(mut lf) = LOG_FILE.lock()
+            && lf.is_some()
+        {
+            *lf = None;
+            log::info!("File logging disabled");
         }
     }
 }
@@ -250,6 +250,7 @@ pub fn clear() {
 }
 
 /// Returns true if new logs arrived since the last call.
+#[allow(dead_code)]
 pub fn take_new_flag() -> bool {
     NEW_LOGS.swap(false, Ordering::Relaxed)
 }
@@ -266,19 +267,19 @@ fn timestamp_millis() -> String {
 }
 
 fn write_file_line(line: &str) {
-    if let Ok(mut lf) = LOG_FILE.lock() {
-        if let Some(f) = lf.as_mut() {
-            let _ = writeln!(f, "{}", line);
-            let _ = f.flush();
-        }
+    if let Ok(mut lf) = LOG_FILE.lock()
+        && let Some(f) = lf.as_mut()
+    {
+        let _ = writeln!(f, "{}", line);
+        let _ = f.flush();
     }
 }
 
 fn flush_file() {
-    if let Ok(mut lf) = LOG_FILE.lock() {
-        if let Some(f) = lf.as_mut() {
-            let _ = f.flush();
-        }
+    if let Ok(mut lf) = LOG_FILE.lock()
+        && let Some(f) = lf.as_mut()
+    {
+        let _ = f.flush();
     }
 }
 

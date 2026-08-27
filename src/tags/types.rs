@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 #[derive(serde::Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct Tags {
     pub prefixes: AllPrefixes,
     pub tags: HashMap<String, String>,
@@ -8,6 +9,7 @@ pub struct Tags {
 }
 
 #[derive(serde::Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct AllPrefixes {
     pub games: Vec<PrefixesGroup>,
     pub comics: Vec<PrefixesGroup>,
@@ -16,6 +18,7 @@ pub struct AllPrefixes {
 }
 
 #[derive(serde::Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct PrefixesGroup {
     pub id: usize,
     pub name: String,
@@ -23,6 +26,7 @@ pub struct PrefixesGroup {
 }
 
 #[derive(serde::Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct Prefix {
     pub id: usize,
     pub name: String,

@@ -14,8 +14,7 @@ pub trait Persistable: Serialize + for<'de> Deserialize<'de> {
     }
 
     fn save_to_file(&self, path: &Path) -> io::Result<()> {
-        let data = serde_json::to_string_pretty(self)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let data = serde_json::to_string_pretty(self).map_err(io::Error::other)?;
         std::fs::write(path, data)
     }
 }

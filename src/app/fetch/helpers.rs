@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 /// Select preferred image URL for a thread:
 /// - Prefer the cover if present
 /// - Otherwise fallback to the first screenshot (if any)
+#[allow(dead_code)]
 pub fn get_cover_or_first_screen_url(t: &F95Thread) -> Option<String> {
     if !t.cover.is_empty() {
         Some(t.cover.clone())
@@ -16,6 +17,7 @@ pub fn get_cover_or_first_screen_url(t: &F95Thread) -> Option<String> {
 }
 
 /// Collect installed games (thread_id, folder) from settings, filtering non-existing folders.
+#[allow(dead_code)]
 pub fn collect_installs() -> Vec<(u64, PathBuf)> {
     crate::app::settings::with_settings(|st| {
         st.downloaded_games
@@ -27,11 +29,13 @@ pub fn collect_installs() -> Vec<(u64, PathBuf)> {
 }
 
 /// Collect persisted pending downloads.
+#[allow(dead_code)]
 pub fn collect_pending_ids() -> Vec<u64> {
     crate::app::settings::with_settings(|st| st.pending_downloads.clone())
 }
 
 /// Build unique list of target thread IDs: installed + downloading + pending.
+#[allow(dead_code)]
 pub fn build_targets(
     installs: &[(u64, PathBuf)],
     downloading_ids: &HashSet<u64>,
@@ -52,6 +56,7 @@ pub fn build_targets(
 }
 
 /// Snapshot current results into a map so we don't re-fetch if a card is already filled.
+#[allow(dead_code)]
 pub fn build_existing_map(
     source: Option<&crate::parser::F95Msg>,
 ) -> HashMap<u64, crate::parser::F95Thread> {
@@ -66,10 +71,12 @@ pub fn build_existing_map(
 }
 
 /// Map (thread_id -> install folder) for quick lookups.
+#[allow(dead_code)]
 pub fn build_install_map(installs: &[(u64, PathBuf)]) -> HashMap<u64, PathBuf> {
     installs.iter().cloned().collect()
 }
 
+#[allow(dead_code)]
 fn placeholder_title(id: u64, install_map: &HashMap<u64, PathBuf>) -> String {
     install_map
         .get(&id)
@@ -79,6 +86,7 @@ fn placeholder_title(id: u64, install_map: &HashMap<u64, PathBuf>) -> String {
 }
 
 /// Create a placeholder thread entry when we don't yet have cached data.
+#[allow(dead_code)]
 pub fn placeholder_thread(
     id: u64,
     install_map: &HashMap<u64, PathBuf>,
@@ -105,6 +113,7 @@ pub fn placeholder_thread(
 
 /// Merge targets with the existing cache, creating placeholder cards when needed.
 /// Tries to load from disk cache first, falls back to placeholder if not available.
+#[allow(dead_code)]
 pub fn fill_threads_from_targets(
     targets: &[u64],
     existing_map: &HashMap<u64, crate::parser::F95Thread>,
@@ -131,6 +140,7 @@ pub fn fill_threads_from_targets(
 }
 
 /// Build F95Msg from a set of threads as a single-page result.
+#[allow(dead_code)]
 pub fn make_msg_from_threads(data: Vec<crate::parser::F95Thread>) -> crate::parser::F95Msg {
     let count = data.len() as u64;
     crate::parser::F95Msg {
@@ -293,8 +303,7 @@ pub fn save_to_cache(cache_dir: &Path, thread_id: u64, thread: &F95Thread) -> st
     };
 
     // Serialize to JSON
-    let json = serde_json::to_string_pretty(&cached)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    let json = serde_json::to_string_pretty(&cached).map_err(std::io::Error::other)?;
 
     // Write to file
     let path = cache_meta_path(cache_dir, thread_id);

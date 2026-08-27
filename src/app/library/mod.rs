@@ -12,6 +12,3 @@ pub use fs::{FileSystem, RealFileSystem};
 pub use image_codec::{ImageCodec, ImageCodecError, RealImageCodec};
 pub use image_data::ImageData;
 pub use metadata_codec::{CachedThreadMeta, MetadataCodec, MetadataCodecError, RealMetadataCodec};
-pub use provider::{
-    CachingProvider, CardImageProvider, NetworkProvider, ProductionCachingProvider,
-};

@@ -71,6 +71,7 @@ fn lang_lock() -> &'static RwLock<SupportedLang> {
 }
 
 #[derive(Debug, Error)]
+#[allow(dead_code)]
 pub enum LocalizationError {
     #[error("Unsupported language: {0}")]
     UnsupportedLanguage(String),

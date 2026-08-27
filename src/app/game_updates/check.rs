@@ -59,12 +59,11 @@ pub async fn check_all_updates() -> Vec<GameUpdateInfo> {
     let mut results = Vec::new();
 
     for thread_id in thread_ids {
-        if set.len() >= 3 {
-            if let Some(res) = set.join_next().await {
-                if let Ok(Some(update_info)) = res {
-                    results.push(update_info);
-                }
-            }
+        if set.len() >= 3
+            && let Some(res) = set.join_next().await
+            && let Ok(Some(update_info)) = res
+        {
+            results.push(update_info);
         }
 
         let delay = Duration::from_millis(500);

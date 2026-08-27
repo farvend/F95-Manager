@@ -15,15 +15,15 @@ pub type ProductionCachingProvider<P> =
 #[derive(Debug, Error)]
 pub enum CacheError {
     #[error("Failed to create cache directory: {0}")]
-    CreateDirFailed(#[source] std::io::Error),
+    CreateDir(#[source] std::io::Error),
     #[error("Failed to encode image: {0}")]
-    EncodeFailed(#[source] ImageCodecError),
+    Encode(#[source] ImageCodecError),
     #[error("Failed to write to cache: {0}")]
-    WriteFailed(#[source] std::io::Error),
+    Write(#[source] std::io::Error),
     #[error("Failed to encode metadata: {0}")]
-    MetadataEncodeFailed(#[source] MetadataCodecError),
+    MetadataEncode(#[source] MetadataCodecError),
     #[error("Failed to write metadata to cache: {0}")]
-    MetadataWriteFailed(#[source] std::io::Error),
+    MetadataWrite(#[source] std::io::Error),
 }
 
 #[async_trait]
@@ -188,17 +188,17 @@ impl<P: CardImageProvider, FS: FileSystem, IC: ImageCodec, MC: MetadataCodec>
             self.fs
                 .create_dir_all(parent)
                 .await
-                .map_err(CacheError::CreateDirFailed)?;
+                .map_err(CacheError::CreateDir)?;
         }
 
         let bytes = self
             .metadata_codec
             .encode(meta)
-            .map_err(CacheError::MetadataEncodeFailed)?;
+            .map_err(CacheError::MetadataEncode)?;
         self.fs
             .write(&path, &bytes)
             .await
-            .map_err(CacheError::MetadataWriteFailed)?;
+            .map_err(CacheError::MetadataWrite)?;
 
         log::debug!("Saved metadata cache for thread {}", thread_id);
         Ok(())
@@ -237,14 +237,14 @@ impl<P: CardImageProvider, FS: FileSystem, IC: ImageCodec, MC: MetadataCodec>
             self.fs
                 .create_dir_all(parent)
                 .await
-                .map_err(CacheError::CreateDirFailed)?;
+                .map_err(CacheError::CreateDir)?;
         }
 
-        let bytes = self.codec.encode(data).map_err(CacheError::EncodeFailed)?;
+        let bytes = self.codec.encode(data).map_err(CacheError::Encode)?;
         self.fs
             .write(path, &bytes)
             .await
-            .map_err(CacheError::WriteFailed)?;
+            .map_err(CacheError::Write)?;
         Ok(())
     }
 }
@@ -410,7 +410,7 @@ mod tests {
         use super::*;
         use crate::app::library::fs::tests::MockFileSystem;
         use crate::app::library::image_codec::tests::MockImageCodec;
-        use crate::app::library::metadata_codec::RealMetadataCodec;
+
         use crate::app::library::metadata_codec::tests::MockMetadataCodec;
         use std::path::PathBuf;
 
@@ -888,7 +888,7 @@ mod tests {
             println!("Reading cover file...");
             let bytes = fs.read(&cover_path).await.expect("Should read cover file");
             println!("Read {} bytes", bytes.len());
-            assert!(bytes.len() > 0, "Cover file should not be empty");
+            assert!(!bytes.is_empty(), "Cover file should not be empty");
 
             // Test 4: Try to decode the image
             println!("Decoding image...");
