@@ -37,6 +37,7 @@ export component MainWindow inherits Window {
     in property <[SuggestionData]> selected-prefixes;
     in property <[SuggestionData]> selected-exclude-prefixes;
     in-out property <bool> library-mode: false;
+    in-out property <bool> session-mode: false;
     in-out property <bool> loading: true;
     in-out property <string> status-text: Translations.loading;
     in-out property <string> search-text;
@@ -91,6 +92,7 @@ export component MainWindow inherits Window {
     callback previous-page();
     callback next-page();
     callback toggle-library();
+    callback select-view(int);
     callback toggle-bookmark(string);
     callback layout-width-changed(float);
     callback image-needed(string);
@@ -191,6 +193,7 @@ export component MainWindow inherits Window {
             selected-prefixes: root.selected-prefixes;
             selected-exclude-prefixes: root.selected-exclude-prefixes;
             library-mode <=> root.library-mode;
+            session-mode <=> root.session-mode;
             search-text <=> root.search-text;
             sort-index <=> root.sort-index;
             date-index <=> root.date-index;
@@ -205,6 +208,7 @@ export component MainWindow inherits Window {
             classic-library: root.classic-library;
             refresh-catalog(query) => { root.refresh-catalog(query); }
             toggle-library => { root.toggle-library(); }
+            select-view(view) => { root.select-view(view); }
             toggle-bookmark(id) => { root.toggle-bookmark(id); }
             open-settings => { root.open-settings(); }
             open-about => { root.open-about(); }

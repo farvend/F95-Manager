@@ -27,6 +27,7 @@ pub(super) fn apply_translations(translations: &AppTranslations, version: &str) 
     translations.set_loading(tr("loading"));
     translations.set_catalog_empty(tr("catalog-empty"));
     translations.set_library_empty(tr("library-empty"));
+    translations.set_session_empty(tr("session-empty"));
     translations.set_filters_title(tr("filters-title"));
     translations.set_filters_sorting(tr("filters-sorting"));
     translations.set_filters_date(tr("filters-date-limit"));
@@ -54,6 +55,7 @@ pub(super) fn apply_translations(translations: &AppTranslations, version: &str) 
     translations.set_filters_unplayed(tr("filters-unplayed"));
     translations.set_view_catalog(tr("view-mode-catalog"));
     translations.set_view_downloaded(tr("view-mode-downloaded"));
+    translations.set_view_session(tr("view-mode-session"));
     translations.set_search_title(tr("search-mode-title"));
     translations.set_search_creator(tr("search-mode-creator"));
     translations.set_common_settings(tr("common-settings"));

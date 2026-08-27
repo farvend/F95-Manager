@@ -10,7 +10,7 @@ use crate::app::settings::store::{
 };
 
 #[cfg(target_os = "windows")]
-fn run_executable(path: &Path) {
+fn run_executable(path: &Path) -> bool {
     use std::os::windows::process::CommandExt;
     const DETACHED_PROCESS: u32 = 0x00000008;
     const CREATE_NEW_CONSOLE: u32 = 0x00000010;
@@ -67,16 +67,16 @@ fn run_executable(path: &Path) {
                 match child.spawn() {
                     Ok(_) => {
                         log::info!("Launched game (custom): {}", abs_exe.to_string_lossy());
-                        return;
+                        return true;
                     }
                     Err(e) => {
                         log::error!("Custom launch failed: {}", e);
-                        return;
+                        return false;
                     }
                 }
             } else {
                 log::error!("Custom launch: empty command after parsing");
-                return;
+                return false;
             }
         }
     }
@@ -91,7 +91,7 @@ fn run_executable(path: &Path) {
         match direct.spawn() {
             Ok(_) => {
                 log::info!("Launched game (direct): {}", abs_exe.to_string_lossy());
-                return;
+                return true;
             }
             Err(e) => {
                 log::warn!(
@@ -118,7 +118,7 @@ fn run_executable(path: &Path) {
         match pwsh.spawn() {
             Ok(_) => {
                 log::info!("Launched game (powershell): {}", abs_exe.to_string_lossy());
-                return;
+                return true;
             }
             Err(e) => {
                 log::warn!(
@@ -134,6 +134,7 @@ fn run_executable(path: &Path) {
     if let Some(d) = &dir {
         reveal_in_file_manager(d);
     }
+    false
 }
 
 #[cfg(target_os = "windows")]
@@ -235,10 +236,10 @@ fn depth_from(root: &Path, path: &Path) -> Option<usize> {
 }
 
 /// Public: run a downloaded game by thread_id (Windows: try best .exe; others: open folder)
-pub fn run_downloaded_game(thread_id: u64) {
+pub fn run_downloaded_game(thread_id: u64) -> bool {
     let folder = match downloaded_game_folder(thread_id) {
         Some(f) => f,
-        None => return,
+        None => return false,
     };
 
     #[cfg(target_os = "windows")]
@@ -257,7 +258,7 @@ pub fn run_downloaded_game(thread_id: u64) {
             (None, None) => {
                 // Nothing found: open folder for manual start
                 reveal_in_file_manager(&folder);
-                return;
+                return false;
             }
         };
 
@@ -269,27 +270,34 @@ pub fn run_downloaded_game(thread_id: u64) {
             }
         }
 
-        {
-            let mut st = APP_SETTINGS.write().unwrap();
-            if let Some(game) = st
-                .downloaded_games
-                .iter_mut()
-                .find(|g| g.thread_id == thread_id)
-            {
-                if !game.has_been_launched {
+        let launched = run_executable(&chosen);
+        if launched {
+            let changed = {
+                let mut st = APP_SETTINGS.write().unwrap();
+                if let Some(game) = st
+                    .downloaded_games
+                    .iter_mut()
+                    .find(|game| game.thread_id == thread_id)
+                    && !game.has_been_launched
+                {
                     game.has_been_launched = true;
+                    true
+                } else {
+                    false
                 }
+            };
+            if changed {
+                save_settings_to_disk();
             }
         }
-        save_settings_to_disk();
 
-        run_executable(&chosen);
-        return;
+        return launched;
     }
 
     #[cfg(not(target_os = "windows"))]
     {
         // Non-Windows fallback
         reveal_in_file_manager(&folder);
+        false
     }
 }

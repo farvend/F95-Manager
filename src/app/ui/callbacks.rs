@@ -94,18 +94,13 @@ pub(super) fn wire_callbacks(
     let weak = ui.as_weak();
     let callback_state = state.clone();
     ui.on_refresh_catalog(move |query| {
-        let library = callback_state
-            .lock()
-            .map(|mut state| {
-                state.query = query.to_string();
-                state.library_mode
-            })
-            .unwrap_or(false);
-        if library {
-            load_library(callback_state.clone(), weak.clone());
-        } else {
-            load_catalog(1, query.to_string(), callback_state.clone(), weak.clone());
+        if let Ok(mut state) = callback_state.lock() {
+            state.query = query.to_string();
+            if !state.library_mode {
+                state.page = 1;
+            }
         }
+        reload_current_view(callback_state.clone(), weak.clone());
     });
 
     let weak = ui.as_weak();
@@ -157,6 +152,20 @@ pub(super) fn wire_callbacks(
         if switch_to_library {
             load_library(callback_state.clone(), weak.clone());
         } else {
+            let (page, query) = callback_state
+                .lock()
+                .map(|state| (state.page, state.query.clone()))
+                .unwrap_or((1, String::new()));
+            load_catalog(page, query, callback_state.clone(), weak.clone());
+        }
+    });
+
+    let weak = ui.as_weak();
+    let callback_state = state.clone();
+    ui.on_select_view(move |view| match view {
+        1 => load_library(callback_state.clone(), weak.clone()),
+        2 => load_session(callback_state.clone(), weak.clone()),
+        _ => {
             let (page, query) = callback_state
                 .lock()
                 .map(|state| (state.page, state.query.clone()))
@@ -237,19 +246,46 @@ pub(super) fn wire_callbacks(
                     .any(|card| card.id == id && card.installed)
             });
             if installed {
-                crate::app::settings::run_downloaded_game(id);
-                let (library_mode, unplayed_only) = callback_state
-                    .lock()
-                    .map(|state| (state.library_mode, state.unplayed_only))
-                    .unwrap_or((false, false));
-                // Launching only changes the "unplayed" state. Replacing the
-                // complete card model here resets Slint's scroll position, so
-                // only refilter when the active filter can remove this card.
-                if library_mode && unplayed_only {
-                    load_library(callback_state.clone(), weak.clone());
-                } else if let Some(ui) = weak.upgrade() {
-                    rebuild_cards(&ui, &callback_state);
-                }
+                // Do not replace the card model while its button is still
+                // dispatching this click. Apart from directory scanning being
+                // blocking work, destroying the clicked repeated component
+                // re-entrantly can leave Slint's pointer grab attached to the
+                // old component. The window continues to render in that state,
+                // but later clicks and hover callbacks no longer arrive.
+                let state = callback_state.clone();
+                let weak = weak.clone();
+                crate::app::rt().spawn(async move {
+                    let launched = tokio::task::spawn_blocking(move || {
+                        crate::app::settings::run_downloaded_game(id)
+                    })
+                    .await
+                    .unwrap_or(false);
+
+                    let state_for_ui = state.clone();
+                    let weak_for_reload = weak.clone();
+                    let _ = weak.upgrade_in_event_loop(move |ui| {
+                        if launched
+                            && let Ok(mut state) = state_for_ui.lock()
+                            && !state.launched_games.contains(&id)
+                        {
+                            state.launched_games.push(id);
+                        }
+                        let (library_mode, session_mode, unplayed_only) = state_for_ui
+                            .lock()
+                            .map(|state| {
+                                (state.library_mode, state.session_mode, state.unplayed_only)
+                            })
+                            .unwrap_or((false, false, false));
+
+                        if session_mode && launched {
+                            load_session(state_for_ui.clone(), weak_for_reload.clone());
+                        } else if library_mode && unplayed_only && launched {
+                            load_library(state_for_ui.clone(), weak_for_reload.clone());
+                        } else if launched {
+                            update_card_after_launch(&ui, &state_for_ui, id);
+                        }
+                    });
+                });
             } else {
                 let should_start = callback_state.lock().ok().is_some_and(|state| {
                     state
@@ -334,10 +370,10 @@ pub(super) fn wire_callbacks(
             return;
         }
         crate::app::settings::remove_pending_download(id);
-        if let Ok(mut state) = callback_state.lock() {
-            if state.library_mode {
-                state.cards.retain(|card| card.id != id);
-            }
+        if let Ok(mut state) = callback_state.lock()
+            && state.library_mode
+        {
+            state.cards.retain(|card| card.id != id);
         }
         if let Some(ui) = weak.upgrade() {
             rebuild_cards(&ui, &callback_state);
@@ -352,16 +388,16 @@ pub(super) fn wire_callbacks(
 
     let callback_state = state.clone();
     ui.on_open_folder(move |id| {
-        if let Ok(id) = id.parse::<u64>() {
-            if let Some(folder) = callback_state.lock().ok().and_then(|state| {
+        if let Ok(id) = id.parse::<u64>()
+            && let Some(folder) = callback_state.lock().ok().and_then(|state| {
                 state
                     .cards
                     .iter()
                     .find(|card| card.id == id)
                     .and_then(|card| card.folder.clone())
-            }) {
-                crate::app::settings::reveal_in_file_manager(&folder);
-            }
+            })
+        {
+            crate::app::settings::reveal_in_file_manager(&folder);
         }
     });
 
@@ -380,10 +416,10 @@ pub(super) fn wire_callbacks(
 
     let weak = ui.as_weak();
     ui.on_prepare_game_bookmarks(move |id| {
-        if let Ok(id) = id.parse::<u64>() {
-            if let Some(ui) = weak.upgrade() {
-                ui.set_context_game_bookmarks(game_bookmark_model(id));
-            }
+        if let Ok(id) = id.parse::<u64>()
+            && let Some(ui) = weak.upgrade()
+        {
+            ui.set_context_game_bookmarks(game_bookmark_model(id));
         }
     });
 
@@ -392,17 +428,16 @@ pub(super) fn wire_callbacks(
     ui.on_toggle_game_bookmark(move |id, bookmark_id| {
         let Ok(id) = id.parse::<u64>() else { return };
         let bookmark_id = bookmark_id.to_string();
-        if let Ok(mut settings) = crate::app::settings::APP_SETTINGS.write() {
-            if let Some(game) = settings
+        if let Ok(mut settings) = crate::app::settings::APP_SETTINGS.write()
+            && let Some(game) = settings
                 .downloaded_games
                 .iter_mut()
                 .find(|game| game.thread_id == id)
-            {
-                if game.bookmark_ids.iter().any(|item| item == &bookmark_id) {
-                    game.bookmark_ids.retain(|item| item != &bookmark_id);
-                } else {
-                    game.bookmark_ids.push(bookmark_id);
-                }
+        {
+            if game.bookmark_ids.iter().any(|item| item == &bookmark_id) {
+                game.bookmark_ids.retain(|item| item != &bookmark_id);
+            } else {
+                game.bookmark_ids.push(bookmark_id);
             }
         }
         crate::app::settings::save_settings_to_disk();
@@ -939,15 +974,8 @@ pub(super) fn wire_callbacks(
         if let Some(ui) = weak.upgrade() {
             update_selected_filters(&ui, &callback_state);
         }
-        let library = callback_state
-            .lock()
-            .map(|state| state.library_mode)
-            .unwrap_or(false);
-        if library {
-            load_library(callback_state.clone(), weak.clone());
-        } else {
-            load_catalog(page, query, callback_state.clone(), weak.clone());
-        }
+        let _ = (page, query);
+        reload_current_view(callback_state.clone(), weak.clone());
     });
 
     let weak = ui.as_weak();
@@ -970,15 +998,8 @@ pub(super) fn wire_callbacks(
         if let Some(ui) = weak.upgrade() {
             update_selected_filters(&ui, &callback_state);
         }
-        let library = callback_state
-            .lock()
-            .map(|state| state.library_mode)
-            .unwrap_or(false);
-        if library {
-            load_library(callback_state.clone(), weak.clone());
-        } else {
-            load_catalog(1, query, callback_state.clone(), weak.clone());
-        }
+        let _ = query;
+        reload_current_view(callback_state.clone(), weak.clone());
     });
 
     let weak = ui.as_weak();
@@ -994,15 +1015,8 @@ pub(super) fn wire_callbacks(
         if let Some(ui) = weak.upgrade() {
             ui.set_sort_index(index.clamp(0, 4));
         }
-        let library = callback_state
-            .lock()
-            .map(|state| state.library_mode)
-            .unwrap_or(false);
-        if library {
-            load_library(callback_state.clone(), weak.clone());
-        } else {
-            load_catalog(1, query, callback_state.clone(), weak.clone());
-        }
+        let _ = query;
+        reload_current_view(callback_state.clone(), weak.clone());
     });
 
     let weak = ui.as_weak();
@@ -1018,17 +1032,10 @@ pub(super) fn wire_callbacks(
             .unwrap_or_default();
         if let Some(ui) = weak.upgrade() {
             ui.set_date_index(index);
-            ui.set_date_label(date_limit_label(index).into());
+            ui.set_date_label(date_limit_label(index));
         }
-        let library = callback_state
-            .lock()
-            .map(|state| state.library_mode)
-            .unwrap_or(false);
-        if library {
-            load_library(callback_state.clone(), weak.clone());
-        } else {
-            load_catalog(1, query, callback_state.clone(), weak.clone());
-        }
+        let _ = query;
+        reload_current_view(callback_state.clone(), weak.clone());
     });
 
     let weak = ui.as_weak();
@@ -1049,15 +1056,7 @@ pub(super) fn wire_callbacks(
                 };
             }
         }
-        let (library, query) = callback_state
-            .lock()
-            .map(|state| (state.library_mode, state.query.clone()))
-            .unwrap_or((false, String::new()));
-        if library {
-            load_library(callback_state.clone(), weak.clone());
-        } else {
-            load_catalog(1, query, callback_state.clone(), weak.clone());
-        }
+        reload_current_view(callback_state.clone(), weak.clone());
     });
 
     let weak = ui.as_weak();
@@ -1069,6 +1068,6 @@ pub(super) fn wire_callbacks(
                 ui.set_unplayed_only(state.unplayed_only);
             }
         }
-        load_library(callback_state.clone(), weak.clone());
+        reload_current_view(callback_state.clone(), weak.clone());
     });
 }

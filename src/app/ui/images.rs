@@ -55,40 +55,38 @@ pub(super) fn preload_library_data(state: SharedState, weak: slint::Weak<MainWin
             if thread
                 .as_ref()
                 .is_none_or(crate::app::fetch_helpers::needs_enrich)
+                && let Ok(meta) = crate::parser::game_info::thread_meta::fetch_thread_meta(id).await
             {
-                if let Ok(meta) = crate::parser::game_info::thread_meta::fetch_thread_meta(id).await
-                {
-                    let mut value = thread.unwrap_or_else(|| F95Thread {
-                        thread_id: crate::parser::game_info::ThreadId(id),
-                        title: format!("Thread #{id}"),
-                        creator: String::new(),
-                        version: String::new(),
-                        cover: String::new(),
-                        screens: Vec::new(),
-                        tags: Vec::new(),
-                        prefixes: Vec::new(),
-                        date: String::new(),
-                        views: 0,
-                        likes: 0,
-                        rating: 0.0,
-                        watched: false,
-                        ignored: false,
-                        is_new: false,
-                        ts: 0,
-                    });
-                    crate::app::fetch_helpers::apply_meta(&mut value, meta);
-                    let cache_dir_for_write = cache_dir.clone();
-                    let value_for_write = value.clone();
-                    let _ = tokio::task::spawn_blocking(move || {
-                        crate::app::fetch_helpers::save_to_cache(
-                            &cache_dir_for_write,
-                            id,
-                            &value_for_write,
-                        )
-                    })
-                    .await;
-                    thread = Some(value);
-                }
+                let mut value = thread.unwrap_or_else(|| F95Thread {
+                    thread_id: crate::parser::game_info::ThreadId(id),
+                    title: format!("Thread #{id}"),
+                    creator: String::new(),
+                    version: String::new(),
+                    cover: String::new(),
+                    screens: Vec::new(),
+                    tags: Vec::new(),
+                    prefixes: Vec::new(),
+                    date: String::new(),
+                    views: 0,
+                    likes: 0,
+                    rating: 0.0,
+                    watched: false,
+                    ignored: false,
+                    is_new: false,
+                    ts: 0,
+                });
+                crate::app::fetch_helpers::apply_meta(&mut value, meta);
+                let cache_dir_for_write = cache_dir.clone();
+                let value_for_write = value.clone();
+                let _ = tokio::task::spawn_blocking(move || {
+                    crate::app::fetch_helpers::save_to_cache(
+                        &cache_dir_for_write,
+                        id,
+                        &value_for_write,
+                    )
+                })
+                .await;
+                thread = Some(value);
             }
             let cover_path = cache_dir.join(id.to_string()).join("cover.png");
             let decoded = if load_image {
@@ -130,24 +128,23 @@ pub(super) fn preload_library_data(state: SharedState, weak: slint::Weak<MainWin
             let weak_for_refresh = weak_for_task.clone();
             let _ = weak_for_task.upgrade_in_event_loop(move |ui| {
                 let mut schedule_refresh = false;
-                if let Some(thread) = thread {
-                    if let Ok(mut state) = state_for_ui.lock() {
-                        if state.library_mode {
-                            if let Some(card) = state.cards.iter_mut().find(|card| card.id == id) {
-                                let folder = card.folder.clone();
-                                let installed = card.installed;
-                                *card = card_from_thread(
-                                    thread,
-                                    installed,
-                                    folder,
-                                    cover_path.is_file().then_some(cover_path.clone()),
-                                );
-                            }
-                            if !state.library_refresh_scheduled {
-                                state.library_refresh_scheduled = true;
-                                schedule_refresh = true;
-                            }
-                        }
+                if let Some(thread) = thread
+                    && let Ok(mut state) = state_for_ui.lock()
+                    && state.library_mode
+                {
+                    if let Some(card) = state.cards.iter_mut().find(|card| card.id == id) {
+                        let folder = card.folder.clone();
+                        let installed = card.installed;
+                        *card = card_from_thread(
+                            thread,
+                            installed,
+                            folder,
+                            cover_path.is_file().then_some(cover_path.clone()),
+                        );
+                    }
+                    if !state.library_refresh_scheduled {
+                        state.library_refresh_scheduled = true;
+                        schedule_refresh = true;
                     }
                 }
                 if load_image {
@@ -165,7 +162,7 @@ pub(super) fn preload_library_data(state: SharedState, weak: slint::Weak<MainWin
                             })
                             .unwrap_or(false);
                         if should_refresh {
-                            load_library(state, weak);
+                            reload_current_view(state, weak);
                         }
                     });
                 }

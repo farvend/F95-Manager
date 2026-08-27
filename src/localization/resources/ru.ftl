@@ -74,6 +74,7 @@ sorting-rating = Рейтинг
 view-mode-header = РЕЖИМ
 view-mode-catalog = Каталог
 view-mode-downloaded = Скаченные
+view-mode-session = Текущая сессия
 
 date-limit-anytime = ЛЮБОЕ ВРЕМЯ
 date-limit-today = СЕГОДНЯ
@@ -171,6 +172,9 @@ catalog-empty = Каталог пуст
 catalog-loading = Загрузка каталога…
 catalog-load-error = Не удалось загрузить каталог: { $err }
 library-empty = Библиотека пуста
+session-empty = В текущей сессии игры ещё не запускались
+session-loading = Загрузка текущей сессии…
+session-game-count = Запущено в этой сессии: { $count }
 library-loading = Загрузка библиотеки…
 library-installed-count = Установлено игр: { $count }
 common-refresh = Обновить

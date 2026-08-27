@@ -74,6 +74,7 @@ sorting-rating = Rating
 view-mode-header = MODE
 view-mode-catalog = Catalog
 view-mode-downloaded = Downloaded
+view-mode-session = Current session
 
 date-limit-anytime = ANYTIME
 date-limit-today = TODAY
@@ -171,6 +172,9 @@ catalog-empty = Catalog is empty
 catalog-loading = Loading catalog…
 catalog-load-error = Failed to load catalog: { $err }
 library-empty = Library is empty
+session-empty = No games have been launched in this session
+session-loading = Loading current session…
+session-game-count = Launched this session: { $count }
 library-loading = Loading library…
 library-installed-count = Installed games: { $count }
 common-refresh = Refresh

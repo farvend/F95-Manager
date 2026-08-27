@@ -48,7 +48,7 @@ pub fn run() -> Result<(), slint::PlatformError> {
     let renderer = std::env::var("F95_RENDERER").unwrap_or_else(|_| "femtovg".to_string());
     if let Err(error) = slint::BackendSelector::new()
         .backend_name("winit".into())
-        .renderer_name(renderer.clone().into())
+        .renderer_name(renderer.clone())
         .select()
     {
         if renderer == "software" {
@@ -114,6 +114,7 @@ pub fn run() -> Result<(), slint::PlatformError> {
     ui.set_ui_scale_percent(settings.ui_scale_percent.into());
     ui.set_card_scale_percent(settings.card_scale_percent.into());
     ui.set_library_mode(start_in_library);
+    ui.set_session_mode(false);
     ui.set_classic_library(settings.classic_library_toggle);
     ui.global::<AppTheme>()
         .set_scale(settings.ui_scale_percent as f32 / 100.0);

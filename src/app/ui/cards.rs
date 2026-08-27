@@ -73,7 +73,12 @@ pub(super) fn rebuild_cards(ui: &MainWindow, state: &SharedState) {
             ui.set_catalog_scroll_y(scroll_y);
         }
     });
-    ui.set_page_label(if state.library_mode {
+    ui.set_page_label(if state.session_mode {
+        tr_with(
+            "session-game-count",
+            &[("count", state.cards.len().to_string())],
+        )
+    } else if state.library_mode {
         tr_with(
             "library-installed-count",
             &[("count", state.cards.len().to_string())],
@@ -197,6 +202,25 @@ pub(super) fn update_card_image(ui: &MainWindow, state: &SharedState, id: u64) {
         card.screen_count = record.screens.len() as i32;
         card.screens_ready = available_screen_count(&state, record) > 0;
     }
+    row.cards.set_row_data(index % columns, card);
+}
+
+/// Update the only visual field changed by a successful launch without
+/// replacing the repeated card model from inside its own click dispatch.
+pub(super) fn update_card_after_launch(ui: &MainWindow, state: &SharedState, id: u64) {
+    let Ok(state) = state.lock() else { return };
+    let columns = state.columns.max(1);
+    let Some(index) = state.cards.iter().position(|card| card.id == id) else {
+        return;
+    };
+    let rows = ui.get_game_rows();
+    let Some(row) = rows.row_data(index / columns) else {
+        return;
+    };
+    let Some(mut card) = row.cards.row_data(index % columns) else {
+        return;
+    };
+    card.unplayed = false;
     row.cards.set_row_data(index % columns, card);
 }
 

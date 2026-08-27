@@ -10,10 +10,12 @@ pub(super) fn load_catalog(
         let Ok(mut state) = state.lock() else { return };
         state.request_generation = state.request_generation.wrapping_add(1);
         state.library_mode = false;
+        state.session_mode = false;
         state.request_generation
     };
     let _ = weak.upgrade_in_event_loop(|ui| {
         ui.set_library_mode(false);
+        ui.set_session_mode(false);
         ui.set_loading(true);
         ui.set_status_text(tr("catalog-loading"));
     });
@@ -141,10 +143,12 @@ pub(super) fn load_library(state: SharedState, weak: slint::Weak<MainWindow>) {
         let Ok(mut state) = state.lock() else { return };
         state.request_generation = state.request_generation.wrapping_add(1);
         state.library_mode = true;
+        state.session_mode = false;
         state.request_generation
     };
     let _ = weak.upgrade_in_event_loop(|ui| {
         ui.set_library_mode(true);
+        ui.set_session_mode(false);
         ui.set_loading(true);
         ui.set_status_text(tr("library-loading"));
     });
@@ -211,6 +215,96 @@ pub(super) fn load_library(state: SharedState, weak: slint::Weak<MainWindow>) {
     });
 }
 
+pub(super) fn load_session(state: SharedState, weak: slint::Weak<MainWindow>) {
+    let (generation, launched_games) = {
+        let Ok(mut state) = state.lock() else { return };
+        state.request_generation = state.request_generation.wrapping_add(1);
+        state.library_mode = true;
+        state.session_mode = true;
+        (state.request_generation, state.launched_games.clone())
+    };
+    let _ = weak.upgrade_in_event_loop(|ui| {
+        ui.set_library_mode(true);
+        ui.set_session_mode(true);
+        ui.set_loading(true);
+        ui.set_status_text(tr("session-loading"));
+    });
+    let filter = state
+        .lock()
+        .map(|state| LibraryFilter::from(&*state))
+        .unwrap_or_default();
+    crate::app::rt().spawn(async move {
+        let launched_for_fast = launched_games.clone();
+        let fast_filter = filter.clone();
+        let cards = tokio::task::spawn_blocking(move || {
+            let mut cards = session_cards_fast(&launched_for_fast);
+            filter_library_cards(&mut cards, &fast_filter);
+            cards
+        })
+        .await
+        .unwrap_or_default();
+        if let Ok(mut state) = state.lock() {
+            if !state.session_mode
+                || state.request_generation != generation
+                || state.launched_games != launched_games
+            {
+                return;
+            }
+            state.cards = cards;
+        }
+        let state_for_ui = state.clone();
+        request_all_covers(state.clone(), weak.clone());
+        let _ = weak.upgrade_in_event_loop(move |ui| {
+            ui.set_loading(false);
+            ui.set_status_text(tr("session-empty"));
+            prune_cover_cache(&state_for_ui);
+            rebuild_cards(&ui, &state_for_ui);
+        });
+
+        let launched_for_enrich = launched_games.clone();
+        let enriched = tokio::task::spawn_blocking(move || {
+            let mut cards = session_cards(&launched_for_enrich);
+            filter_library_cards(&mut cards, &filter);
+            cards
+        })
+        .await
+        .unwrap_or_default();
+        if let Ok(mut state) = state.lock() {
+            if !state.session_mode
+                || state.request_generation != generation
+                || state.launched_games != launched_games
+            {
+                return;
+            }
+            state.cards = enriched;
+        }
+        request_all_covers(state.clone(), weak.clone());
+        let state_for_ui = state.clone();
+        let _ = weak.upgrade_in_event_loop(move |ui| rebuild_cards(&ui, &state_for_ui));
+    });
+}
+
+pub(super) fn reload_current_view(state: SharedState, weak: slint::Weak<MainWindow>) {
+    let (library_mode, session_mode, page, query) = state
+        .lock()
+        .map(|state| {
+            (
+                state.library_mode,
+                state.session_mode,
+                state.page,
+                state.query.clone(),
+            )
+        })
+        .unwrap_or((false, false, 1, String::new()));
+    if session_mode {
+        load_session(state, weak);
+    } else if library_mode {
+        load_library(state, weak);
+    } else {
+        load_catalog(page, query, state, weak);
+    }
+}
+
 #[derive(Clone)]
 struct LibraryFilter {
     query: String,
@@ -246,9 +340,9 @@ impl From<&UiState> for LibraryFilter {
     fn from(state: &UiState) -> Self {
         Self {
             query: state.query.trim().to_lowercase(),
-            search_mode: state.search_mode.clone(),
+            search_mode: state.search_mode,
             include_tags: state.include_tags.clone(),
-            include_logic: state.include_logic.clone(),
+            include_logic: state.include_logic,
             exclude_tags: state.exclude_tags.clone(),
             prefixes: state.prefixes.clone(),
             exclude_prefixes: state.exclude_prefixes.clone(),
@@ -317,12 +411,10 @@ fn filter_library_cards(cards: &mut Vec<CardRecord>, filter: &LibraryFilter) {
             && date_matches
     });
     match filter.sorting {
-        Sorting::Date => cards.sort_by(|left, right| right.ts.cmp(&left.ts)),
-        Sorting::Likes => cards.sort_by(|left, right| right.likes.cmp(&left.likes)),
-        Sorting::Views => cards.sort_by(|left, right| right.views.cmp(&left.views)),
-        Sorting::Title => {
-            cards.sort_by(|left, right| left.title.to_lowercase().cmp(&right.title.to_lowercase()))
-        }
+        Sorting::Date => cards.sort_by_key(|card| std::cmp::Reverse(card.ts)),
+        Sorting::Likes => cards.sort_by_key(|card| std::cmp::Reverse(card.likes)),
+        Sorting::Views => cards.sort_by_key(|card| std::cmp::Reverse(card.views)),
+        Sorting::Title => cards.sort_by_key(|left| left.title.to_lowercase()),
         Sorting::Rating => cards.sort_by(|left, right| right.rating.total_cmp(&left.rating)),
     }
 }
@@ -336,11 +428,11 @@ pub(super) fn library_cards_fast(selected: &HashSet<String>) -> Vec<CardRecord> 
     let mut cards = settings
         .downloaded_games
         .iter()
-        .cloned()
-        .filter(|game| {
+        .filter(|&game| {
             selected.is_empty() || game.bookmark_ids.iter().any(|id| selected.contains(id))
         })
-        .filter(|game| seen.insert(game.thread_id))
+        .filter(|&game| seen.insert(game.thread_id))
+        .cloned()
         .map(|game| {
             let cached_cover = settings
                 .cache_dir
@@ -385,12 +477,12 @@ pub(super) fn library_cards(selected: &HashSet<String>) -> Vec<CardRecord> {
     let mut cards = settings
         .downloaded_games
         .iter()
-        .cloned()
-        .filter(|game| {
+        .filter(|&game| {
             selected.is_empty() || game.bookmark_ids.iter().any(|id| selected.contains(id))
         })
-        .filter(|game| seen.insert(game.thread_id))
-        .filter(|game| crate::app::settings::game_folder_exists(&game.folder))
+        .filter(|&game| seen.insert(game.thread_id))
+        .filter(|&game| crate::app::settings::game_folder_exists(&game.folder))
+        .cloned()
         .map(|game| {
             let cached_cover = settings
                 .cache_dir
@@ -435,6 +527,22 @@ pub(super) fn library_cards(selected: &HashSet<String>) -> Vec<CardRecord> {
         .collect();
     append_pending_cards(&mut cards, &settings, &mut seen);
     cards
+}
+
+fn session_cards_fast(launched_games: &[u64]) -> Vec<CardRecord> {
+    let launched: HashSet<u64> = launched_games.iter().copied().collect();
+    library_cards_fast(&HashSet::new())
+        .into_iter()
+        .filter(|card| launched.contains(&card.id) && card.installed)
+        .collect()
+}
+
+fn session_cards(launched_games: &[u64]) -> Vec<CardRecord> {
+    let launched: HashSet<u64> = launched_games.iter().copied().collect();
+    library_cards(&HashSet::new())
+        .into_iter()
+        .filter(|card| launched.contains(&card.id) && card.installed)
+        .collect()
 }
 
 fn append_pending_cards(
