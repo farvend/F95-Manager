@@ -1,4 +1,4 @@
+mod parser;
+#[cfg(test)]
 mod tests;
-pub use tests::*;
-mod page;
-pub use page::*;
+pub use parser::*;

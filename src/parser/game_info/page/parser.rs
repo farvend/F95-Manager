@@ -96,8 +96,7 @@ impl F95Page {
         let selector = scraper::Selector::parse(r#"[style="text-align: center"]"#).unwrap();
         let span_html = &html
             .select(&selector)
-            .filter(|e| RE_DOWNLOAD_LABEL.is_match(&e.html()))
-            .next()
+            .find(|e| RE_DOWNLOAD_LABEL.is_match(&e.html()))
             .ok_or(GetLinksError::NoDownloadsBlock)?
             .html();
         let span_html = RE_DOWNLOAD_LABEL
