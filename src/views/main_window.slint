@@ -282,8 +282,8 @@ export component MainWindow inherits Window {
     }
 
     if root.authenticated && root.error-count > 0: Rectangle {
-        x: parent.width - self.width - 12px * Theme.scale;
-        y: parent.height - self.height - 12px * Theme.scale;
+        x: root.catalog-x-value + root.catalog-width-value - self.width - 12px * Theme.scale;
+        y: root.catalog-y-value + root.catalog-height-value - self.height - 12px * Theme.scale;
         width: error-text.preferred-width + 18px * Theme.scale;
         height: 32px * Theme.scale;
         background: #a03c3c;
