@@ -229,10 +229,11 @@ pub(super) fn load_session(state: SharedState, weak: slint::Weak<MainWindow>) {
         ui.set_loading(true);
         ui.set_status_text(tr("session-loading"));
     });
-    let filter = state
+    let mut filter = state
         .lock()
         .map(|state| LibraryFilter::from(&*state))
         .unwrap_or_default();
+    filter.unplayed_only = false;
     crate::app::rt().spawn(async move {
         let launched_for_fast = launched_games.clone();
         let fast_filter = filter.clone();

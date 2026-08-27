@@ -141,7 +141,7 @@ export component FiltersPanel inherits Rectangle {
                         clicked => { root.toggle-bookmark(bookmark.id); }
                     }
                     Rectangle { height: 8px; }
-                    if root.library-mode: FlatButton { text: Translations.filters-unplayed; active: root.unplayed-only; clicked => { root.toggle-unplayed(); } }
+                    if root.library-mode && !root.session-mode: FlatButton { text: Translations.filters-unplayed; active: root.unplayed-only; clicked => { root.toggle-unplayed(); } }
                     if root.classic-library: FlatButton { text: Translations.filters-downloaded; active: root.library-mode && !root.session-mode; clicked => { root.select-view(root.library-mode && !root.session-mode ? 0 : 1); } }
                     if !root.classic-library: HorizontalLayout {
                         height: 31px * Theme.scale; spacing: 3px;

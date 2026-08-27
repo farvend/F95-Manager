@@ -252,6 +252,17 @@ pub(super) fn wire_callbacks(
                 // re-entrantly can leave Slint's pointer grab attached to the
                 // old component. The window continues to render in that state,
                 // but later clicks and hover callbacks no longer arrive.
+                let newly_tracked = callback_state
+                    .lock()
+                    .map(|mut state| {
+                        if state.launched_games.contains(&id) {
+                            false
+                        } else {
+                            state.launched_games.push(id);
+                            true
+                        }
+                    })
+                    .unwrap_or(false);
                 let state = callback_state.clone();
                 let weak = weak.clone();
                 crate::app::rt().spawn(async move {
@@ -261,15 +272,18 @@ pub(super) fn wire_callbacks(
                     .await
                     .unwrap_or(false);
 
+                    if !launched
+                        && newly_tracked
+                        && let Ok(mut state) = state.lock()
+                    {
+                        state
+                            .launched_games
+                            .retain(|launched_id| *launched_id != id);
+                    }
+
                     let state_for_ui = state.clone();
                     let weak_for_reload = weak.clone();
                     let _ = weak.upgrade_in_event_loop(move |ui| {
-                        if launched
-                            && let Ok(mut state) = state_for_ui.lock()
-                            && !state.launched_games.contains(&id)
-                        {
-                            state.launched_games.push(id);
-                        }
                         let (library_mode, session_mode, unplayed_only) = state_for_ui
                             .lock()
                             .map(|state| {
