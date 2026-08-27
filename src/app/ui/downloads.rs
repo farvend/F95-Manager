@@ -1,4 +1,5 @@
 use super::*;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 fn download_visual(progress: Option<&Progress>) -> (DownloadVisualState, f32, String) {
     match progress {
@@ -13,6 +14,31 @@ fn download_visual(progress: Option<&Progress>) -> (DownloadVisualState, f32, St
         None => (DownloadVisualState::Idle, 0.0, String::new()),
     }
 }
+fn queue_download_ui_update(
+    id: u64,
+    state: &SharedState,
+    weak: &slint::Weak<MainWindow>,
+    refresh_pending: &Arc<AtomicBool>,
+) {
+    if refresh_pending.swap(true, Ordering::AcqRel) {
+        return;
+    }
+
+    let state_for_ui = state.clone();
+    let pending_for_ui = refresh_pending.clone();
+    if weak
+        .upgrade_in_event_loop(move |ui| {
+            // Clear before reading the latest state. A status arriving during
+            // this refresh can then enqueue one more update instead of being lost.
+            pending_for_ui.store(false, Ordering::Release);
+            update_card_download(&ui, &state_for_ui, id);
+            show_download_links(&ui, &state_for_ui, id);
+        })
+        .is_err()
+    {
+        refresh_pending.store(false, Ordering::Release);
+    }
+}
 
 pub(super) fn watch_download(
     id: u64,
@@ -20,6 +46,7 @@ pub(super) fn watch_download(
     state: SharedState,
     weak: slint::Weak<MainWindow>,
 ) {
+    let refresh_pending = Arc::new(AtomicBool::new(false));
     crate::app::rt().spawn_blocking(move || {
         while let Ok(status) = receiver.recv() {
             let mut completed = None;
@@ -82,11 +109,7 @@ pub(super) fn watch_download(
             if let Some((folder, exe_path)) = completed {
                 crate::app::settings::record_downloaded_game(id, folder, exe_path);
             }
-            let state_for_ui = state.clone();
-            let _ = weak.upgrade_in_event_loop(move |ui| {
-                update_card_download(&ui, &state_for_ui, id);
-                show_download_links(&ui, &state_for_ui, id);
-            });
+            queue_download_ui_update(id, &state, &weak, &refresh_pending);
             if was_completed {
                 break;
             }
