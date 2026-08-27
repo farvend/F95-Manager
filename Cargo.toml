@@ -66,8 +66,4 @@ opt-level = 3
 opt-level = 3
 strip = true
 lto = true
-unrar = "0.5.8"
 panic = "abort"
-
-[build]
-rustflags = ["-C", "link-arg=/STACK:8000000"]
