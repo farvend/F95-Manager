@@ -157,7 +157,7 @@ export component FiltersPanel inherits Rectangle {
                         FlatButton { horizontal-stretch: 1; text: Translations.view-catalog; active: !root.library-mode; clicked => { root.select-view(0); } }
                         FlatButton { horizontal-stretch: 1; text: Translations.view-downloaded; active: root.library-mode && !root.session-mode; clicked => { root.select-view(1); } }
                     }
-                    FlatButton { text: Translations.view-session; active: root.session-mode; clicked => { root.select-view(2); } }
+                    FlatButton { text: Translations.view-session; active: root.session-mode; clicked => { root.select-view(root.session-mode ? 0 : 2); } }
                     FlatButton { text: Translations.common-settings; clicked => { root.open-settings(); } }
                     FlatButton { text: Translations.common-about; clicked => { root.open-about(); } }
                     FlatButton { text: Translations.common-logs; clicked => { root.open-logs(); } }
