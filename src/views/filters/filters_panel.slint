@@ -27,6 +27,7 @@ export component FiltersPanel inherits Rectangle {
     in-out property <bool> unplayed-only: false;
     in property <bool> classic-library: false;
     private property <bool> search-dirty: false;
+    private property <bool> filters-enabled: !root.session-mode;
     callback refresh-catalog(string);
     callback toggle-library();
     callback select-view(int);
@@ -57,36 +58,40 @@ export component FiltersPanel inherits Rectangle {
                     spacing: 6px * Theme.scale;
                     Text { height: 27px * Theme.scale; text: Translations.filters-title; color: #dddddd; font-size: 20px * Theme.scale; }
                     Rectangle { height: 1px; background: #414141; }
-                    SectionTitle { left: Translations.filters-sorting; right: Translations.filters-date; }
+                    SectionTitle { enabled: root.filters-enabled; left: Translations.filters-sorting; right: Translations.filters-date; }
                     HorizontalLayout {
                         height: 38px * Theme.scale;
                         spacing: 3px;
-                        FlatButton { horizontal-stretch: 1; text: "🕓"; text-font: "Segoe UI Emoji"; active: root.sort-index == 0; clicked => { root.sort-chosen(0); } }
-                        FlatButton { horizontal-stretch: 1; text: "👍"; text-font: "Segoe UI Emoji"; active: root.sort-index == 1; clicked => { root.sort-chosen(1); } }
-                        FlatButton { horizontal-stretch: 1; text: "👀"; text-font: "Segoe UI Emoji"; active: root.sort-index == 2; clicked => { root.sort-chosen(2); } }
-                        FlatButton { horizontal-stretch: 1; text: "🔤"; text-font: "Segoe UI Emoji"; active: root.sort-index == 3; clicked => { root.sort-chosen(3); } }
-                        FlatButton { horizontal-stretch: 1; text: "⭐"; text-font: "Segoe UI Emoji"; active: root.sort-index == 4; clicked => { root.sort-chosen(4); } }
+                        FlatButton { enabled: root.filters-enabled; horizontal-stretch: 1; text: "🕓"; text-font: "Segoe UI Emoji"; active: root.sort-index == 0; clicked => { root.sort-chosen(0); } }
+                        FlatButton { enabled: root.filters-enabled; horizontal-stretch: 1; text: "👍"; text-font: "Segoe UI Emoji"; active: root.sort-index == 1; clicked => { root.sort-chosen(1); } }
+                        FlatButton { enabled: root.filters-enabled; horizontal-stretch: 1; text: "👀"; text-font: "Segoe UI Emoji"; active: root.sort-index == 2; clicked => { root.sort-chosen(2); } }
+                        FlatButton { enabled: root.filters-enabled; horizontal-stretch: 1; text: "🔤"; text-font: "Segoe UI Emoji"; active: root.sort-index == 3; clicked => { root.sort-chosen(3); } }
+                        FlatButton { enabled: root.filters-enabled; horizontal-stretch: 1; text: "⭐"; text-font: "Segoe UI Emoji"; active: root.sort-index == 4; clicked => { root.sort-chosen(4); } }
                     }
-                    SectionTitle { left: Translations.filters-date; right: root.date-label; }
-                    DateStepSlider { value <=> root.date-index; changed(value) => { root.date-chosen(value); } }
+                    SectionTitle { enabled: root.filters-enabled; left: Translations.filters-date; right: root.date-label; }
+                    DateStepSlider { enabled: root.filters-enabled; value <=> root.date-index; changed(value) => { root.date-chosen(value); } }
                     TouchArea {
+                        enabled: root.filters-enabled;
                         height: 18px * Theme.scale;
-                        clicked => { root.search-mode = root.search-mode == 0 ? 1 : 0; root.mode-chosen(1, root.search-mode); }
-                        SectionTitle { left: Translations.filters-search; right: root.search-mode == 0 ? Translations.search-title : Translations.search-creator; }
+                        clicked => { if (root.filters-enabled) { root.search-mode = root.search-mode == 0 ? 1 : 0; root.mode-chosen(1, root.search-mode); } }
+                        SectionTitle { enabled: root.filters-enabled; left: Translations.filters-search; right: root.search-mode == 0 ? Translations.search-title : Translations.search-creator; }
                     }
                     LineEdit {
                         height: 31px * Theme.scale;
+                        enabled: root.filters-enabled;
                         text <=> root.search-text;
                         placeholder-text: Translations.filters-search-placeholder;
                         changed text => { root.search-dirty = true; }
                         accepted => { root.search-dirty = false; root.refresh-catalog(root.search-text); }
                     }
                     TouchArea {
+                        enabled: root.filters-enabled;
                         height: 18px * Theme.scale;
-                        clicked => { root.include-logic = root.include-logic == 0 ? 1 : 0; root.mode-chosen(0, root.include-logic); }
-                        SectionTitle { left: Translations.filters-tags; right: root.include-logic == 0 ? Translations.logic-or + " / " + Translations.logic-and : Translations.logic-and + " / " + Translations.logic-or; }
+                        clicked => { if (root.filters-enabled) { root.include-logic = root.include-logic == 0 ? 1 : 0; root.mode-chosen(0, root.include-logic); } }
+                        SectionTitle { enabled: root.filters-enabled; left: Translations.filters-tags; right: root.include-logic == 0 ? Translations.logic-or + " / " + Translations.logic-and : Translations.logic-and + " / " + Translations.logic-or; }
                     }
                     SuggestInput {
+                        enabled: root.filters-enabled;
                         text <=> root.include-tag-text;
                         placeholder: Translations.filters-tag-placeholder;
                         suggestions: root.include-tag-suggestions; kind: 0;
@@ -96,9 +101,10 @@ export component FiltersPanel inherits Rectangle {
                             root.suggestion-overlay-changed(kind, x, y, width, values, index, visible);
                         }
                     }
-                    SelectedFilters { values: root.selected-include-tags; kind: 0; remove(id, kind) => { root.remove-filter(id, kind); } }
-                    SectionTitle { left: Translations.filters-exclude-tags; right: ""; }
+                    SelectedFilters { enabled: root.filters-enabled; values: root.selected-include-tags; kind: 0; remove(id, kind) => { root.remove-filter(id, kind); } }
+                    SectionTitle { enabled: root.filters-enabled; left: Translations.filters-exclude-tags; right: ""; }
                     SuggestInput {
+                        enabled: root.filters-enabled;
                         text <=> root.exclude-tag-text;
                         placeholder: Translations.filters-exclude-tag-placeholder;
                         suggestions: root.exclude-tag-suggestions; kind: 1;
@@ -108,9 +114,10 @@ export component FiltersPanel inherits Rectangle {
                             root.suggestion-overlay-changed(kind, x, y, width, values, index, visible);
                         }
                     }
-                    SelectedFilters { values: root.selected-exclude-tags; kind: 1; remove(id, kind) => { root.remove-filter(id, kind); } }
-                    SectionTitle { left: Translations.filters-prefixes; right: ""; }
+                    SelectedFilters { enabled: root.filters-enabled; values: root.selected-exclude-tags; kind: 1; remove(id, kind) => { root.remove-filter(id, kind); } }
+                    SectionTitle { enabled: root.filters-enabled; left: Translations.filters-prefixes; right: ""; }
                     SuggestInput {
+                        enabled: root.filters-enabled;
                         text <=> root.prefix-text;
                         placeholder: Translations.filters-prefix-placeholder;
                         suggestions: root.prefix-suggestions; kind: 2;
@@ -120,9 +127,10 @@ export component FiltersPanel inherits Rectangle {
                             root.suggestion-overlay-changed(kind, x, y, width, values, index, visible);
                         }
                     }
-                    SelectedFilters { values: root.selected-prefixes; kind: 2; remove(id, kind) => { root.remove-filter(id, kind); } }
-                    SectionTitle { left: Translations.settings-exclude-prefixes; right: ""; }
+                    SelectedFilters { enabled: root.filters-enabled; values: root.selected-prefixes; kind: 2; remove(id, kind) => { root.remove-filter(id, kind); } }
+                    SectionTitle { enabled: root.filters-enabled; left: Translations.settings-exclude-prefixes; right: ""; }
                     SuggestInput {
+                        enabled: root.filters-enabled;
                         text <=> root.exclude-prefix-text;
                         placeholder: Translations.settings-startup-exclude-prefix-placeholder;
                         suggestions: root.exclude-prefix-suggestions; kind: 3;
@@ -132,10 +140,11 @@ export component FiltersPanel inherits Rectangle {
                             root.suggestion-overlay-changed(kind, x, y, width, values, index, visible);
                         }
                     }
-                    SelectedFilters { values: root.selected-exclude-prefixes; kind: 3; remove(id, kind) => { root.remove-filter(id, kind); } }
+                    SelectedFilters { enabled: root.filters-enabled; values: root.selected-exclude-prefixes; kind: 3; remove(id, kind) => { root.remove-filter(id, kind); } }
                     Rectangle { height: 1px; background: #383838; }
-                    Text { height: 18px * Theme.scale; text: Translations.filters-bookmarks; color: #777777; font-size: 13px * Theme.scale; }
+                    Text { height: 18px * Theme.scale; text: Translations.filters-bookmarks; color: root.filters-enabled ? #777777 : #555555; font-size: 13px * Theme.scale; }
                     for bookmark in root.bookmarks: FlatButton {
+                        enabled: root.filters-enabled;
                         text: bookmark.label;
                         active: bookmark.active;
                         clicked => { root.toggle-bookmark(bookmark.id); }
@@ -158,7 +167,7 @@ export component FiltersPanel inherits Rectangle {
 
 Timer {
     interval: 350ms;
-    running: root.search-dirty;
+    running: root.filters-enabled && root.search-dirty;
     triggered => { root.search-dirty = false; root.refresh-catalog(root.search-text); }
 }
     }

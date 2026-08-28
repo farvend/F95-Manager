@@ -79,24 +79,26 @@ export component FlatButton inherits Rectangle {
     in property <string> text-font: "Segoe UI";
     in property <bool> active: false;
     in property <bool> danger: false;
+    in property <bool> enabled: true;
     callback clicked;
     height: 31px * Theme.scale;
     border-radius: 5px * Theme.scale;
     border-width: 1px;
-    border-color: active ? #824247 : #444444;
-    background: touch.pressed ? #3a3031 : touch.has-hover ? #303030 : active ? #392627 : #292929;
+    border-color: !root.enabled ? #383838 : root.active ? #824247 : #444444;
+    background: !root.enabled ? #242424 : touch.pressed ? #3a3031 : touch.has-hover ? #303030 : root.active ? #392627 : #292929;
     Text {
         text: root.text;
         font-family: root.text-font;
-        color: root.danger ? #e68b90 : root.active ? #e96b72 : #bdbdbd;
+        color: !root.enabled ? #666666 : root.danger ? #e68b90 : root.active ? #e96b72 : #bdbdbd;
         font-size: 13px * Theme.scale;
         horizontal-alignment: center;
         vertical-alignment: center;
         overflow: elide;
     }
     touch := TouchArea {
-        mouse-cursor: pointer;
-        clicked => { root.clicked(); }
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => { if (root.enabled) { root.clicked(); } }
     }
 }
 
