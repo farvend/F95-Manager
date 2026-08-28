@@ -229,21 +229,11 @@ pub(super) fn load_session(state: SharedState, weak: slint::Weak<MainWindow>) {
         ui.set_loading(true);
         ui.set_status_text(tr("session-loading"));
     });
-    let mut filter = state
-        .lock()
-        .map(|state| LibraryFilter::from(&*state))
-        .unwrap_or_default();
-    filter.unplayed_only = false;
     crate::app::rt().spawn(async move {
         let launched_for_fast = launched_games.clone();
-        let fast_filter = filter.clone();
-        let cards = tokio::task::spawn_blocking(move || {
-            let mut cards = session_cards_fast(&launched_for_fast);
-            filter_library_cards(&mut cards, &fast_filter);
-            cards
-        })
-        .await
-        .unwrap_or_default();
+        let cards = tokio::task::spawn_blocking(move || session_cards_fast(&launched_for_fast))
+            .await
+            .unwrap_or_default();
         if let Ok(mut state) = state.lock() {
             if !state.session_mode
                 || state.request_generation != generation
@@ -263,13 +253,9 @@ pub(super) fn load_session(state: SharedState, weak: slint::Weak<MainWindow>) {
         });
 
         let launched_for_enrich = launched_games.clone();
-        let enriched = tokio::task::spawn_blocking(move || {
-            let mut cards = session_cards(&launched_for_enrich);
-            filter_library_cards(&mut cards, &filter);
-            cards
-        })
-        .await
-        .unwrap_or_default();
+        let enriched = tokio::task::spawn_blocking(move || session_cards(&launched_for_enrich))
+            .await
+            .unwrap_or_default();
         if let Ok(mut state) = state.lock() {
             if !state.session_mode
                 || state.request_generation != generation

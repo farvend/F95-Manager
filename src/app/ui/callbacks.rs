@@ -254,14 +254,7 @@ pub(super) fn wire_callbacks(
                 // but later clicks and hover callbacks no longer arrive.
                 let newly_tracked = callback_state
                     .lock()
-                    .map(|mut state| {
-                        if state.launched_games.contains(&id) {
-                            false
-                        } else {
-                            state.launched_games.push(id);
-                            true
-                        }
-                    })
+                    .map(|mut state| state.track_launch(id))
                     .unwrap_or(false);
                 let state = callback_state.clone();
                 let weak = weak.clone();
@@ -276,9 +269,7 @@ pub(super) fn wire_callbacks(
                         && newly_tracked
                         && let Ok(mut state) = state.lock()
                     {
-                        state
-                            .launched_games
-                            .retain(|launched_id| *launched_id != id);
+                        state.rollback_launch(id);
                     }
 
                     let state_for_ui = state.clone();

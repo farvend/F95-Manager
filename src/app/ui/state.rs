@@ -61,6 +61,21 @@ pub(super) struct DownloadJob {
     pub(super) link_choices: Vec<DownloadLink>,
 }
 
+impl UiState {
+    pub(super) fn track_launch(&mut self, id: u64) -> bool {
+        if self.launched_games.contains(&id) {
+            false
+        } else {
+            self.launched_games.push(id);
+            true
+        }
+    }
+
+    pub(super) fn rollback_launch(&mut self, id: u64) {
+        self.launched_games.retain(|launched_id| *launched_id != id);
+    }
+}
+
 impl Default for UiState {
     fn default() -> Self {
         Self {
@@ -124,5 +139,32 @@ impl SettingsFilterState {
                 settings.warn_prefixes.clone(),
             ],
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::UiState;
+
+    #[test]
+    fn session_accumulates_unique_launched_games() {
+        let mut state = UiState::default();
+
+        assert!(state.track_launch(101));
+        assert!(state.track_launch(202));
+        assert!(!state.track_launch(101));
+
+        assert_eq!(state.launched_games, vec![101, 202]);
+    }
+
+    #[test]
+    fn failed_launch_removes_only_its_game() {
+        let mut state = UiState::default();
+        state.track_launch(101);
+        state.track_launch(202);
+
+        state.rollback_launch(202);
+
+        assert_eq!(state.launched_games, vec![101]);
     }
 }
