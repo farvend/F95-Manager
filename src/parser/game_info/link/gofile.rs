@@ -94,7 +94,7 @@ pub async fn resolve_gofile_file(
 
     // Gofile validates X-Website-Token by recomputing it from the request's
     // User-Agent and X-BL (language), so both headers must match the hash.
-    let user_agent = crate::net::user_agent().map_err(GofileLinkError::Config)?;
+    let user_agent = crate::net::user_agent();
     let website_token = website_token(token, &user_agent, WEBSITE_LANGUAGE, SystemTime::now());
     let url = format!(
         "https://api.gofile.io/contents/{id}?contentFilter=&page=1&pageSize=1000&sortField=name&sortDirection=1"

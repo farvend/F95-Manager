@@ -12,11 +12,16 @@ use reqwest::Url;
 /// leak credentials to download mirrors.
 const F95_HOST: &str = "f95zone.to";
 
+/// User-Agent used until the embedded check window stores its own.
+///
+/// F95 login cookies (`xf_user`, `xf_session`) do not depend on it. Only
+/// Cloudflare's `cf_clearance` is bound to the User-Agent it was issued for,
+/// and the check window saves both together.
+const DEFAULT_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
+
 /// Failure to prepare the shared HTTP client.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NetError {
-    /// `app_config.json` has no `user_agent` value.
-    MissingUserAgent,
     /// reqwest refused to build the client (details are logged).
     ClientBuild,
 }
@@ -24,10 +29,6 @@ pub enum NetError {
 impl fmt::Display for NetError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            NetError::MissingUserAgent => write!(
-                f,
-                "app_config.json: user_agent is not set; it must match the User-Agent of the browser whose cf_clearance cookie is stored in cookies"
-            ),
             NetError::ClientBuild => write!(f, "failed to build HTTP client"),
         }
     }
@@ -123,15 +124,13 @@ lazy_static! {
     static ref CLIENT: RwLock<Option<(String, reqwest::Client)>> = RwLock::new(None);
 }
 
-/// User-Agent for f95zone and hosting APIs.
-///
-/// There is deliberately no default: Cloudflare binds `cf_clearance` to the
-/// exact User-Agent string, so a missing value in the config is an error, not
-/// something to guess.
-pub fn user_agent() -> Result<String, NetError> {
+/// User-Agent for f95zone and hosting APIs: the one stored by the check
+/// window together with its `cf_clearance`, or the built-in one before any
+/// check has been passed.
+pub fn user_agent() -> String {
     match crate::app::config::configured_user_agent() {
-        Some(user_agent) => Ok(user_agent),
-        None => Err(NetError::MissingUserAgent),
+        Some(user_agent) => user_agent,
+        None => DEFAULT_USER_AGENT.to_string(),
     }
 }
 
@@ -148,7 +147,7 @@ fn build_client(user_agent: &str) -> Result<reqwest::Client, NetError> {
 
 /// Shared HTTP client for the currently configured User-Agent.
 pub fn client() -> Result<reqwest::Client, NetError> {
-    let user_agent = user_agent()?;
+    let user_agent = user_agent();
     if let Some(client) = CLIENT
         .read()
         .expect("client lock poisoned")

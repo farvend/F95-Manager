@@ -38,11 +38,11 @@ fn config_file_path() -> PathBuf {
 
 impl AppConfig {}
 
-/// User-Agent override from the config file, if one is set.
+/// User-Agent stored by the check window together with its `cf_clearance`.
 ///
-/// `None` is an error for the caller: there is no built-in User-Agent, because
-/// Cloudflare validates `cf_clearance` against it. An empty or whitespace-only
-/// value is treated as absent rather than as a valid header.
+/// `None` means no check has been passed yet and the built-in User-Agent
+/// applies. An empty or whitespace-only value is treated as absent rather
+/// than as a valid header.
 pub fn configured_user_agent() -> Option<String> {
     let cfg = APP_CONFIG.read().expect("APP_CONFIG lock poisoned");
     let raw = cfg.user_agent.as_ref()?;
@@ -257,7 +257,7 @@ pub async fn login_and_store(login: String, password: String) -> Result<(), Stri
     let base_url = Url::parse(BASE_URL).map_err(|e| format!("invalid base URL: {e}"))?;
     let jar = Arc::new(Jar::default());
     let client = reqwest::Client::builder()
-        .user_agent(crate::net::user_agent().map_err(|e| e.to_string())?)
+        .user_agent(crate::net::user_agent())
         .cookie_provider(jar.clone())
         .build()
         .map_err(|e| format!("failed to build login client: {e}"))?;

@@ -63,8 +63,8 @@ impl fmt::Display for GetPageError {
             GetPageError::Request(error) => write!(f, "Request error: {error}"),
             GetPageError::CloudflareChallenge => write!(
                 f,
-                "Cloudflare blocked the request: the cf_clearance cookie expired or does not \
-                 match this User-Agent/IP. Copy fresh cookies and User-Agent from the browser"
+                "Cloudflare blocked the request: the cf_clearance cookie is missing, expired \
+                 or was issued for another User-Agent/IP"
             ),
             GetPageError::LoggedOut => write!(
                 f,
