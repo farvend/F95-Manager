@@ -80,34 +80,7 @@ pub(super) fn update_settings_filter_models(
 }
 
 pub(super) fn refresh_logs(window: &LogsWindow) {
-    let text = crate::logger::get_all().join("\n");
-    window.set_contents(text.into());
-    let mut lines = Vec::new();
-    crate::logger::for_each_range(0, crate::logger::len(), |entry| {
-        let (red, green, blue) = match entry.level {
-            log::Level::Error => (220, 80, 80),
-            log::Level::Warn => (235, 200, 80),
-            log::Level::Info => (200, 200, 200),
-            log::Level::Debug => (120, 180, 255),
-            log::Level::Trace => (160, 160, 160),
-        };
-        let location = match (&entry.file, entry.line) {
-            (Some(file), Some(line)) => format!(" @ {file}:{line}"),
-            (Some(file), None) => format!(" @ {file}"),
-            _ => String::new(),
-        };
-        lines.push(LogLineData {
-            text: format!(
-                "[{:>5}] {}{}: {}",
-                entry.level, entry.target, location, entry.msg
-            )
-            .into(),
-            red,
-            green,
-            blue,
-        });
-    });
-    window.set_lines(ModelRc::from(Rc::new(VecModel::from(lines))));
+    window.set_contents(crate::logger::get_all().join("\n").into());
 }
 
 pub(super) fn matching_suggestions(query: &str, kind: i32) -> ModelRc<SuggestionData> {

@@ -203,20 +203,7 @@ fn display_level(level: LevelFilter) -> &'static str {
     }
 }
 
-pub fn for_each_range<F: FnMut(&LogEntry)>(start: usize, end: usize, mut f: F) {
-    if let Ok(buf) = LOGS.lock() {
-        let len = buf.len();
-        let s = start.min(len);
-        let e = end.min(len);
-        for idx in s..e {
-            if let Some(entry) = buf.get(idx) {
-                f(entry);
-            }
-        }
-    }
-}
-
-// Back-compat helper: returns preformatted strings (not used by new UI, but kept for convenience)
+/// Formatted lines of the in-memory log, oldest first.
 pub fn get_all() -> Vec<String> {
     if let Ok(buf) = LOGS.lock() {
         buf.iter().map(format_line).collect()
@@ -232,14 +219,6 @@ fn format_line(e: &LogEntry) -> String {
         _ => String::new(),
     };
     format!("[{:>5}] {}{}: {}", e.level, e.target, location, e.msg)
-}
-
-pub fn len() -> usize {
-    if let Ok(buf) = LOGS.lock() {
-        buf.len()
-    } else {
-        0
-    }
 }
 
 pub fn clear() {

@@ -1,5 +1,5 @@
 import { ScrollView } from "std-widgets.slint";
-import { FlatButton, LogLineData, Translations } from "../shared.slint";
+import { FlatButton, Translations } from "../shared.slint";
 
 export component LogsWindow inherits Window {
     title: Translations.logs-title + " — F95 standalone client";
@@ -8,8 +8,7 @@ export component LogsWindow inherits Window {
     min-width: 520px;
     min-height: 340px;
     background: #1b1b1b;
-    in-out property <string> contents;
-    in property <[LogLineData]> lines;
+    in property <string> contents;
     callback refresh();
     callback clear();
     callback copy();
@@ -28,13 +27,20 @@ export component LogsWindow inherits Window {
             border-width: 1px; border-color: #3d3d3d; background: #121212;
             ScrollView {
                 viewport-width: self.width;
-                VerticalLayout {
-                    x: 10px; y: 9px; width: parent.width - 20px; spacing: 1px;
-                    for line in root.lines: Text {
-                        height: self.preferred-height;
-                        text: line.text; color: rgb(line.red, line.green, line.blue);
-                        font-family: "Consolas"; font-size: 12px; wrap: word-wrap;
-                    }
+                viewport-height: log-text.preferred-height + 18px;
+                // Read-only TextInput: mouse selection, Ctrl+A and Ctrl+C work
+                // across lines, unlike separate Text items.
+                log-text := TextInput {
+                    x: 10px; y: 9px; width: parent.width - 20px;
+                    height: self.preferred-height;
+                    text: root.contents;
+                    read-only: true;
+                    single-line: false;
+                    wrap: word-wrap;
+                    color: #c8c8c8;
+                    selection-background-color: #2f5f9f;
+                    selection-foreground-color: #ffffff;
+                    font-family: "Consolas"; font-size: 12px;
                 }
             }
         }
