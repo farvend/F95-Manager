@@ -1,0 +1,50 @@
+import { FlatButton } from "../shared.slint";
+
+// Small window that hosts an embedded browser (created from Rust) below the
+// header strip. The user solves F95's download check there.
+export component CaptchaWindow inherits Window {
+    in property <string> window-title;
+    in property <string> hint;
+    in property <string> cancel-text;
+    // The embedded browser is placed right under this strip.
+    out property <length> header-height: 52px;
+    callback cancel();
+    callback resized(length, length);
+
+    title: root.window-title;
+    preferred-width: 560px;
+    preferred-height: 760px;
+    min-width: 420px;
+    min-height: 520px;
+    background: #1d1d1d;
+
+    changed width => { root.resized(root.width, root.height); }
+    changed height => { root.resized(root.width, root.height); }
+
+    VerticalLayout {
+        Rectangle {
+            height: root.header-height;
+            HorizontalLayout {
+                padding: 8px;
+                spacing: 8px;
+                Text {
+                    text: root.hint;
+                    color: #dddddd;
+                    font-size: 13px;
+                    wrap: word-wrap;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+                FlatButton {
+                    width: 96px;
+                    text: root.cancel-text;
+                    clicked => { root.cancel(); }
+                }
+            }
+        }
+        Rectangle {
+            vertical-stretch: 1;
+            background: #111111;
+        }
+    }
+}

@@ -218,3 +218,9 @@ settings-color-red = КРАСНЫЙ
 settings-color-green = ЗЕЛЁНЫЙ
 settings-color-blue = СИНИЙ
 
+
+captcha-window-title = Проверка F95
+captcha-hint = Пройдите проверку, чтобы скачать с { $host }. Загрузка продолжится сама.
+captcha-cancel = Отмена
+
+captcha-session-hint = Пройдите проверку Cloudflare на странице. Когда игра откроется, загрузка продолжится сама.

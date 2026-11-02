@@ -150,6 +150,18 @@ impl HostingSubset {
         let hosting: Hosting = (*self).into();
         hosting.base()
     }
+
+    /// Supported hosting named by the text F95 puts on a `/dl/` link
+    /// ("GOFILE", "MEGA", ...). `None` for hostings the app cannot download.
+    pub fn from_label(label: &str) -> Option<HostingSubset> {
+        match label.trim().to_ascii_lowercase().as_str() {
+            "pixeldrain" => Some(HostingSubset::Pixeldrain),
+            "gofile" => Some(HostingSubset::Gofile),
+            "mega" => Some(HostingSubset::Mega),
+            "catbox" => Some(HostingSubset::Catbox),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for HostingSubset {

@@ -15,6 +15,10 @@ pub struct AppConfig {
     pub cookies: Option<String>,
     #[serde(default)]
     pub username: Option<String>,
+    /// User-Agent sent to f95zone. Cloudflare binds `cf_clearance` to it, so it
+    /// must match the browser whose cookies are stored in `cookies`.
+    #[serde(default)]
+    pub user_agent: Option<String>,
 }
 
 impl Persistable for AppConfig {}
@@ -33,6 +37,84 @@ fn config_file_path() -> PathBuf {
 }
 
 impl AppConfig {}
+
+/// User-Agent override from the config file, if one is set.
+///
+/// `None` is an error for the caller: there is no built-in User-Agent, because
+/// Cloudflare validates `cf_clearance` against it. An empty or whitespace-only
+/// value is treated as absent rather than as a valid header.
+pub fn configured_user_agent() -> Option<String> {
+    let cfg = APP_CONFIG.read().expect("APP_CONFIG lock poisoned");
+    let raw = cfg.user_agent.as_ref()?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(trimmed.to_string())
+}
+
+/// `Cookie:` header value for F95zone requests, if the account has cookies.
+///
+/// Read per request so logging in or pasting new cookies takes effect without
+/// restarting the application. `None` means no account cookie is stored.
+pub fn configured_cookies() -> Option<String> {
+    let cfg = APP_CONFIG.read().expect("APP_CONFIG lock poisoned");
+    let raw = cfg.cookies.as_ref()?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(trimmed.to_string())
+}
+
+/// Merge cookies captured in the embedded browser into the stored config.
+///
+/// Only F95 cookies are stored. Stored Cloudflare cookies are dropped first:
+/// the browser's clearance replaces them, and a leftover `cf_chl_*` from an
+/// earlier challenge must not travel with it. Other cookies the browser did
+/// not report are kept, so passing Cloudflare cannot drop a valid `xf_user`.
+pub fn update_cookies_from_browser(cookies: &str, user_agent: &str) {
+    let mut merged: Vec<(String, String)> = configured_cookies()
+        .unwrap_or_default()
+        .split(';')
+        .filter_map(|pair| {
+            let (name, value) = pair.trim().split_once('=')?;
+            let name = name.trim();
+            if crate::app::ui::captcha::is_cloudflare_cookie(name) {
+                return None;
+            }
+            Some((name.to_string(), value.trim().to_string()))
+        })
+        .collect();
+    for pair in cookies.split(';') {
+        let Some((name, value)) = pair.trim().split_once('=') else {
+            continue;
+        };
+        let name = name.trim();
+        if name.is_empty() {
+            continue;
+        }
+        let value = value.trim().to_string();
+        match merged.iter_mut().find(|(stored, _)| stored == name) {
+            Some((_, stored_value)) => *stored_value = value,
+            None => merged.push((name.to_string(), value)),
+        }
+    }
+    let header = merged
+        .into_iter()
+        .map(|(name, value)| format!("{name}={value}"))
+        .collect::<Vec<_>>()
+        .join("; ");
+    {
+        let mut cfg = APP_CONFIG.write().expect("APP_CONFIG lock poisoned");
+        cfg.cookies = Some(header);
+        if !user_agent.trim().is_empty() {
+            cfg.user_agent = Some(user_agent.trim().to_string());
+        }
+    }
+    save_config_to_disk();
+    log::info!("Stored fresh F95 cookies from the embedded browser");
+}
 
 fn extract_xf_token_from_html(html: &str) -> Option<String> {
     let document = scraper::Html::parse_document(html);
@@ -175,9 +257,7 @@ pub async fn login_and_store(login: String, password: String) -> Result<(), Stri
     let base_url = Url::parse(BASE_URL).map_err(|e| format!("invalid base URL: {e}"))?;
     let jar = Arc::new(Jar::default());
     let client = reqwest::Client::builder()
-        .user_agent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
-        )
+        .user_agent(crate::net::user_agent().map_err(|e| e.to_string())?)
         .cookie_provider(jar.clone())
         .build()
         .map_err(|e| format!("failed to build login client: {e}"))?;

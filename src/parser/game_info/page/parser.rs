@@ -7,16 +7,15 @@ use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::parser::game_info::DownloadLink;
-use crate::parser::game_info::cookies;
 use crate::parser::game_info::{Platform, PlatformDownloads};
 
 lazy_static! {
-    static ref RE_DOWNLOADS: Regex =
-        Regex::new(r#"DOWNLOAD[.\w<>/ \n="-:]*</a> *< */? *\w+ */?>"#).unwrap();
-    static ref RE_PLATFORM_LINKS: Regex = Regex::new(r" *<.*href.*").unwrap();
-    static ref RE_LINK: Regex = Regex::new(r#"https://[\w./]*"#).unwrap();
     static ref RE_BR: Regex = Regex::new(r"<br\s*/?>").unwrap();
     static ref RE_DOWNLOAD_LABEL: Regex = Regex::new(r"(?i)download").unwrap();
+    static ref RE_SCRIPT: Regex = Regex::new(r"(?s)<script\b[^>]*>.*?</script>").unwrap();
+    static ref SEL_DOWNLOAD_BLOCK: scraper::Selector =
+        scraper::Selector::parse(r#"[style="text-align: center"]"#).unwrap();
+    static ref SEL_LINK: scraper::Selector = scraper::Selector::parse("a[href]").unwrap();
 }
 
 pub struct F95PageUrl(pub Url);
@@ -26,12 +25,7 @@ const FAILED_HTML_DIR: &str = "html_pages";
 
 #[derive(Debug)]
 pub enum GetLinksError {
-    BuildClient,
-    Request(reqwest::Error),
-    ReadText(reqwest::Error),
     NoDownloadsBlock,
-    PlatformLineFormat,
-    PlatformNameMissing,
     NoPlatformLinks,
     NoSupportedHostings,
     LoginRequired,
@@ -39,12 +33,7 @@ pub enum GetLinksError {
 impl fmt::Display for GetLinksError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            GetLinksError::BuildClient => write!(f, "Failed to build HTTP client"),
-            GetLinksError::Request(e) => write!(f, "Request error: {}", e),
-            GetLinksError::ReadText(e) => write!(f, "Response read error: {}", e),
             GetLinksError::NoDownloadsBlock => write!(f, "Downloads block not found on page"),
-            GetLinksError::PlatformLineFormat => write!(f, "Platform line parse error"),
-            GetLinksError::PlatformNameMissing => write!(f, "Platform name missing"),
             GetLinksError::NoPlatformLinks => write!(f, "No platform links found"),
             GetLinksError::NoSupportedHostings => write!(f, "No supported hostings found"),
             GetLinksError::LoginRequired => {
@@ -54,18 +43,75 @@ impl fmt::Display for GetLinksError {
     }
 }
 
+#[derive(Debug)]
+pub enum GetPageError {
+    Config(crate::net::NetError),
+    Request(reqwest::Error),
+    /// Cloudflare answered with its "Just a moment..." challenge instead of
+    /// the thread: `cf_clearance` is missing, expired, or was issued for a
+    /// different User-Agent or IP address.
+    CloudflareChallenge,
+    /// F95 served the page to a guest: the `xf_user` login cookie is missing
+    /// or expired.
+    LoggedOut,
+}
+
+impl fmt::Display for GetPageError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GetPageError::Config(error) => write!(f, "{error}"),
+            GetPageError::Request(error) => write!(f, "Request error: {error}"),
+            GetPageError::CloudflareChallenge => write!(
+                f,
+                "Cloudflare blocked the request: the cf_clearance cookie expired or does not \
+                 match this User-Agent/IP. Copy fresh cookies and User-Agent from the browser"
+            ),
+            GetPageError::LoggedOut => write!(
+                f,
+                "F95zone session expired: the xf_user cookie is no longer valid. Log in again"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for GetPageError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            GetPageError::Config(error) => Some(error),
+            GetPageError::Request(error) => Some(error),
+            GetPageError::CloudflareChallenge | GetPageError::LoggedOut => None,
+        }
+    }
+}
+
 impl F95PageUrl {
-    pub async fn get_page(&self) -> Result<F95Page, reqwest::Error> {
-        let client = crate::net::client();
-        let text = client
+    pub async fn get_page(&self) -> Result<F95Page, GetPageError> {
+        let client = crate::net::client().map_err(GetPageError::Config)?;
+        let response = client
             .get(self.0.clone())
-            .header("Cookie", cookies())
             .send()
-            .await?
-            .text()
-            .await?;
+            .await
+            .map_err(GetPageError::Request)?;
+        let challenged = response.headers().contains_key("cf-mitigated");
+        let text = response.text().await.map_err(GetPageError::Request)?;
+        check_session(challenged, &text)?;
         Ok(F95Page(text))
     }
+}
+
+/// Tells an expired cookie apart from a page the parser does not understand.
+///
+/// Cloudflare marks its challenge with a `cf-mitigated: challenge` header; the
+/// challenge page itself is titled "Just a moment...". A real F95 page carries
+/// XenForo's `data-logged-in` flag on `<html>`.
+fn check_session(challenged: bool, html: &str) -> Result<(), GetPageError> {
+    if challenged || html.contains("<title>Just a moment...</title>") {
+        return Err(GetPageError::CloudflareChallenge);
+    }
+    if html.contains(r#"data-logged-in="false""#) {
+        return Err(GetPageError::LoggedOut);
+    }
+    Ok(())
 }
 
 impl F95Page {
@@ -93,23 +139,27 @@ impl F95Page {
 
     pub fn get_download_links(&self) -> Result<Vec<PlatformDownloads>, GetLinksError> {
         let html = scraper::Html::parse_document(&self.0);
-        let selector = scraper::Selector::parse(r#"[style="text-align: center"]"#).unwrap();
-        let span_html = &html
-            .select(&selector)
-            .find(|e| RE_DOWNLOAD_LABEL.is_match(&e.html()))
+        // Match the label case-insensitively, but ignore inline scripts:
+        // XenForo's `js-extraPhrases` JSON contains `"lightbox_download":
+        // "Download"` and sits above the real DOWNLOAD block.
+        let block_html = html
+            .select(&SEL_DOWNLOAD_BLOCK)
+            .find(|element| {
+                RE_DOWNLOAD_LABEL.is_match(&RE_SCRIPT.replace_all(&element.html(), ""))
+            })
             .ok_or(GetLinksError::NoDownloadsBlock)?
             .html();
-        let span_html = RE_DOWNLOAD_LABEL
-            .find(span_html)
-            .map(|download_label| &span_html[download_label.end()..])
+        let after_label = RE_DOWNLOAD_LABEL
+            .find(&block_html)
+            .map(|download_label| &block_html[download_label.end()..])
             .ok_or(GetLinksError::NoDownloadsBlock)?;
-        let parts: Vec<&str> = RE_BR.split(span_html).collect();
 
         let mut downloads = Vec::new();
         let mut found_download_urls = false;
 
-        for platform_downloads in parts.iter().skip(1) {
-            let fragment = scraper::Html::parse_fragment(platform_downloads);
+        // One `<br>`-separated line per platform: "Win: GOFILE - MEGA - ...".
+        for line in RE_BR.split(after_label).skip(1) {
+            let fragment = scraper::Html::parse_fragment(line);
             let platform = fragment
                 .root_element()
                 .text()
@@ -117,14 +167,27 @@ impl F95Page {
                 .find(|platform| !platform.is_empty())
                 .unwrap_or(Platform::OTHER);
 
-            let url_captures: Vec<_> = RE_LINK.captures_iter(platform_downloads).collect();
-            found_download_urls |= !url_captures.is_empty();
+            let anchors: Vec<_> = fragment
+                .select(&SEL_LINK)
+                .filter(|anchor| !is_hidden(*anchor))
+                .collect();
+            found_download_urls |= !anchors.is_empty();
 
-            let links: Vec<DownloadLink> = url_captures
+            let links: Vec<DownloadLink> = anchors
                 .into_iter()
-                .filter_map(|link| {
-                    let url = link.get(0).map(|m| m.as_str())?;
-                    DownloadLink::new(Url::from_str(url).ok()?)
+                .filter_map(|anchor| {
+                    // `a[href]` guarantees the attribute; scraper already
+                    // decodes `&amp;`, so the query string survives intact.
+                    let href = anchor.value().attr("href")?;
+                    let url = match Url::from_str(href) {
+                        Ok(url) => url,
+                        Err(error) => {
+                            log::debug!("skipping non-absolute download link {href}: {error}");
+                            return None;
+                        }
+                    };
+                    let label: String = anchor.text().collect();
+                    DownloadLink::new(url, &label)
                 })
                 .collect();
 
@@ -147,6 +210,21 @@ impl F95Page {
 
         Ok(downloads)
     }
+}
+
+/// F95 puts decoy links next to the real ones, hidden with `u-hidden` /
+/// `aria-hidden="true"`. Following them only yields "That link is no longer in
+/// the post", so they are not download links.
+fn is_hidden(anchor: scraper::ElementRef<'_>) -> bool {
+    let hides = |element: scraper::ElementRef<'_>| {
+        element.value().attr("aria-hidden") == Some("true")
+            || element.value().classes().any(|class| class == "u-hidden")
+    };
+    hides(anchor)
+        || anchor
+            .ancestors()
+            .filter_map(scraper::ElementRef::wrap)
+            .any(hides)
 }
 
 fn page_has_hidden_guest_links(html: &str) -> bool {
@@ -174,124 +252,34 @@ fn safe_filename_part(value: &str) -> String {
     }
 }
 
-// impl F95PageUrl {
-//     pub async fn get_download_links(&self) -> Result<Vec<PlatformDownloads>, GetLinksError> {
-//         let client = reqwest::Client::builder()
-//             .build()
-//             .map_err(|_| GetLinksError::BuildClient)?;
+#[cfg(test)]
+mod session_tests {
+    use super::*;
 
-//         let text = client
-//             .get(self.0.clone())
-//             .header("Cookie", cookies())
-//             .send()
-//             .await
-//             .map_err(GetLinksError::Request)?
-//             .text()
-//             .await
-//             .map_err(GetLinksError::ReadText)?;
+    const CHALLENGE: &str = r#"<!DOCTYPE html><html lang="en-US"><head><title>Just a moment...</title></head><body><noscript>Enable JavaScript and cookies to continue</noscript></body></html>"#;
 
-//         let html = scraper::Html::parse_document(&text);
-//         let selector = scraper::Selector::parse(r#"[style="text-align: center"]"#).unwrap();
-//         let span_html = &html
-//             .select(&selector)
-//             .filter(|e| e.html().contains("DOWNLOAD"))
-//             .next()
-//             .ok_or(GetLinksError::NoDownloadsBlock)?
-//             .html();
-//         let span_html = span_html
-//             .split_once("DOWNLOAD")
-//             .unwrap().1;
-//         // let cap = RE_DOWNLOADS
-//         //     .captures(&text)
-//         //     .ok_or(GetLinksError::NoDownloadsBlock)?;
-//         // let span_html = cap
-//         //     .get(0)
-//         //     .map(|m| m.as_str())
-//         //     .ok_or(GetLinksError::NoDownloadsBlock)?;
+    #[test]
+    fn cloudflare_challenge_is_reported_as_cookie_problem() {
+        assert!(matches!(
+            check_session(false, CHALLENGE),
+            Err(GetPageError::CloudflareChallenge)
+        ));
+        // The header alone is enough, whatever the body looks like.
+        assert!(matches!(
+            check_session(true, "<html></html>"),
+            Err(GetPageError::CloudflareChallenge)
+        ));
+    }
 
-//         let mut downloads = Vec::new();
+    #[test]
+    fn guest_page_is_reported_as_expired_login() {
+        let html = r#"<html data-logged-in="false"><head><title>Game | F95zone</title></head></html>"#;
+        assert!(matches!(check_session(false, html), Err(GetPageError::LoggedOut)));
+    }
 
-//         //for platform_links in RE_PLATFORM_LINKS.captures_iter(span_html) {
-//         for platform_downloads in span_html.split("<br>") {
-//             // let platform_downloads = platform_links
-//             //     .get(0)
-//             //     .ok_or(GetLinksError::PlatformLineFormat)?
-//             //     .as_str();
-
-//             let platform = RE_PLATFORM
-//                 .captures(platform_downloads)
-//                 .and_then(|e| e.get(0))
-//                 .ok_or(GetLinksError::PlatformNameMissing)?
-//                 .as_str();
-//             dbg!(&platform);
-//             let platform = Platform::from(&platform[1..platform.len()-1]);
-
-//             let links = RE_LINK
-//                 .captures_iter(platform_downloads)
-//                 .filter_map(|link| {
-//                     let url = link.get(0).map(|m| m.as_str())?;
-//                     DownloadLink::new(Url::from_str(url).ok()?)
-//                 })
-//                 .collect::<Vec<DownloadLink>>();
-
-//             downloads.push(PlatformDownloads::new(platform, links));
-//         }
-
-//         if downloads.is_empty() {
-//             return Err(GetLinksError::NoPlatformLinks);
-//         }
-
-//         Ok(downloads)
-//     }
-
-//     pub async fn get_download_links_flat(&self) -> Result<Vec<DownloadLink>, GetLinksError> {
-//         let client = reqwest::Client::builder()
-//             .build()
-//             .map_err(|_| GetLinksError::BuildClient)?;
-
-//         let text = client
-//             .get(self.0.clone())
-//             .header("Cookie", cookies())
-//             .send()
-//             .await
-//             .map_err(GetLinksError::Request)?
-//             .text()
-//             .await
-//             .map_err(GetLinksError::ReadText)?;
-
-//         let html = scraper::Html::parse_document(&text);
-//         let selector = scraper::Selector::parse(r#"[style="text-align: center"]"#).unwrap();
-//         let span_html = &html
-//             .select(&selector)
-//             .filter(|e| e.html().contains("DOWNLOAD"))
-//             .next()
-//             .ok_or(GetLinksError::NoDownloadsBlock)?
-//             .html();
-//         let span_html = span_html
-//             .split_once("DOWNLOAD")
-//             .unwrap().1;
-
-//         use std::collections::HashSet;
-//         let mut seen = HashSet::new();
-//         let mut links: Vec<DownloadLink> = Vec::new();
-
-//         for cap in RE_LINK.captures_iter(span_html) {
-//             if let Some(m) = cap.get(0) {
-//                 let s = m.as_str();
-//                 if seen.insert(s.to_string()) {
-//                     if let Ok(url) = Url::from_str(s) {
-//                         if let Some(dl) = DownloadLink::new(url) {
-//                             links.push(dl);
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-
-//         if links.is_empty() {
-//             return Err(GetLinksError::NoPlatformLinks);
-//         }
-
-//         Ok(links)
-//     }
-// }
+    #[test]
+    fn logged_in_page_passes_to_the_parser() {
+        let html = r#"<html data-logged-in="true"><head><title>Game | F95zone</title></head></html>"#;
+        assert!(check_session(false, html).is_ok());
+    }
+}

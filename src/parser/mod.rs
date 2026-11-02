@@ -16,7 +16,7 @@ use serde::{Deserialize, Deserializer};
 use std::fmt;
 
 use crate::{
-    parser::game_info::{ThreadId, cookies},
+    parser::game_info::ThreadId,
     types::{DateLimit, Sorting},
 };
 
@@ -117,7 +117,7 @@ pub async fn fetch_image_f95_with_ref(
     url: &str,
     referer: &str,
 ) -> Result<(usize, usize, Vec<u8>), String> {
-    let client = crate::net::client();
+    let client = crate::net::client().map_err(|error| error.to_string())?;
     log::debug!("fetch_image: GET {} referer={}", url, referer);
 
     let resp = match client
@@ -250,6 +250,7 @@ pub async fn fetch_image_f95(url: &str) -> Result<(usize, usize, Vec<u8>), Strin
 pub enum F95Error {
     Reqwest(reqwest::Error),
     Api(String),
+    Config(crate::net::NetError),
 }
 
 impl fmt::Display for F95Error {
@@ -257,6 +258,7 @@ impl fmt::Display for F95Error {
         match self {
             F95Error::Reqwest(e) => write!(f, "Request/Decode error: {}", e),
             F95Error::Api(msg) => write!(f, "API error: {}", msg),
+            F95Error::Config(error) => write!(f, "{error}"),
         }
     }
 }
@@ -266,6 +268,7 @@ impl std::error::Error for F95Error {
         match self {
             F95Error::Reqwest(e) => Some(e),
             F95Error::Api(_) => None,
+            F95Error::Config(error) => Some(error),
         }
     }
 }
@@ -273,6 +276,12 @@ impl std::error::Error for F95Error {
 impl From<reqwest::Error> for F95Error {
     fn from(e: reqwest::Error) -> Self {
         F95Error::Reqwest(e)
+    }
+}
+
+impl From<crate::net::NetError> for F95Error {
+    fn from(error: crate::net::NetError) -> Self {
+        F95Error::Config(error)
     }
 }
 
@@ -350,7 +359,7 @@ struct Root {
 /// Note: uses async reqwest client. Ensure Cargo.toml enables reqwest features:
 /// reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 pub async fn fetch_list_page(page: u32, filters: &F95Filters) -> Result<F95Msg, F95Error> {
-    let client = crate::net::client();
+    let client = crate::net::client()?;
 
     let tags = if filters.include_tags.is_empty() {
         None
@@ -419,7 +428,6 @@ pub async fn fetch_list_page(page: u32, filters: &F95Filters) -> Result<F95Msg, 
     // wait 1 second before retrying once to avoid immediate hammering.
     let mut raw_resp = client
         .get(BASE_URL)
-        .header("Cookie", cookies())
         .query(&params)
         .send()
         .await?;
@@ -430,7 +438,6 @@ pub async fn fetch_list_page(page: u32, filters: &F95Filters) -> Result<F95Msg, 
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         raw_resp = client
             .get(BASE_URL)
-            .header("Cookie", cookies())
             .query(&params)
             .send()
             .await?;

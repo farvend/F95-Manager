@@ -127,7 +127,7 @@ fn link_label(link: &DownloadLink) -> String {
                 format!("{}/{}", link.hosting, path)
             }
         }
-        DownloadLink::Masked(url) => format!("{}{}", url.domain().unwrap_or_default(), url.path()),
+        DownloadLink::Masked(_) | DownloadLink::F95Page(_) => link.host_label(),
     }
 }
 

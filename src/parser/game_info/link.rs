@@ -9,11 +9,11 @@ use crate::{
 };
 
 use self::info::DirectRequest;
-use super::cookies;
 
 mod archive;
 pub mod direct;
 mod download;
+pub mod f95dl;
 pub mod gofile;
 pub mod info;
 
@@ -103,9 +103,34 @@ pub use self::direct::DirectDownloadLink;
 pub enum DownloadLink {
     Direct(DirectDownloadLink),
     Masked(Url),
+    /// F95 download page (`/dl/<post>/?...`) that resolves to a hosting URL.
+    F95Page(F95PageLink),
 }
+
+/// `/dl/` link together with the hosting name F95 shows on it.
+///
+/// The URL alone says nothing about the hosting (it always points to
+/// f95zone.to), so the anchor text ("GOFILE", "MEGA", ...) is kept to tell the
+/// user which mirror failed, and to skip mirrors the app cannot download
+/// before asking the user to pass F95's check for them.
+#[derive(Debug, Clone)]
+pub struct F95PageLink {
+    pub url: Url,
+    pub host: String,
+    pub hosting: Option<HostingSubset>,
+}
+
 impl DownloadLink {
-    pub fn new(value: Url) -> Option<DownloadLink> {
+    /// `label` is the anchor text from the post; it names the hosting for
+    /// `/dl/` links, whose URL does not.
+    pub fn new(value: Url, label: &str) -> Option<DownloadLink> {
+        if value.host_str() == Some("f95zone.to") && is_download_page(&value) {
+            return Some(Self::F95Page(F95PageLink {
+                url: value,
+                host: label.trim().to_string(),
+                hosting: HostingSubset::from_label(label),
+            }));
+        }
         if let Some(mut segs) = value.path_segments() {
             if segs.next() == Some("masked") {
                 // Validate masked target hosting is supported (e.g. skip workupload, mediafire, etc. if not in subset)
@@ -127,6 +152,27 @@ impl DownloadLink {
             }
         }
         Some(Self::Direct(DirectDownloadLink::new(value)?))
+    }
+
+    /// Hosting the link downloads from, for messages and the link picker.
+    pub fn host_label(&self) -> String {
+        match self {
+            DownloadLink::Direct(link) => link.hosting.to_string(),
+            DownloadLink::Masked(url) => match url.path_segments().and_then(|mut s| s.nth(1)) {
+                Some(host) => host.to_string(),
+                None => url.as_str().to_string(),
+            },
+            DownloadLink::F95Page(link) if link.host.is_empty() => link.url.path().to_string(),
+            DownloadLink::F95Page(link) => link.host.clone(),
+        }
+    }
+}
+
+/// `/dl/<post>/` pages serve the hosting link behind F95's own check.
+fn is_download_page(value: &Url) -> bool {
+    match value.path_segments().and_then(|mut segments| segments.next()) {
+        Some("dl") => true,
+        Some(_) | None => false,
     }
 }
 
@@ -160,6 +206,7 @@ pub enum DirectLinkError {
 
 #[derive(Debug)]
 pub enum DownloadError {
+    Config(crate::net::NetError),
     Network(reqwest::Error),
     NoRedirect,
     DirectLinkFailed(DirectLinkError),
@@ -178,6 +225,67 @@ pub enum DownloadError {
     MegaNoFileNode,
     MegaDownload,
     FilenameParse,
+    F95Page(self::f95dl::F95DlError),
+}
+
+impl std::fmt::Display for DownloadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DownloadError::Config(error) => write!(f, "{error}"),
+            DownloadError::Network(error) | DownloadError::Request(error) => {
+                write!(f, "request error: {error}")
+            }
+            DownloadError::NoRedirect => write!(f, "hosting did not return a redirect"),
+            DownloadError::DirectLinkFailed(DirectLinkError::Gofile(error)) => write!(f, "{error}"),
+            DownloadError::DirectLinkFailed(error) => {
+                write!(f, "failed to resolve the direct link: {error:?}")
+            }
+            DownloadError::UnsupportedHosting => write!(f, "download host is not supported"),
+            DownloadError::Captcha => write!(f, "hosting requires a captcha"),
+            DownloadError::ClientBuild(error) => write!(f, "HTTP client build failed: {error}"),
+            DownloadError::MissingHeader(name) => {
+                write!(f, "download response is missing the {name} header")
+            }
+            DownloadError::Io(error) => write!(f, "I/O error: {error}"),
+            DownloadError::StartTask => write!(f, "failed to start the download task"),
+            DownloadError::InvalidUrl => write!(f, "invalid download URL"),
+            DownloadError::InvalidRedirectUrl => write!(f, "invalid redirect URL"),
+            DownloadError::JsonParse => write!(f, "could not parse the hosting response"),
+            DownloadError::MegaClientBuild => write!(f, "MEGA client build failed"),
+            DownloadError::MegaFetchNodes => write!(f, "MEGA node lookup failed"),
+            DownloadError::MegaNoFileNode => write!(f, "MEGA link has no file node"),
+            DownloadError::MegaDownload => write!(f, "MEGA download failed"),
+            DownloadError::FilenameParse => write!(f, "could not determine the archive filename"),
+            DownloadError::F95Page(error) => write!(f, "{error}"),
+        }
+    }
+}
+
+impl std::error::Error for DownloadError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            DownloadError::Config(error) => Some(error),
+            DownloadError::Network(error)
+            | DownloadError::Request(error)
+            | DownloadError::ClientBuild(error) => Some(error),
+            DownloadError::Io(error) => Some(error),
+            DownloadError::F95Page(error) => Some(error),
+            DownloadError::NoRedirect
+            | DownloadError::DirectLinkFailed(_)
+            | DownloadError::UnsupportedHosting
+            | DownloadError::Captcha
+            | DownloadError::MissingHeader(_)
+            | DownloadError::StartTask
+            | DownloadError::InvalidUrl
+            | DownloadError::InvalidRedirectUrl
+            | DownloadError::JsonParse
+            | DownloadError::MegaClientBuild
+            | DownloadError::MegaFetchNodes
+            | DownloadError::MegaNoFileNode
+            | DownloadError::MegaDownload
+            | DownloadError::FilenameParse => None,
+        }
+    }
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -190,6 +298,18 @@ impl DownloadLink {
     async fn get_direct(self) -> Result<DirectDownloadLink, DownloadError> {
         match self {
             DownloadLink::Direct(link) => Ok(link),
+            DownloadLink::F95Page(link) => {
+                // Mirrors the app cannot download are rejected up front, so the
+                // user is never asked to pass F95's check for them.
+                if link.hosting.is_none() {
+                    return Err(DownloadError::UnsupportedHosting);
+                }
+                let host_url = self::f95dl::resolve_host_url(&link.url)
+                    .await
+                    .map_err(DownloadError::F95Page)?;
+                log::info!("resolved {} ({}) to {}", link.url.as_str(), link.host, host_url.as_str());
+                DirectDownloadLink::new(host_url).ok_or(DownloadError::UnsupportedHosting)
+            }
             DownloadLink::Masked(link) => {
                 //check is hosting valid
                 {
@@ -204,13 +324,13 @@ impl DownloadLink {
                         .map_err(|_| DownloadError::UnsupportedHosting)?;
                 }
 
-                let ans = crate::net::client()
+                let client = crate::net::client().map_err(DownloadError::Config)?;
+                let ans = client
                     .post(link.clone())
                     .header(
                         "Content-Type",
                         "application/x-www-form-urlencoded; charset=UTF-8",
                     )
-                    .header("Cookie", cookies())
                     .body("xhr=1&download=1")
                     .send()
                     .await
@@ -245,7 +365,7 @@ impl DownloadLink {
         };
 
         // Fire request / or branch for MEGA
-        let client = crate::net::client();
+        let client = crate::net::client().map_err(DownloadError::Config)?;
         let resp = match direct_req {
             DirectRequest::Http(request) => client
                 .execute(request)
@@ -256,7 +376,9 @@ impl DownloadLink {
                 log::info!("downloading from {}", url.as_str());
 
                 // 1) Init MEGA client over reqwest
-                let http_client = crate::net::client().clone();
+                let http_client = crate::net::client()
+                    .map_err(DownloadError::Config)?
+                    .clone();
                 let mega_client = match mega::ClientBuilder::new().https(true).build(http_client) {
                     Ok(c) => c,
                     Err(e) => {

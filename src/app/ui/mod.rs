@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 slint::include_modules!();
 
+pub mod captcha;
 mod state;
 use state::*;
 mod callbacks;
@@ -145,6 +146,5 @@ pub fn run() -> Result<(), slint::PlatformError> {
     } else {
         ui.set_loading(false);
     }
-
     ui.run()
 }

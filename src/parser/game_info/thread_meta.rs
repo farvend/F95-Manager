@@ -1,11 +1,8 @@
 use lazy_static::lazy_static;
 use regex::Regex;
-use reqwest::{Client, StatusCode, Url};
+use reqwest::{StatusCode, Url};
 
-use super::{
-    cookies,
-    page::{F95Page, F95PageUrl},
-};
+use super::page::{F95Page, F95PageUrl};
 use crate::tags::TAGS;
 use std::{fmt, time::Duration};
 
@@ -22,7 +19,7 @@ pub struct ThreadMeta {
 
 #[derive(Debug)]
 pub enum FetchThreadMetaError {
-    BuildClient,
+    Config(crate::net::NetError),
     Request(reqwest::Error),
     ReadText(reqwest::Error),
     OgTitleMissing,
@@ -35,7 +32,7 @@ pub enum FetchThreadMetaError {
 impl fmt::Display for FetchThreadMetaError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            FetchThreadMetaError::BuildClient => write!(f, "failed to build HTTP client"),
+            FetchThreadMetaError::Config(error) => write!(f, "{error}"),
             FetchThreadMetaError::Request(e) => write!(f, "request error: {}", e),
             FetchThreadMetaError::ReadText(e) => write!(f, "read body error: {}", e),
             FetchThreadMetaError::OgTitleMissing => write!(f, "OG title not found or malformed"),
@@ -72,14 +69,10 @@ lazy_static! {
 pub async fn fetch_thread_meta(thread_id: u64) -> Result<ThreadMeta, FetchThreadMetaError> {
     let url = format!("https://f95zone.to/threads/{}/", thread_id);
 
-    let client = Client::builder()
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
-        .build()
-        .map_err(|_| FetchThreadMetaError::BuildClient)?;
+    let client = crate::net::client().map_err(FetchThreadMetaError::Config)?;
 
     let resp: reqwest::Response = client
         .get(&url)
-        .header("Cookie", cookies())
         .send()
         .await
         .map_err(FetchThreadMetaError::Request)?;
