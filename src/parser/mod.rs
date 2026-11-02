@@ -431,7 +431,6 @@ pub async fn fetch_list_page(page: u32, filters: &F95Filters) -> Result<F95Msg, 
         .query(&params)
         .send()
         .await?;
-    dbg!(1);
 
     if raw_resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
         log::warn!("fetch_list_page: received 429 Too Many Requests; delaying 1s before retry");
@@ -442,11 +441,8 @@ pub async fn fetch_list_page(page: u32, filters: &F95Filters) -> Result<F95Msg, 
             .send()
             .await?;
     }
-    dbg!(2);
 
     let raw_resp = raw_resp.error_for_status()?;
-    dbg!(3);
-    // dbg!("raw response: {:?}", &raw_resp.text().await);
     let resp: Root = match raw_resp.json().await {
         Ok(v) => v,
         Err(err) => {
@@ -455,8 +451,6 @@ pub async fn fetch_list_page(page: u32, filters: &F95Filters) -> Result<F95Msg, 
             return Err(F95Error::Api(text));
         }
     };
-    // return todo!();
-    // dbg!(4);
 
     match resp.msg {
         Msg::Success(msg) if resp.status == "ok" => Ok(msg),
