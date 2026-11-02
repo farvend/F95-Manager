@@ -1,0 +1,13 @@
+[package]
+name = "webview_probe"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+wry = "0.57"
+winit = "0.30"
+webview2-com = "0.39"
+windows = { version = "0.62", features = ["Win32_Foundation"] }

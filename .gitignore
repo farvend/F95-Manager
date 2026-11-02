@@ -1,4 +1,5 @@
 /target
+tools/*/target
 cargo.lock
 .vscode
 /downloads
