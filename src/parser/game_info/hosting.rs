@@ -113,7 +113,7 @@ impl TryFrom<Url> for Hosting {
             .split('.')
             .rev()
             .nth(1)
-            .unwrap()
+            .ok_or(HostingError::NotDomain)?
             .to_string();
 
         let mut name = sec;
@@ -156,5 +156,21 @@ impl fmt::Display for HostingSubset {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let hosting: Hosting = (*self).into();
         hosting.fmt(f)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn single_label_host_is_rejected_without_panicking() {
+        let url = Url::from_str("https://localhost/file.zip").expect("url");
+
+        assert!(matches!(
+            Hosting::try_from(url),
+            Err(HostingError::NotDomain)
+        ));
     }
 }
