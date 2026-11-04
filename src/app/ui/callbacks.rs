@@ -909,12 +909,19 @@ pub(super) fn wire_callbacks(
     });
 
     let settings_for_open = settings_window.clone();
+    // The button toggles: a second press closes the window it opened.
     ui.on_open_settings(move || {
+        if settings_for_open.window().is_visible() {
+            if let Err(error) = settings_for_open.hide() {
+                log::error!("Failed to hide settings window: {error}");
+            }
+            return;
+        }
         settings_for_open.set_saved_message("".into());
         show_and_focus(settings_for_open.as_ref());
     });
     let about_for_open = about_window.clone();
-    ui.on_open_about(move || {
+    settings_window.on_open_about(move || {
         show_and_focus(about_for_open.as_ref());
     });
     let logs_for_refresh = logs_window.clone();
@@ -931,7 +938,7 @@ pub(super) fn wire_callbacks(
         }
     });
     let logs_for_open = logs_window.clone();
-    ui.on_open_logs(move || {
+    settings_window.on_open_logs(move || {
         refresh_logs(&logs_for_open);
         show_and_focus(logs_for_open.as_ref());
     });

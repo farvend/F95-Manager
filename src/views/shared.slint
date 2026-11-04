@@ -96,6 +96,161 @@ export component FlatButton inherits Rectangle {
     }
 }
 
+/// The app's own accent. The std Fluent widgets would take the Windows
+/// accent colour instead (pink on some systems), so sliders, checkboxes and
+/// combo boxes are drawn here.
+export global Accent {
+    out property <color> base: #c8404a;
+    out property <color> hover: #d65761;
+    out property <color> track: #3a3a3a;
+}
+
+export component AppSlider inherits Rectangle {
+    in property <float> minimum: 0;
+    in property <float> maximum: 100;
+    /// Shown value; the owner updates it from `edited` (rounded as it needs).
+    in property <float> value;
+    callback edited(float);
+    height: 26px * Theme.scale;
+    private property <length> pad: 8px * Theme.scale;
+    private property <float> ratio: root.maximum > root.minimum
+        ? (clamp(root.value, root.minimum, root.maximum) - root.minimum) / (root.maximum - root.minimum)
+        : 0;
+    private property <length> thumb-x: root.pad + (root.width - 2 * root.pad) * root.ratio;
+    Rectangle {
+        x: root.pad; y: (parent.height - self.height) / 2;
+        width: parent.width - 2 * root.pad; height: 4px * Theme.scale;
+        border-radius: self.height / 2; background: Accent.track;
+    }
+    Rectangle {
+        x: root.pad; y: (parent.height - self.height) / 2;
+        width: root.thumb-x - root.pad; height: 4px * Theme.scale;
+        border-radius: self.height / 2; background: Accent.base;
+    }
+    Rectangle {
+        width: 14px * Theme.scale; height: self.width;
+        x: root.thumb-x - self.width / 2; y: (parent.height - self.height) / 2;
+        border-radius: self.width / 2;
+        background: touch.has-hover || touch.pressed ? Accent.hover : Accent.base;
+        border-width: 2px; border-color: #1d1d1d;
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        function apply() {
+            let span = max(1px, root.width - 2 * root.pad);
+            let r = clamp((self.mouse-x - root.pad) / span, 0, 1);
+            let next = root.minimum + (root.maximum - root.minimum) * r;
+            root.edited(next);
+        }
+        pointer-event(event) => { if (event.kind == PointerEventKind.down) { self.apply(); } }
+        changed mouse-x => { if (self.pressed) { self.apply(); } }
+    }
+}
+
+export component AppCheckBox inherits Rectangle {
+    in property <string> text;
+    /// Shown state; the owner updates it from `toggled`.
+    in property <bool> checked;
+    callback toggled(bool);
+    height: max(22px * Theme.scale, label.preferred-height);
+    HorizontalLayout {
+        spacing: 9px * Theme.scale;
+        Rectangle {
+            width: 18px * Theme.scale; height: self.width;
+            y: (parent.height - self.height) / 2;
+            border-radius: 4px * Theme.scale;
+            background: root.checked ? (touch.has-hover ? Accent.hover : Accent.base) : #262626;
+            border-width: 1px; border-color: root.checked ? Accent.base : (touch.has-hover ? #6a6a6a : #555555);
+            Path {
+                visible: root.checked;
+                width: 70%; height: 70%;
+                viewbox-width: 10; viewbox-height: 10;
+                stroke: #ffffff; stroke-width: 1.8px;
+                commands: "M 1.5 5.2 L 4 7.6 L 8.6 2.6";
+            }
+        }
+        label := Text {
+            text: root.text; color: #cfcfcf; font-size: 13px * Theme.scale;
+            vertical-alignment: center; wrap: word-wrap; horizontal-stretch: 1;
+        }
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.toggled(!root.checked); }
+    }
+}
+
+/// Row of buttons with exactly one active, for short option lists.
+export component AppChoice inherits HorizontalLayout {
+    in property <[string]> options;
+    /// Highlighted option; the owner updates it from `selected`.
+    in property <int> current-index;
+    callback selected(int);
+    height: 32px * Theme.scale;
+    spacing: 3px;
+    for option[index] in root.options: FlatButton {
+        horizontal-stretch: 1;
+        text: option;
+        active: index == root.current-index;
+        clicked => { root.selected(index); }
+    }
+}
+
+/// Single-line text field with the app's accent for focus and selection
+/// (the std LineEdit uses the Windows accent colour).
+export component AppLineEdit inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder-text;
+    in property <bool> enabled: true;
+    in property <InputType> input-type: InputType.text;
+    in property <length> font-size: 13px * Theme.scale;
+    callback accepted(string);
+    callback edited(string);
+    callback key-pressed(KeyEvent) -> EventResult;
+    height: 32px * Theme.scale;
+    border-radius: 5px * Theme.scale;
+    background: root.enabled ? #262626 : #222222;
+    border-width: 1px;
+    border-color: !root.enabled ? #333333 : input.has-focus ? #4a4a4a : hover.has-hover ? #444444 : #3a3a3a;
+    hover := TouchArea { mouse-cursor: MouseCursor.text; }
+    input := TextInput {
+        x: 10px * Theme.scale;
+        width: parent.width - 20px * Theme.scale;
+        height: parent.height;
+        vertical-alignment: center;
+        single-line: true;
+        text <=> root.text;
+        enabled: root.enabled;
+        input-type: root.input-type;
+        font-size: root.font-size;
+        color: root.enabled ? #dddddd : #777777;
+        selection-background-color: #7a2b31;
+        selection-foreground-color: #ffffff;
+        accepted => { root.accepted(self.text); }
+        edited => { root.edited(self.text); }
+        key-pressed(event) => { return root.key-pressed(event); }
+    }
+    if root.text == "": Text {
+        x: input.x;
+        width: input.width;
+        height: parent.height;
+        vertical-alignment: center;
+        text: root.placeholder-text;
+        color: #6f6f6f;
+        font-size: root.font-size;
+        overflow: elide;
+    }
+    // Focus line along the bottom, in the app's accent.
+    Rectangle {
+        y: parent.height - self.height;
+        x: 4px * Theme.scale;
+        width: parent.width - 8px * Theme.scale;
+        height: 2px;
+        border-radius: 1px;
+        background: input.has-focus ? Accent.base : transparent;
+    }
+}
+
 export global Theme {
     in-out property <float> scale: 1.0;
     in-out property <float> card-scale: 1.0;
@@ -213,6 +368,4 @@ export global Translations {
     in-out property <string> bookmarks-delete-confirm;
     in-out property <string> about-title;
     in-out property <string> about-version;
-    in-out property <string> about-description;
-    in-out property <string> about-footer;
 }

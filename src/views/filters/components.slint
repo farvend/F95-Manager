@@ -1,5 +1,4 @@
-import { LineEdit } from "std-widgets.slint";
-import { SuggestionData, Theme } from "../shared.slint";
+import { AppLineEdit, SuggestionData, Theme } from "../shared.slint";
 
 export component SectionTitle inherits HorizontalLayout {
     in property <string> left;
@@ -34,7 +33,7 @@ export component SuggestInput inherits Rectangle {
             root.absolute-position.y + root.height, root.width, root.suggestions,
             root.selected-index, root.enabled && root.text != "" && root.suggestions.length > 0);
     }
-    LineEdit {
+    AppLineEdit {
         width: parent.width;
         height: 31px * Theme.scale;
         enabled: root.enabled;

@@ -1,11 +1,42 @@
-import { CheckBox, ComboBox, LineEdit, Slider, ScrollView } from "std-widgets.slint";
-import { SuggestionData, Theme, Translations, FlatButton } from "../shared.slint";
+import { ScrollView } from "std-widgets.slint";
+import { AppLineEdit, Accent, AppCheckBox, AppChoice, AppSlider, SuggestionData, Theme, Translations, FlatButton } from "../shared.slint";
 import { SectionTitle } from "../filters/components.slint";
 
 export enum LanguageChoice { automatic, english, russian }
 export enum LoadingIndicatorChoice { bottom-bar, circle-bottom-right }
 
-component SettingsPicker inherits Rectangle {
+/// A chosen value as a compact chip: its name and a × that removes it.
+component ValueChip inherits Rectangle {
+    in property <string> text;
+    callback remove;
+    height: 26px;
+    border-radius: 13px;
+    background: #262626;
+    border-width: 1px;
+    border-color: close.has-hover ? #6b3438 : #3a3a3a;
+    Text {
+        x: 11px; width: parent.width - 36px;
+        text: root.text; color: #cfcfcf; font-size: 12px;
+        vertical-alignment: center; overflow: elide;
+    }
+    Rectangle {
+        x: parent.width - self.width - 4px; y: 3px;
+        width: 20px; height: 20px;
+        border-radius: 10px;
+        background: close.has-hover ? #3a2526 : transparent;
+        Text {
+            text: "×"; font-size: 14px;
+            color: close.has-hover ? #e0737b : #8a8a8a;
+            horizontal-alignment: center; vertical-alignment: center;
+        }
+        close := TouchArea { mouse-cursor: pointer; clicked => { root.remove(); } }
+    }
+}
+
+/// Search field with a suggestion list below it and the chosen values as
+/// rows with a remove button. Laid out top to bottom, so nothing overlaps the
+/// input.
+component SettingsPicker inherits VerticalLayout {
     in property <string> placeholder;
     in property <int> kind;
     in property <[SuggestionData]> suggestions;
@@ -16,10 +47,9 @@ component SettingsPicker inherits Rectangle {
     callback remove(string, int);
     in-out property <string> text;
     in-out property <int> selected-index: 0;
-    height: 32px + root.values.length * 28px;
-    background: transparent;
-    LineEdit {
-        width: parent.width;
+    private property <bool> listing: root.suggestion-kind == root.kind && root.text != "" && root.suggestions.length > 0;
+    spacing: 6px;
+    AppLineEdit {
         height: 32px;
         text <=> root.text;
         placeholder-text: root.placeholder;
@@ -29,22 +59,19 @@ component SettingsPicker inherits Rectangle {
                 root.selected-index = min(root.suggestions.length - 1, root.selected-index + 1); accept
             } else if (event.text == Key.UpArrow && root.suggestions.length > 0) {
                 root.selected-index = max(0, root.selected-index - 1); accept
-            } else if (event.text == Key.Return && root.suggestion-kind == root.kind && root.suggestions.length > 0) {
+            } else if (event.text == Key.Return && root.listing) {
                 root.add(root.suggestions[root.selected-index].id, root.kind);
                 root.text = "";
                 accept
             } else { reject }
         }
     }
-    if root.suggestion-kind == root.kind && root.text != "": Rectangle {
-        y: 32px;
-        width: parent.width;
+    if root.listing: Rectangle {
         height: suggestion-list.preferred-height + 6px;
         background: #202020;
         border-width: 1px;
         border-color: #4b4b4b;
         border-radius: 5px;
-        z: 20;
         suggestion-list := VerticalLayout {
             padding: 3px;
             spacing: 2px;
@@ -56,22 +83,66 @@ component SettingsPicker inherits Rectangle {
             }
         }
     }
-    for item[index] in root.values: FlatButton {
-        y: 35px + index * 28px;
-        width: parent.width;
-        height: 25px;
-        text: item.label + "  ×";
-        danger: true;
-        clicked => { root.remove(item.id, root.kind); }
+    // Two chips per row keeps ten values in five short rows.
+    if root.values.length > 0: GridLayout {
+        spacing: 6px;
+        for item[index] in root.values: ValueChip {
+            row: floor(index / 2);
+            col: mod(index, 2);
+            text: item.label;
+            remove => { root.remove(item.id, root.kind); }
+        }
     }
+}
+
+component NavItem inherits Rectangle {
+    in property <string> text;
+    in property <bool> active;
+    callback clicked;
+    height: 34px;
+    border-radius: 6px;
+    background: root.active ? #2c2324 : touch.has-hover ? #242424 : transparent;
+    Rectangle {
+        x: 0; width: 3px; height: parent.height - 12px; y: 6px;
+        border-radius: 1.5px;
+        background: root.active ? Accent.base : transparent;
+    }
+    Text {
+        x: 14px; width: parent.width - 20px;
+        text: root.text;
+        color: root.active ? #f0f0f0 : touch.has-hover ? #cfcfcf : #a6a6a6;
+        font-size: 14px;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+    touch := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+component PageTitle inherits Text {
+    color: #eeeeee;
+    font-size: 20px;
+    height: 34px;
+    vertical-alignment: center;
+}
+
+/// One colour channel: label, slider and value in a single row.
+component ColorChannel inherits HorizontalLayout {
+    in property <string> label;
+    in property <int> value;
+    callback edited(int);
+    spacing: 10px;
+    height: 26px;
+    Text { width: 80px; text: root.label; color: #777777; font-size: 12px; vertical-alignment: center; overflow: elide; }
+    AppSlider { horizontal-stretch: 1; minimum: 0; maximum: 255; value: root.value; edited(value) => { root.edited(round(value)); } }
+    Text { width: 30px; text: root.value; color: #a6a6a6; font-size: 12px; vertical-alignment: center; horizontal-alignment: right; }
 }
 
 export component SettingsWindow inherits Window {
     title: Translations.settings-title + " — F95 standalone client";
-    preferred-width: 560px;
-    preferred-height: 470px;
-    min-width: 440px;
-    min-height: 400px;
+    preferred-width: 820px;
+    preferred-height: 560px;
+    min-width: 640px;
+    min-height: 440px;
     background: #1d1d1d;
     in-out property <float> ui-scale-percent: 100;
     in-out property <float> card-scale-percent: 100;
@@ -108,106 +179,172 @@ export component SettingsWindow inherits Window {
     callback choose-directory(int);
     callback save-settings(float, float, int, string, string, string, string, bool, bool, bool, LanguageChoice, LoadingIndicatorChoice, int, int, int, int);
     callback open-bookmarks();
+    callback open-about();
+    callback open-logs();
     callback confirm-migration(bool);
-    ScrollView {
-      viewport-width: self.width;
-      VerticalLayout {
-        padding: 22px; spacing: 10px;
-        Text { text: Translations.settings-title; color: #eeeeee; font-size: 25px; }
-        Rectangle { height: 1px; background: #414141; }
-        Text { text: Translations.settings-folders; color: #dddddd; font-size: 18px; }
-        SectionTitle { left: Translations.settings-temp-folder; right: ""; }
-        HorizontalLayout { height: 34px; spacing: 6px; LineEdit { text <=> root.temp-directory; } FlatButton { width: 92px; text: Translations.settings-choose; clicked => { root.choose-directory(0); } } }
-        SectionTitle { left: Translations.settings-games-folder; right: ""; }
-        HorizontalLayout { height: 34px; spacing: 6px; LineEdit { text <=> root.games-directory; } FlatButton { width: 92px; text: Translations.settings-choose; clicked => { root.choose-directory(1); } } }
-        SectionTitle { left: Translations.settings-cache-folder; right: Translations.settings-cover-metadata; }
-        HorizontalLayout { height: 34px; spacing: 6px; LineEdit { text <=> root.cache-directory; } FlatButton { width: 92px; text: Translations.settings-choose; clicked => { root.choose-directory(2); } } }
-        Rectangle { height: 1px; background: #414141; }
-        Text { text: Translations.settings-bookmarks; color: #dddddd; font-size: 18px; }
-        FlatButton { text: Translations.settings-bookmarks; clicked => { root.open-bookmarks(); } }
-        SectionTitle { left: Translations.settings-bookmark-cover-count; right: root.bookmarks-visible; }
-        Slider { height: 30px; minimum: 1; maximum: 5; value: root.bookmarks-visible; changed value => { root.bookmarks-visible = round(self.value); } }
-        SectionTitle { left: Translations.settings-bookmark-color; right: "RGB " + root.bookmark-red + ", " + root.bookmark-green + ", " + root.bookmark-blue; }
-        Rectangle { height: 22px; border-radius: 5px; background: rgb(root.bookmark-red, root.bookmark-green, root.bookmark-blue); border-width: 1px; border-color: #555555; }
-        SectionTitle { left: Translations.settings-color-red; right: root.bookmark-red; }
-        Slider { height: 25px; minimum: 0; maximum: 255; value: root.bookmark-red; changed value => { root.bookmark-red = round(self.value); } }
-        SectionTitle { left: Translations.settings-color-green; right: root.bookmark-green; }
-        Slider { height: 25px; minimum: 0; maximum: 255; value: root.bookmark-green; changed value => { root.bookmark-green = round(self.value); } }
-        SectionTitle { left: Translations.settings-color-blue; right: root.bookmark-blue; }
-        Slider { height: 25px; minimum: 0; maximum: 255; value: root.bookmark-blue; changed value => { root.bookmark-blue = round(self.value); } }
-        Rectangle { height: 1px; background: #414141; }
-        Text { text: Translations.settings-interface; color: #dddddd; font-size: 18px; }
-        SectionTitle { left: Translations.settings-language; right: ""; }
-        language-combo := ComboBox {
-            height: 34px;
-            model: Translations.settings-language-options;
-            current-index: root.language == LanguageChoice.english ? 1 : root.language == LanguageChoice.russian ? 2 : 0;
-            changed current-index => {
-                root.language = self.current-index == 1 ? LanguageChoice.english
-                    : self.current-index == 2 ? LanguageChoice.russian
-                    : LanguageChoice.automatic;
+    // Sections on the left, one page at a time on the right, Save always
+    // visible at the bottom: the old single column was one very long scroll.
+    private property <int> page: 0;
+    VerticalLayout {
+        HorizontalLayout {
+            vertical-stretch: 1;
+            // Navigation
+            Rectangle {
+                width: 190px;
+                background: #181818;
+                Rectangle { x: parent.width - 1px; width: 1px; background: #333333; }
+                VerticalLayout {
+                    padding: 14px; padding-top: 18px; spacing: 4px;
+                    Text { text: Translations.settings-title; color: #eeeeee; font-size: 20px; height: 34px; }
+                    for section[index] in [
+                        Translations.settings-folders,
+                        Translations.settings-interface,
+                        Translations.settings-bookmarks,
+                        Translations.settings-startup-filters,
+                        Translations.settings-warnings,
+                    ]: NavItem {
+                        text: section;
+                        active: root.page == index;
+                        clicked => { root.page = index; }
+                    }
+                    Rectangle { vertical-stretch: 1; }
+                    FlatButton { text: Translations.common-logs; clicked => { root.open-logs(); } }
+                    FlatButton { text: Translations.common-about; clicked => { root.open-about(); } }
+                }
+            }
+            // Page
+            ScrollView {
+                horizontal-stretch: 1;
+                viewport-width: self.width;
+                VerticalLayout {
+                    padding: 22px; spacing: 10px;
+                    alignment: start;
+
+                    if root.page == 0: VerticalLayout {
+                        spacing: 10px;
+                        PageTitle { text: Translations.settings-folders; }
+                        SectionTitle { left: Translations.settings-temp-folder; right: ""; }
+                        HorizontalLayout { height: 34px; spacing: 6px; AppLineEdit { text <=> root.temp-directory; } FlatButton { width: 92px; text: Translations.settings-choose; clicked => { root.choose-directory(0); } } }
+                        SectionTitle { left: Translations.settings-games-folder; right: ""; }
+                        HorizontalLayout { height: 34px; spacing: 6px; AppLineEdit { text <=> root.games-directory; } FlatButton { width: 92px; text: Translations.settings-choose; clicked => { root.choose-directory(1); } } }
+                        SectionTitle { left: Translations.settings-cache-folder; right: Translations.settings-cover-metadata; }
+                        HorizontalLayout { height: 34px; spacing: 6px; AppLineEdit { text <=> root.cache-directory; } FlatButton { width: 92px; text: Translations.settings-choose; clicked => { root.choose-directory(2); } } }
+                        SectionTitle { left: Translations.settings-custom-launch; right: "{{path}}"; }
+                        AppLineEdit { height: 34px; text <=> root.custom-launch; placeholder-text: "\"C:\\Start.exe\" {{path}}"; }
+                    }
+
+                    if root.page == 1: VerticalLayout {
+                        spacing: 10px;
+                        PageTitle { text: Translations.settings-interface; }
+                        SectionTitle { left: Translations.settings-language; right: ""; }
+                        AppChoice {
+                            options: Translations.settings-language-options;
+                            current-index: root.language == LanguageChoice.english ? 1 : root.language == LanguageChoice.russian ? 2 : 0;
+                            selected(index) => {
+                                root.language = index == 1 ? LanguageChoice.english
+                                    : index == 2 ? LanguageChoice.russian
+                                    : LanguageChoice.automatic;
+                            }
+                        }
+                        SectionTitle { left: Translations.settings-loading-animation; right: ""; }
+                        AppChoice {
+                            options: Translations.settings-loading-options;
+                            current-index: root.loading-indicator == LoadingIndicatorChoice.circle-bottom-right ? 1 : 0;
+                            selected(index) => {
+                                root.loading-indicator = index == 1
+                                    ? LoadingIndicatorChoice.circle-bottom-right
+                                    : LoadingIndicatorChoice.bottom-bar;
+                            }
+                        }
+                        SectionTitle { left: Translations.settings-ui-scale; right: round(root.ui-scale-percent) + "%"; }
+                        AppSlider {
+                            minimum: 50; maximum: 200; value: root.ui-scale-percent;
+                            edited(value) => { root.ui-scale-percent = round(value); root.preview-scale(root.ui-scale-percent, root.card-scale-percent); }
+                        }
+                        SectionTitle { left: Translations.settings-card-scale; right: round(root.card-scale-percent) + "%"; }
+                        AppSlider {
+                            minimum: 50; maximum: 200; value: root.card-scale-percent;
+                            edited(value) => { root.card-scale-percent = round(value); root.preview-scale(root.ui-scale-percent, root.card-scale-percent); }
+                        }
+                        SectionTitle { left: Translations.settings-image-cache-games; right: root.image-cache-games; }
+                        AppSlider {
+                            minimum: 1; maximum: 100; value: root.image-cache-games;
+                            edited(value) => { root.image-cache-games = round(value); }
+                        }
+                        Rectangle { height: 4px; }
+                        AppCheckBox { text: Translations.settings-log-file; checked: root.log-to-file; toggled(value) => { root.log-to-file = value; } }
+                        AppCheckBox { text: Translations.settings-show-unplayed; checked: root.show-unplayed; toggled(value) => { root.show-unplayed = value; } }
+                        AppCheckBox { text: Translations.settings-classic-library; checked: root.classic-library; toggled(value) => { root.classic-library = value; } }
+                    }
+
+                    if root.page == 2: VerticalLayout {
+                        spacing: 10px;
+                        PageTitle { text: Translations.settings-bookmarks; }
+                        FlatButton { text: Translations.settings-bookmarks; clicked => { root.open-bookmarks(); } }
+                        SectionTitle { left: Translations.settings-bookmark-cover-count; right: root.bookmarks-visible; }
+                        AppSlider { minimum: 1; maximum: 5; value: root.bookmarks-visible; edited(value) => { root.bookmarks-visible = round(value); } }
+                        SectionTitle { left: Translations.settings-bookmark-color; right: "RGB " + root.bookmark-red + ", " + root.bookmark-green + ", " + root.bookmark-blue; }
+                        HorizontalLayout {
+                            spacing: 14px;
+                            Rectangle {
+                                width: 64px; height: 64px;
+                                border-radius: 8px; border-width: 1px; border-color: #555555;
+                                background: rgb(root.bookmark-red, root.bookmark-green, root.bookmark-blue);
+                            }
+                            VerticalLayout {
+                                spacing: 2px;
+                                ColorChannel { label: Translations.settings-color-red; value: root.bookmark-red; edited(value) => { root.bookmark-red = value; } }
+                                ColorChannel { label: Translations.settings-color-green; value: root.bookmark-green; edited(value) => { root.bookmark-green = value; } }
+                                ColorChannel { label: Translations.settings-color-blue; value: root.bookmark-blue; edited(value) => { root.bookmark-blue = value; } }
+                            }
+                        }
+                    }
+
+                    if root.page == 3: VerticalLayout {
+                        spacing: 10px;
+                        PageTitle { text: Translations.settings-startup-filters; }
+                        SectionTitle { left: Translations.settings-add-tags; right: Translations.settings-max-ten; }
+                        SettingsPicker { kind: 0; placeholder: Translations.settings-startup-tag-placeholder; suggestions: root.filter-suggestions; suggestion-kind: root.filter-suggestion-kind; values: root.startup-tags; query(query, kind) => { root.settings-suggestion-query(query, kind); } add(id, kind) => { root.add-settings-filter(id, kind); } remove(id, kind) => { root.remove-settings-filter(id, kind); } }
+                        SectionTitle { left: Translations.settings-exclude-tags; right: Translations.settings-max-ten; }
+                        SettingsPicker { kind: 1; placeholder: Translations.settings-startup-exclude-tag-placeholder; suggestions: root.filter-suggestions; suggestion-kind: root.filter-suggestion-kind; values: root.startup-exclude-tags; query(query, kind) => { root.settings-suggestion-query(query, kind); } add(id, kind) => { root.add-settings-filter(id, kind); } remove(id, kind) => { root.remove-settings-filter(id, kind); } }
+                        SectionTitle { left: Translations.settings-add-prefixes; right: Translations.settings-max-ten; }
+                        SettingsPicker { kind: 2; placeholder: Translations.settings-startup-prefix-placeholder; suggestions: root.filter-suggestions; suggestion-kind: root.filter-suggestion-kind; values: root.startup-prefixes; query(query, kind) => { root.settings-suggestion-query(query, kind); } add(id, kind) => { root.add-settings-filter(id, kind); } remove(id, kind) => { root.remove-settings-filter(id, kind); } }
+                        SectionTitle { left: Translations.settings-exclude-prefixes; right: Translations.settings-max-ten; }
+                        SettingsPicker { kind: 3; placeholder: Translations.settings-startup-exclude-prefix-placeholder; suggestions: root.filter-suggestions; suggestion-kind: root.filter-suggestion-kind; values: root.startup-exclude-prefixes; query(query, kind) => { root.settings-suggestion-query(query, kind); } add(id, kind) => { root.add-settings-filter(id, kind); } remove(id, kind) => { root.remove-settings-filter(id, kind); } }
+                    }
+
+                    if root.page == 4: VerticalLayout {
+                        spacing: 10px;
+                        PageTitle { text: Translations.settings-warnings; }
+                        SectionTitle { left: Translations.settings-warning-tags; right: ""; }
+                        SettingsPicker { kind: 4; placeholder: Translations.settings-warning-tag-placeholder; suggestions: root.filter-suggestions; suggestion-kind: root.filter-suggestion-kind; values: root.warning-tags; query(query, kind) => { root.settings-suggestion-query(query, kind); } add(id, kind) => { root.add-settings-filter(id, kind); } remove(id, kind) => { root.remove-settings-filter(id, kind); } }
+                        SectionTitle { left: Translations.settings-warning-prefixes; right: ""; }
+                        SettingsPicker { kind: 5; placeholder: Translations.settings-warning-prefix-placeholder; suggestions: root.filter-suggestions; suggestion-kind: root.filter-suggestion-kind; values: root.warning-prefixes; query(query, kind) => { root.settings-suggestion-query(query, kind); } add(id, kind) => { root.add-settings-filter(id, kind); } remove(id, kind) => { root.remove-settings-filter(id, kind); } }
+                    }
+                }
             }
         }
-        SectionTitle { left: Translations.settings-loading-animation; right: ""; }
-        loading-combo := ComboBox {
-            height: 34px;
-            model: Translations.settings-loading-options;
-            current-index: root.loading-indicator == LoadingIndicatorChoice.circle-bottom-right ? 1 : 0;
-            changed current-index => {
-                root.loading-indicator = self.current-index == 1
-                    ? LoadingIndicatorChoice.circle-bottom-right
-                    : LoadingIndicatorChoice.bottom-bar;
+        // Footer
+        Rectangle {
+            height: 56px;
+            background: #181818;
+            Rectangle { y: 0; height: 1px; background: #333333; }
+            HorizontalLayout {
+                padding-left: 16px; padding-right: 16px; spacing: 12px;
+                Text { text: root.saved-message; color: #d65761; font-size: 13px; vertical-alignment: center; horizontal-stretch: 1; }
+                FlatButton {
+                    width: 160px; height: 34px; y: (parent.height - self.height) / 2;
+                    text: Translations.settings-save; active: true;
+                    clicked => { root.save-settings(
+                        root.ui-scale-percent, root.card-scale-percent, root.image-cache-games, root.temp-directory,
+                        root.games-directory, root.cache-directory, root.custom-launch,
+                        root.log-to-file, root.show-unplayed, root.classic-library,
+                        root.language, root.loading-indicator,
+                        root.bookmarks-visible, root.bookmark-red, root.bookmark-green, root.bookmark-blue
+                    ); }
+                }
             }
         }
-        SectionTitle { left: Translations.settings-ui-scale; right: root.ui-scale-percent + "%"; }
-        Slider {
-            height: 32px; minimum: 50; maximum: 200; value <=> root.ui-scale-percent;
-            changed value => { root.preview-scale(root.ui-scale-percent, root.card-scale-percent); }
-        }
-        SectionTitle { left: Translations.settings-card-scale; right: root.card-scale-percent + "%"; }
-        Slider {
-            height: 32px; minimum: 50; maximum: 200; value <=> root.card-scale-percent;
-            changed value => { root.preview-scale(root.ui-scale-percent, root.card-scale-percent); }
-        }
-        SectionTitle { left: Translations.settings-image-cache-games; right: root.image-cache-games; }
-        Slider {
-            height: 32px; minimum: 1; maximum: 100; value: root.image-cache-games;
-            changed value => { root.image-cache-games = round(self.value); }
-        }
-        CheckBox { text: Translations.settings-log-file; checked <=> root.log-to-file; }
-        CheckBox { text: Translations.settings-show-unplayed; checked <=> root.show-unplayed; }
-        CheckBox { text: Translations.settings-classic-library; checked <=> root.classic-library; }
-        SectionTitle { left: Translations.settings-custom-launch; right: "{{path}}"; }
-        LineEdit { height: 34px; text <=> root.custom-launch; placeholder-text: "\"C:\\Start.exe\" {{path}}"; }
-        Rectangle { height: 1px; background: #414141; }
-        Text { text: Translations.settings-startup-filters; color: #dddddd; font-size: 18px; }
-        SectionTitle { left: Translations.settings-add-tags; right: Translations.settings-max-ten; }
-        SettingsPicker { kind: 0; placeholder: Translations.settings-startup-tag-placeholder; suggestions: root.filter-suggestions; suggestion-kind: root.filter-suggestion-kind; values: root.startup-tags; query(query, kind) => { root.settings-suggestion-query(query, kind); } add(id, kind) => { root.add-settings-filter(id, kind); } remove(id, kind) => { root.remove-settings-filter(id, kind); } }
-        SectionTitle { left: Translations.settings-exclude-tags; right: Translations.settings-max-ten; }
-        SettingsPicker { kind: 1; placeholder: Translations.settings-startup-exclude-tag-placeholder; suggestions: root.filter-suggestions; suggestion-kind: root.filter-suggestion-kind; values: root.startup-exclude-tags; query(query, kind) => { root.settings-suggestion-query(query, kind); } add(id, kind) => { root.add-settings-filter(id, kind); } remove(id, kind) => { root.remove-settings-filter(id, kind); } }
-        SectionTitle { left: Translations.settings-add-prefixes; right: Translations.settings-max-ten; }
-        SettingsPicker { kind: 2; placeholder: Translations.settings-startup-prefix-placeholder; suggestions: root.filter-suggestions; suggestion-kind: root.filter-suggestion-kind; values: root.startup-prefixes; query(query, kind) => { root.settings-suggestion-query(query, kind); } add(id, kind) => { root.add-settings-filter(id, kind); } remove(id, kind) => { root.remove-settings-filter(id, kind); } }
-        SectionTitle { left: Translations.settings-exclude-prefixes; right: Translations.settings-max-ten; }
-        SettingsPicker { kind: 3; placeholder: Translations.settings-startup-exclude-prefix-placeholder; suggestions: root.filter-suggestions; suggestion-kind: root.filter-suggestion-kind; values: root.startup-exclude-prefixes; query(query, kind) => { root.settings-suggestion-query(query, kind); } add(id, kind) => { root.add-settings-filter(id, kind); } remove(id, kind) => { root.remove-settings-filter(id, kind); } }
-        Rectangle { height: 1px; background: #414141; }
-        Text { text: Translations.settings-warnings; color: #dddddd; font-size: 18px; }
-        SectionTitle { left: Translations.settings-warning-tags; right: ""; }
-        SettingsPicker { kind: 4; placeholder: Translations.settings-warning-tag-placeholder; suggestions: root.filter-suggestions; suggestion-kind: root.filter-suggestion-kind; values: root.warning-tags; query(query, kind) => { root.settings-suggestion-query(query, kind); } add(id, kind) => { root.add-settings-filter(id, kind); } remove(id, kind) => { root.remove-settings-filter(id, kind); } }
-        SectionTitle { left: Translations.settings-warning-prefixes; right: ""; }
-        SettingsPicker { kind: 5; placeholder: Translations.settings-warning-prefix-placeholder; suggestions: root.filter-suggestions; suggestion-kind: root.filter-suggestion-kind; values: root.warning-prefixes; query(query, kind) => { root.settings-suggestion-query(query, kind); } add(id, kind) => { root.add-settings-filter(id, kind); } remove(id, kind) => { root.remove-settings-filter(id, kind); } }
-        Text { text: root.saved-message; color: #cf6b72; font-size: 13px; }
-        FlatButton {
-            height: 36px; text: Translations.settings-save; active: true;
-            clicked => { root.save-settings(
-                root.ui-scale-percent, root.card-scale-percent, root.image-cache-games, root.temp-directory,
-                root.games-directory, root.cache-directory, root.custom-launch,
-                root.log-to-file, root.show-unplayed, root.classic-library,
-                root.language, root.loading-indicator,
-                root.bookmarks-visible, root.bookmark-red, root.bookmark-green, root.bookmark-blue
-            ); }
-        }
-        Rectangle { height: 8px; }
-      }
     }
     if root.migration-confirm-visible: Rectangle {
         background: #00000099;

@@ -1,5 +1,5 @@
-import { LineEdit, Slider, ScrollView } from "std-widgets.slint";
-import { BookmarkEditorData, FlatButton, Theme, Translations } from "../shared.slint";
+import { ScrollView } from "std-widgets.slint";
+import { AppLineEdit, AppSlider, BookmarkEditorData, FlatButton, Theme, Translations } from "../shared.slint";
 
 export component BookmarksWindow inherits Window {
     title: Translations.settings-bookmarks + " — F95 standalone client";
@@ -43,14 +43,14 @@ export component BookmarksWindow inherits Window {
             spacing: 7px * Theme.scale;
             Text { text: root.selected-id == "" ? Translations.bookmarks-new : Translations.bookmarks-edit; color: #eeeeee; font-size: 21px * Theme.scale; }
             Text { text: Translations.bookmarks-emoji; color: #aaaaaa; font-size: 13px * Theme.scale; }
-            LineEdit { height: 33px * Theme.scale; text <=> root.emoji; }
+            AppLineEdit { height: 33px * Theme.scale; text <=> root.emoji; }
             Text { text: Translations.bookmarks-name; color: #aaaaaa; font-size: 13px * Theme.scale; }
-            LineEdit { height: 33px * Theme.scale; text <=> root.label; }
+            AppLineEdit { height: 33px * Theme.scale; text <=> root.label; }
             Text { text: Translations.bookmarks-color + ": RGB " + root.red + ", " + root.green + ", " + root.blue; color: #aaaaaa; font-size: 13px * Theme.scale; }
             Rectangle { height: 24px; background: rgb(root.red, root.green, root.blue); border-radius: 5px; border-width: 1px; border-color: #555555; }
-            Slider { height: 25px; minimum: 0; maximum: 255; value: root.red; changed value => { root.red = round(self.value); } }
-            Slider { height: 25px; minimum: 0; maximum: 255; value: root.green; changed value => { root.green = round(self.value); } }
-            Slider { height: 25px; minimum: 0; maximum: 255; value: root.blue; changed value => { root.blue = round(self.value); } }
+            AppSlider { minimum: 0; maximum: 255; value: root.red; edited(value) => { root.red = round(value); } }
+            AppSlider { minimum: 0; maximum: 255; value: root.green; edited(value) => { root.green = round(value); } }
+            AppSlider { minimum: 0; maximum: 255; value: root.blue; edited(value) => { root.blue = round(value); } }
             Rectangle { vertical-stretch: 1; }
             HorizontalLayout {
                 height: 34px; spacing: 6px;
