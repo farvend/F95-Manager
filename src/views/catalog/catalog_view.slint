@@ -72,17 +72,43 @@ export component CatalogView inherits Rectangle {
                 }
                 Rectangle {
                     height: 43px * Theme.scale;
-                    border-width: 1px;
-                    border-color: #343434;
                     background: #202020;
+                    // Only the line towards the cards: a full frame doubled up
+                    // with the window edge and the filters panel's border.
+                    Rectangle { y: 0; height: 1px; background: #343434; }
                     HorizontalLayout {
-                        y: 4px * Theme.scale;
+                        y: (parent.height - self.height) / 2;
                         height: 31px * Theme.scale;
                         alignment: center;
                         spacing: 14px * Theme.scale;
-                        FlatButton { width: 48px * Theme.scale; text: "◀"; clicked => { root.previous-page(); } }
+                        // Arrows are drawn shapes, not ◀/▶ glyphs: the glyphs sit
+                        // off-centre in Segoe UI Symbol and turn into emoji with
+                        // other fonts.
+                        FlatButton {
+                            width: 48px * Theme.scale;
+                            clicked => { root.previous-page(); }
+                            Path {
+                                width: 10px * Theme.scale;
+                                height: 12px * Theme.scale;
+                                viewbox-width: 10;
+                                viewbox-height: 12;
+                                fill: #bdbdbd;
+                                commands: "M 10 0 L 0 6 L 10 12 Z";
+                            }
+                        }
                         Text { text: root.page-label; color: #aaaaaa; font-size: 14px * Theme.scale; vertical-alignment: center; }
-                        FlatButton { width: 48px * Theme.scale; text: "▶"; clicked => { root.next-page(); } }
+                        FlatButton {
+                            width: 48px * Theme.scale;
+                            clicked => { root.next-page(); }
+                            Path {
+                                width: 10px * Theme.scale;
+                                height: 12px * Theme.scale;
+                                viewbox-width: 10;
+                                viewbox-height: 12;
+                                fill: #bdbdbd;
+                                commands: "M 0 0 L 10 6 L 0 12 Z";
+                            }
+                        }
                     }
                 }
             }

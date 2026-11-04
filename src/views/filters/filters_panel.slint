@@ -49,8 +49,8 @@ export component FiltersPanel inherits Rectangle {
             max-width: 280px;
             horizontal-stretch: 0;
             background: #1e1e1e;
-            border-width: 1px;
-            border-color: #373737;
+            // Only the line towards the catalog; see the pager in catalog_view.
+            Rectangle { x: 0; width: 1px; background: #373737; z: 1; }
             ScrollView {
                 viewport-width: self.width;
                 VerticalLayout {
