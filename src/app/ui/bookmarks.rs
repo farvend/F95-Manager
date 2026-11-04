@@ -13,6 +13,8 @@ pub(super) fn update_bookmarks(ui: &MainWindow, state: &SharedState) {
             label: format!("{} {}", bookmark.emoji, bookmark.label).into(),
         })
         .collect::<Vec<_>>();
+    let active = bookmarks.iter().filter(|bookmark| bookmark.active).count();
+    ui.set_active_bookmark_count(i32::try_from(active).expect("bookmark count fits in i32"));
     ui.set_bookmarks(ModelRc::from(Rc::new(VecModel::from(bookmarks))));
 }
 

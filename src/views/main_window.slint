@@ -28,6 +28,9 @@ export component MainWindow inherits Window {
 
     in property <[GameRowData]> game-rows;
     in property <[BookmarkData]> bookmarks;
+    in property <int> active-bookmark-count: 0;
+    /// Window height at which the right panel fits without scrolling.
+    out property <length> filters-fit-height: 0px;
     in-out property <[BookmarkData]> context-game-bookmarks;
     in property <[SuggestionData]> include-tag-suggestions;
     in property <[SuggestionData]> exclude-tag-suggestions;
@@ -106,8 +109,6 @@ export component MainWindow inherits Window {
     callback refresh-game(string);
     callback delete-game(string);
     callback open-settings();
-    callback open-about();
-    callback open-logs();
     callback suggestion-query(string, int);
     callback filter-chosen(string, int);
     callback remove-filter(string, int);
@@ -183,7 +184,7 @@ export component MainWindow inherits Window {
             }
         }
 
-        FiltersPanel {
+        filters := FiltersPanel {
             bookmarks: root.bookmarks;
             include-tag-suggestions: root.include-tag-suggestions;
             exclude-tag-suggestions: root.exclude-tag-suggestions;
@@ -207,13 +208,14 @@ export component MainWindow inherits Window {
             search-mode <=> root.search-mode;
             unplayed-only <=> root.unplayed-only;
             classic-library: root.classic-library;
+            active-bookmarks: root.active-bookmark-count;
+            init => { root.filters-fit-height = self.content-height; }
+            changed content-height => { root.filters-fit-height = self.content-height; }
             refresh-catalog(query) => { root.refresh-catalog(query); }
             toggle-library => { root.toggle-library(); }
             select-view(view) => { root.select-view(view); }
             toggle-bookmark(id) => { root.toggle-bookmark(id); }
             open-settings => { root.open-settings(); }
-            open-about => { root.open-about(); }
-            open-logs => { root.open-logs(); }
             suggestion-query(query, kind) => { root.suggestion-query(query, kind); }
             filter-chosen(id, kind) => { root.filter-chosen(id, kind); }
             remove-filter(id, kind) => { root.remove-filter(id, kind); }

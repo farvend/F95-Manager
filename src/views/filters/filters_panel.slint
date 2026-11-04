@@ -1,5 +1,5 @@
-import { LineEdit, ScrollView } from "std-widgets.slint";
-import { BookmarkData, SuggestionData, Theme, Translations, FlatButton } from "../shared.slint";
+import { ScrollView } from "std-widgets.slint";
+import { Accent, AppLineEdit, BookmarkData, SuggestionData, Theme, Translations, FlatButton } from "../shared.slint";
 import { SectionTitle, SuggestInput, SelectedFilters, DateStepSlider } from "components.slint";
 
 export component FiltersPanel inherits Rectangle {
@@ -26,15 +26,18 @@ export component FiltersPanel inherits Rectangle {
     in-out property <int> search-mode: 0;
     in-out property <bool> unplayed-only: false;
     in property <bool> classic-library: false;
+    /// How many bookmark filters are on; shown while the list is folded.
+    in property <int> active-bookmarks: 0;
     private property <bool> search-dirty: false;
+    private property <bool> bookmarks-open: false;
+    /// Height the panel needs to show everything without scrolling.
+    out property <length> content-height: content.preferred-height;
     private property <bool> filters-enabled: !root.session-mode;
     callback refresh-catalog(string);
     callback toggle-library();
     callback select-view(int);
     callback toggle-bookmark(string);
     callback open-settings();
-    callback open-about();
-    callback open-logs();
     callback suggestion-query(string, int);
     callback filter-chosen(string, int);
     callback remove-filter(string, int);
@@ -53,7 +56,7 @@ export component FiltersPanel inherits Rectangle {
             Rectangle { x: 0; width: 1px; background: #373737; z: 1; }
             ScrollView {
                 viewport-width: self.width;
-                VerticalLayout {
+                content := VerticalLayout {
                     padding: 11px * Theme.scale;
                     spacing: 6px * Theme.scale;
                     Text { height: 27px * Theme.scale; text: Translations.filters-title; color: #dddddd; font-size: 20px * Theme.scale; }
@@ -76,7 +79,7 @@ export component FiltersPanel inherits Rectangle {
                         clicked => { if (root.filters-enabled) { root.search-mode = root.search-mode == 0 ? 1 : 0; root.mode-chosen(1, root.search-mode); } }
                         SectionTitle { enabled: root.filters-enabled; left: Translations.filters-search; right: root.search-mode == 0 ? Translations.search-title : Translations.search-creator; }
                     }
-                    LineEdit {
+                    AppLineEdit {
                         height: 31px * Theme.scale;
                         enabled: root.filters-enabled;
                         text <=> root.search-text;
@@ -142,25 +145,74 @@ export component FiltersPanel inherits Rectangle {
                     }
                     SelectedFilters { enabled: root.filters-enabled; values: root.selected-exclude-prefixes; kind: 3; remove(id, kind) => { root.remove-filter(id, kind); } }
                     Rectangle { height: 1px; background: #383838; }
-                    Text { height: 18px * Theme.scale; text: Translations.filters-bookmarks; color: root.filters-enabled ? #777777 : #555555; font-size: 13px * Theme.scale; }
-                    for bookmark in root.bookmarks: FlatButton {
-                        enabled: root.filters-enabled;
-                        text: bookmark.label;
-                        active: bookmark.active;
-                        clicked => { root.toggle-bookmark(bookmark.id); }
+                    // Bookmarks fold away so the panel stays short; the header
+                    // keeps the number of active bookmark filters visible.
+                    // The library's "not played" filter shares this row: both
+                    // narrow down downloaded games, and the row is always
+                    // there, so switching views moves nothing below it.
+                    HorizontalLayout {
+                        height: 22px * Theme.scale;
+                        spacing: 6px * Theme.scale;
+                        bookmarks-header := TouchArea {
+                            enabled: root.filters-enabled;
+                            horizontal-stretch: 1;
+                            mouse-cursor: self.enabled ? pointer : default;
+                            clicked => { root.bookmarks-open = !root.bookmarks-open; }
+                            HorizontalLayout {
+                                spacing: 6px * Theme.scale;
+                                Path {
+                                    width: 8px * Theme.scale;
+                                    height: 8px * Theme.scale;
+                                    y: (parent.height - self.height) / 2;
+                                    viewbox-width: 8;
+                                    viewbox-height: 8;
+                                    fill: root.filters-enabled ? #9a9a9a : #555555;
+                                    commands: root.bookmarks-open ? "M 0 1 L 8 1 L 4 7 Z" : "M 1 0 L 7 4 L 1 8 Z";
+                                }
+                                Text {
+                                    text: root.active-bookmarks > 0
+                                        ? Translations.filters-bookmarks + " (" + root.active-bookmarks + ")"
+                                        : Translations.filters-bookmarks;
+                                    color: !root.filters-enabled ? #555555 : bookmarks-header.has-hover ? #bbbbbb : #888888;
+                                    font-size: 13px * Theme.scale;
+                                    vertical-alignment: center;
+                                    overflow: elide;
+                                }
+                            }
+                        }
+                        if root.library-mode && !root.session-mode: Rectangle {
+                            width: unplayed-text.preferred-width + 18px * Theme.scale;
+                            border-radius: self.height / 2;
+                            border-width: 1px;
+                            border-color: root.unplayed-only ? Accent.base : unplayed-touch.has-hover ? #5a5a5a : #444444;
+                            background: root.unplayed-only ? #3a2224 : unplayed-touch.has-hover ? #2c2c2c : transparent;
+                            unplayed-text := Text {
+                                text: Translations.filters-unplayed;
+                                font-size: 12px * Theme.scale;
+                                color: root.unplayed-only ? #f0b8bc : #a6a6a6;
+                                horizontal-alignment: center; vertical-alignment: center;
+                            }
+                            unplayed-touch := TouchArea { mouse-cursor: pointer; clicked => { root.toggle-unplayed(); } }
+                        }
+                    }
+                    if root.bookmarks-open: VerticalLayout {
+                        spacing: 6px * Theme.scale;
+                        for bookmark in root.bookmarks: FlatButton {
+                            enabled: root.filters-enabled;
+                            text: bookmark.label;
+                            active: bookmark.active;
+                            clicked => { root.toggle-bookmark(bookmark.id); }
+                        }
                     }
                     Rectangle { height: 8px; }
-                    if root.library-mode && !root.session-mode: FlatButton { text: Translations.filters-unplayed; active: root.unplayed-only; clicked => { root.toggle-unplayed(); } }
                     if root.classic-library: FlatButton { text: Translations.filters-downloaded; active: root.library-mode && !root.session-mode; clicked => { root.select-view(root.library-mode && !root.session-mode ? 0 : 1); } }
                     if !root.classic-library: HorizontalLayout {
-                        height: 31px * Theme.scale; spacing: 3px;
+                        height: 31px * Theme.scale; spacing: 6px * Theme.scale;
                         FlatButton { horizontal-stretch: 1; text: Translations.view-catalog; active: !root.library-mode; clicked => { root.select-view(0); } }
                         FlatButton { horizontal-stretch: 1; text: Translations.view-downloaded; active: root.library-mode && !root.session-mode; clicked => { root.select-view(1); } }
                     }
                     FlatButton { text: Translations.view-session; active: root.session-mode; clicked => { root.select-view(root.session-mode ? 0 : 2); } }
                     FlatButton { text: Translations.common-settings; clicked => { root.open-settings(); } }
-                    FlatButton { text: Translations.common-about; clicked => { root.open-about(); } }
-                    FlatButton { text: Translations.common-logs; clicked => { root.open-logs(); } }
                     Rectangle { vertical-stretch: 1; }
         }
 }

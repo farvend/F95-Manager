@@ -103,7 +103,10 @@ pub fn run() -> Result<(), slint::PlatformError> {
     let about_window = Rc::new(AboutWindow::new()?);
     let errors_window = Rc::new(ErrorsWindow::new()?);
     let bookmarks_window = Rc::new(BookmarksWindow::new()?);
-    about_window.set_version(env!("CARGO_PKG_VERSION").into());
+    about_window.set_repository_url(env!("CARGO_PKG_REPOSITORY").into());
+    about_window.on_open_repository(|| {
+        crate::app::settings::open_in_browser(env!("CARGO_PKG_REPOSITORY"));
+    });
     update_all_translations(
         &ui,
         &settings_window,
@@ -146,5 +149,30 @@ pub fn run() -> Result<(), slint::PlatformError> {
     } else {
         ui.set_loading(false);
     }
+    ui.show()?;
+    fit_height_to_filters(&ui);
     ui.run()
+}
+
+/// Start tall enough for the whole right panel to fit without scrolling, but
+/// no taller than half the screen. Runs once the window has a monitor.
+fn fit_height_to_filters(ui: &MainWindow) {
+    let window = ui.window();
+    let scale = window.scale_factor();
+    let wanted = ui.get_filters_fit_height();
+    let Some(monitor_height) = window.with_winit_window(|native| {
+        native
+            .current_monitor()
+            .map(|monitor| monitor.size().height as f32 / scale)
+    }) else {
+        log::warn!("main window has no native window yet; keeping its default height");
+        return;
+    };
+    let Some(monitor_height) = monitor_height else {
+        log::warn!("main window is on no monitor; keeping its default height");
+        return;
+    };
+    let height = wanted.min(monitor_height / 2.0);
+    let width = window.size().to_logical(scale).width;
+    window.set_size(slint::LogicalSize::new(width, height));
 }
