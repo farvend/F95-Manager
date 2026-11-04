@@ -74,18 +74,21 @@ pub fn configured_cookies() -> Option<String> {
 /// earlier challenge must not travel with it. Other cookies the browser did
 /// not report are kept, so passing Cloudflare cannot drop a valid `xf_user`.
 pub fn update_cookies_from_browser(cookies: &str, user_agent: &str) {
-    let mut merged: Vec<(String, String)> = configured_cookies()
-        .unwrap_or_default()
-        .split(';')
-        .filter_map(|pair| {
-            let (name, value) = pair.trim().split_once('=')?;
-            let name = name.trim();
-            if crate::app::ui::captcha::is_cloudflare_cookie(name) {
-                return None;
-            }
-            Some((name.to_string(), value.trim().to_string()))
-        })
-        .collect();
+    // No stored cookies yet: the browser's set is the whole result.
+    let mut merged: Vec<(String, String)> = match configured_cookies() {
+        Some(stored) => stored
+            .split(';')
+            .filter_map(|pair| {
+                let (name, value) = pair.trim().split_once('=')?;
+                let name = name.trim();
+                if crate::app::ui::captcha::is_cloudflare_cookie(name) {
+                    return None;
+                }
+                Some((name.to_string(), value.trim().to_string()))
+            })
+            .collect(),
+        None => Vec::new(),
+    };
     for pair in cookies.split(';') {
         let Some((name, value)) = pair.trim().split_once('=') else {
             continue;

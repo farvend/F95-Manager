@@ -33,6 +33,9 @@ pub enum GofileLinkError {
     NoFileInFolder,
     InvalidFileUrl(url::ParseError),
     InvalidCookieHeader(reqwest::header::InvalidHeaderValue),
+    /// The website token is bound to the current time window; a system clock
+    /// set before 1970 cannot produce one.
+    ClockBeforeEpoch(std::time::SystemTimeError),
 }
 
 impl fmt::Display for GofileLinkError {
@@ -62,6 +65,9 @@ impl fmt::Display for GofileLinkError {
             }
             GofileLinkError::InvalidCookieHeader(error) => {
                 write!(f, "Gofile token cannot be sent as a cookie: {error}")
+            }
+            GofileLinkError::ClockBeforeEpoch(error) => {
+                write!(f, "system clock is before 1970, Gofile token cannot be built: {error}")
             }
         }
     }
@@ -95,7 +101,7 @@ pub async fn resolve_gofile_file(
     // Gofile validates X-Website-Token by recomputing it from the request's
     // User-Agent and X-BL (language), so both headers must match the hash.
     let user_agent = crate::net::user_agent();
-    let website_token = website_token(token, &user_agent, WEBSITE_LANGUAGE, SystemTime::now());
+    let website_token = website_token(token, &user_agent, WEBSITE_LANGUAGE, SystemTime::now())?;
     let url = format!(
         "https://api.gofile.io/contents/{id}?contentFilter=&page=1&pageSize=1000&sortField=name&sortDirection=1"
     );
@@ -158,13 +164,20 @@ async fn account_token() -> Result<&'static str, GofileLinkError> {
 
 /// Token Gofile's web client (`wt.obf.js`) computes for every API request:
 /// `sha256("{userAgent}::{language}::{accountToken}::{4h window}::{salt}")`.
-fn website_token(account_token: &str, user_agent: &str, language: &str, now: SystemTime) -> String {
-    let time_bucket =
-        now.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() / WEBSITE_TOKEN_PERIOD_SECS;
+fn website_token(
+    account_token: &str,
+    user_agent: &str,
+    language: &str,
+    now: SystemTime,
+) -> Result<String, GofileLinkError> {
+    let since_epoch = now
+        .duration_since(UNIX_EPOCH)
+        .map_err(GofileLinkError::ClockBeforeEpoch)?;
+    let time_bucket = since_epoch.as_secs() / WEBSITE_TOKEN_PERIOD_SECS;
     let input = format!(
         "{user_agent}::{language}::{account_token}::{time_bucket}::{WEBSITE_TOKEN_SECRET}"
     );
-    format!("{:x}", Sha256::digest(input.as_bytes()))
+    Ok(format!("{:x}", Sha256::digest(input.as_bytes())))
 }
 
 #[derive(serde::Deserialize)]
@@ -275,7 +288,8 @@ mod tests {
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:68.0) Gecko/20100101 Firefox/68.0",
                 "en-US",
                 now
-            ),
+            )
+            .expect("time after the epoch"),
             "3fc045ad7661b1b730f27572d4f5a7cb43465bf255e581ba66a407dbe5947976"
         );
     }

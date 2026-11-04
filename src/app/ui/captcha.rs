@@ -441,20 +441,35 @@ fn poll_session(id: u64, attempts: u32) {
 
 fn on_page_state(id: u64, value: &str) {
     log::debug!("check window: page state {value}");
-    // The callback gets the script's result as JSON, i.e. a JSON string.
-    let state = serde_json::from_str::<String>(value)
-        .ok()
-        .and_then(|inner| serde_json::from_str::<(Option<String>, String)>(&inner).ok());
-    // Anything else is still Cloudflare's page or a document being replaced.
-    if let Some((Some(logged_in), user_agent)) = state {
-        // This runs inside WebView2's script completion handler. Reading the
-        // cookie store waits for another WebView2 callback, which WebView2
-        // never delivers while a handler is running, so leave it first.
-        slint::Timer::single_shot(Duration::ZERO, move || {
-            let outcome = harvest_session(id, logged_in == "true", user_agent);
-            finish(id, outcome.map(ReplyValue::Session));
-        });
+    // WebView2 hands back an empty string when the script ran into a page
+    // that was being replaced (Cloudflare reloads right after its check);
+    // the next poll asks again.
+    if value.is_empty() {
+        return;
     }
+    // The result arrives as JSON, i.e. a JSON string holding the script's
+    // own JSON.
+    let state = serde_json::from_str::<String>(value).and_then(|inner| {
+        serde_json::from_str::<(Option<String>, String)>(&inner)
+    });
+    let (logged_in, user_agent) = match state {
+        Ok(state) => state,
+        Err(error) => {
+            log::warn!("check window: unexpected page state {value:?}: {error}");
+            return;
+        }
+    };
+    // No `data-logged-in`: still Cloudflare's page.
+    let Some(logged_in) = logged_in else {
+        return;
+    };
+    // This runs inside WebView2's script completion handler. Reading the
+    // cookie store waits for another WebView2 callback, which WebView2 never
+    // delivers while a handler is running, so leave it first.
+    slint::Timer::single_shot(Duration::ZERO, move || {
+        let outcome = harvest_session(id, logged_in == "true", user_agent);
+        finish(id, outcome.map(ReplyValue::Session));
+    });
 }
 
 /// Keep the browser on F95. The final redirect to the hosting is blocked on
