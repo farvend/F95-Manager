@@ -36,3 +36,43 @@ export component DownloadCircle inherits Rectangle {
         Close {}
     }
 }
+
+/// "Looking for the download link": a thin ring with a short arc running
+/// around it, visibly different from the filled download sector.
+export component ResolvingRing inherits Rectangle {
+    border-radius: self.width / 2;
+    background: #00000078;
+
+    Rectangle {
+        width: 80%;
+        height: 80%;
+        border-radius: self.width / 2;
+        border-width: 1px;
+        border-color: #6a6a6a;
+    }
+    Path {
+        private property <float> start: mod(animation-tick(), 1100ms) / 1100ms;
+        private property <float> amount: 0.28;
+        private property <float> radius: 40;
+
+        width: 100%;
+        height: 100%;
+        viewbox-width: 100;
+        viewbox-height: 100;
+        stroke: #d65761;
+        stroke-width: 2.5px;
+
+        MoveTo {
+            x: 50 - parent.radius * sin(-parent.start * 360deg);
+            y: 50 - parent.radius * cos(-parent.start * 360deg);
+        }
+        ArcTo {
+            radius-x: parent.radius;
+            radius-y: parent.radius;
+            x: 50 - parent.radius * sin(-(parent.start + parent.amount) * 360deg);
+            y: 50 - parent.radius * cos(-(parent.start + parent.amount) * 360deg);
+            sweep: true;
+            large-arc: false;
+        }
+    }
+}

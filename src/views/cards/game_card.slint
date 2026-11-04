@@ -1,5 +1,5 @@
 import { DownloadDisplayMode, DownloadVisualState, GameCardData, TagRowData, Theme } from "../shared.slint";
-import { DownloadCircle } from "download_progress.slint";
+import { DownloadCircle, ResolvingRing } from "download_progress.slint";
 
 export component GameCard inherits Rectangle {
     in property <GameCardData> game;
@@ -192,6 +192,36 @@ export component GameCard inherits Rectangle {
                     wrap: word-wrap;
                 }
             }
+            // Looking for the link: a short segment sliding along the bottom.
+            if root.game.download-state == DownloadVisualState.resolving
+                && root.game.download-display-mode == DownloadDisplayMode.bottom-bar: Rectangle {
+                private property <float> phase: mod(animation-tick(), 1400ms) / 1400ms;
+                y: parent.height - self.height;
+                width: parent.width * 0.25;
+                x: (parent.width - self.width) * (0.5 - 0.5 * cos(self.phase * 360deg));
+                height: 2px * root.card-factor;
+                background: #d65761;
+                z: 30;
+            }
+            if root.game.download-state == DownloadVisualState.resolving
+                && root.game.download-display-mode == DownloadDisplayMode.circle-bottom-right: ResolvingRing {
+                x: parent.width - self.width - 8px * root.card-factor;
+                y: parent.height - self.height - 8px * root.card-factor;
+                width: 20px * root.card-factor;
+                height: 20px * root.card-factor;
+                z: 30;
+                resolving-touch := TouchArea {
+                    changed has-hover => {
+                        if (self.has-hover) {
+                            root.hovered-badge = -4;
+                            root.badge-tooltip = root.game.download-detail;
+                        } else if (root.hovered-badge == -4) {
+                            root.hovered-badge = -1;
+                            root.badge-tooltip = "";
+                        }
+                    }
+                }
+            }
             if root.game.download-state == DownloadVisualState.indeterminate
                 && root.game.download-display-mode == DownloadDisplayMode.bottom-bar: Rectangle {
                 y: parent.height - self.height;
@@ -234,7 +264,7 @@ export component GameCard inherits Rectangle {
                     changed has-hover => {
                         if (self.has-hover) {
                             root.hovered-badge = -3;
-                            root.badge-tooltip = root.game.download-error;
+                            root.badge-tooltip = root.game.download-detail;
                         } else if (root.hovered-badge == -3) {
                             root.hovered-badge = -1;
                             root.badge-tooltip = "";

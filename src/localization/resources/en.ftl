@@ -224,3 +224,6 @@ captcha-hint = Complete the check to download from { $host }. The download conti
 captcha-cancel = Cancel
 
 captcha-session-hint = Pass the Cloudflare check on this page. Once the game opens, the download continues on its own.
+
+download-resolving = Looking for the download link…
+download-resolving-host = Getting the link from { $host }…

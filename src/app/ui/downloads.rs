@@ -1,16 +1,34 @@
 use super::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-fn download_visual(progress: Option<&Progress>) -> (DownloadVisualState, f32, String) {
-    match progress {
-        Some(Progress::Pending(value)) => (
+/// Card state, progress and hover text for a game's download.
+fn download_visual(phase: Option<&DownloadPhase>) -> (DownloadVisualState, f32, String) {
+    match phase {
+        Some(DownloadPhase::Resolving { host }) => (
+            DownloadVisualState::Resolving,
+            0.0,
+            match host {
+                Some(host) => crate::localization::translate_with(
+                    "download-resolving-host",
+                    &[("host", host.clone())],
+                ),
+                None => crate::localization::translate("download-resolving"),
+            },
+        ),
+        Some(DownloadPhase::Transfer(Progress::Pending(value))) => (
             DownloadVisualState::Determinate,
             value.clamp(0.0, 1.0),
             String::new(),
         ),
-        Some(Progress::Error(error)) => (DownloadVisualState::Error, 0.0, error.clone()),
-        Some(Progress::Unknown) => (DownloadVisualState::Indeterminate, 0.0, String::new()),
-        Some(Progress::Paused) => (DownloadVisualState::Paused, 0.0, String::new()),
+        Some(DownloadPhase::Transfer(Progress::Error(error))) => {
+            (DownloadVisualState::Error, 0.0, error.clone())
+        }
+        Some(DownloadPhase::Transfer(Progress::Unknown)) => {
+            (DownloadVisualState::Indeterminate, 0.0, String::new())
+        }
+        Some(DownloadPhase::Transfer(Progress::Paused)) => {
+            (DownloadVisualState::Paused, 0.0, String::new())
+        }
         None => (DownloadVisualState::Idle, 0.0, String::new()),
     }
 }
@@ -54,17 +72,22 @@ pub(super) fn watch_download(
             {
                 let Ok(mut state) = state.lock() else { return };
                 match status {
+                    GameDownloadStatus::Resolving { host } => {
+                        if let Some(job) = state.downloads.get_mut(&id) {
+                            job.phase = DownloadPhase::Resolving { host };
+                        }
+                    }
                     GameDownloadStatus::Downloading(progress) => {
                         if let Progress::Error(error) = &progress {
                             reported_error = Some(format!("Download error (thread {id}): {error}"));
                         }
                         if let Some(job) = state.downloads.get_mut(&id) {
-                            job.progress = match progress {
+                            job.phase = DownloadPhase::Transfer(match progress {
                                 Progress::Pending(value) => {
                                     Progress::Pending(value.clamp(0.0, 1.0) * 0.75)
                                 }
                                 other => other,
-                            };
+                            });
                         }
                     }
                     GameDownloadStatus::Unzipping(progress) => {
@@ -72,22 +95,22 @@ pub(super) fn watch_download(
                             reported_error = Some(format!("Unzip error (thread {id}): {error}"));
                         }
                         if let Some(job) = state.downloads.get_mut(&id) {
-                            job.progress = match progress {
+                            job.phase = DownloadPhase::Transfer(match progress {
                                 Progress::Pending(value) => {
                                     Progress::Pending(0.75 + value.clamp(0.0, 1.0) * 0.25)
                                 }
                                 other => other,
-                            };
+                            });
                         }
                     }
                     GameDownloadStatus::SelectLinks(links) => {
                         if links.is_empty() {
                             if let Some(job) = state.downloads.get_mut(&id) {
-                                job.progress =
-                                    Progress::Error("Download links not found".to_string());
+                                job.phase = DownloadPhase::Transfer(Progress::Error(
+                                    "Download links not found".to_string(),
+                                ));
                             }
                         } else if let Some(job) = state.downloads.get_mut(&id) {
-                            job.progress = Progress::Unknown;
                             job.link_choices = links;
                         }
                     }
@@ -166,11 +189,11 @@ pub(super) fn update_card_download(ui: &MainWindow, state: &SharedState, id: u64
     let Some(mut card) = row.cards.row_data(index % columns) else {
         return;
     };
-    let (download_state, download_progress, download_error) =
-        download_visual(state.downloads.get(&id).map(|job| &job.progress));
+    let (download_state, download_progress, download_detail) =
+        download_visual(state.downloads.get(&id).map(|job| &job.phase));
     card.download_state = download_state;
     card.download_progress = download_progress;
-    card.download_error = download_error.into();
+    card.download_detail = download_detail.into();
     if let Some(record) = state.cards.get(index) {
         card.installed = record.installed;
     }
@@ -178,5 +201,5 @@ pub(super) fn update_card_download(ui: &MainWindow, state: &SharedState, id: u64
 }
 
 pub(super) fn card_download_visual(state: &UiState, id: u64) -> (DownloadVisualState, f32, String) {
-    download_visual(state.downloads.get(&id).map(|job| &job.progress))
+    download_visual(state.downloads.get(&id).map(|job| &job.phase))
 }

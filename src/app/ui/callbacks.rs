@@ -296,7 +296,7 @@ pub(super) fn wire_callbacks(
                     state
                         .downloads
                         .get(&id)
-                        .is_none_or(|job| matches!(job.progress, Progress::Error(_)))
+                        .is_none_or(|job| job.phase.is_failed())
                 });
                 if should_start {
                     if let Some(card) = callback_state
@@ -313,7 +313,7 @@ pub(super) fn wire_callbacks(
                         state.downloads.insert(
                             id,
                             DownloadJob {
-                                progress: Progress::Unknown,
+                                phase: DownloadPhase::Resolving { host: None },
                                 link_choices: Vec::new(),
                             },
                         );
@@ -341,7 +341,9 @@ pub(super) fn wire_callbacks(
             }
             let link = job.link_choices[index].clone();
             job.link_choices.clear();
-            job.progress = Progress::Unknown;
+            job.phase = DownloadPhase::Resolving {
+                host: Some(link.host_label()),
+            };
             Some(link)
         });
         if let Some(link) = link {

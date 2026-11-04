@@ -13,7 +13,7 @@ export struct CardBadgeData {
 }
 
 export enum DownloadDisplayMode { bottom-bar, circle-bottom-right }
-export enum DownloadVisualState { idle, indeterminate, determinate, error, paused }
+export enum DownloadVisualState { idle, resolving, indeterminate, determinate, error, paused }
 
 export struct GameCardData {
     id: string,
@@ -40,7 +40,8 @@ export struct GameCardData {
     download-state: DownloadVisualState,
     download-progress: float,
     download-display-mode: DownloadDisplayMode,
-    download-error: string,
+    /// Hover text: what the download is doing, or why it failed.
+    download-detail: string,
 }
 
 export struct GameRowData {

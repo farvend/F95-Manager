@@ -224,3 +224,6 @@ captcha-hint = Пройдите проверку, чтобы скачать с {
 captcha-cancel = Отмена
 
 captcha-session-hint = Пройдите проверку Cloudflare на странице. Когда игра откроется, загрузка продолжится сама.
+
+download-resolving = Ищу ссылку на скачивание…
+download-resolving-host = Получаю ссылку с { $host }…

@@ -57,8 +57,22 @@ pub(super) struct UiState {
 }
 
 pub(super) struct DownloadJob {
-    pub(super) progress: Progress,
+    pub(super) phase: DownloadPhase,
     pub(super) link_choices: Vec<DownloadLink>,
+}
+
+/// What a card shows while its game is being downloaded.
+pub(super) enum DownloadPhase {
+    /// Looking for the hosting link; `host` is the mirror being tried.
+    Resolving { host: Option<String> },
+    /// Downloading or extracting.
+    Transfer(Progress),
+}
+
+impl DownloadPhase {
+    pub(super) fn is_failed(&self) -> bool {
+        matches!(self, DownloadPhase::Transfer(Progress::Error(_)))
+    }
 }
 
 impl UiState {

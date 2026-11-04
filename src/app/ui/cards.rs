@@ -17,7 +17,7 @@ pub(super) fn rebuild_cards(ui: &MainWindow, state: &SharedState) {
                 .map(|card| {
                     let (warning_count, warning_details, bookmark_badges, unplayed) =
                         card_badges_for_mode(card, &app_settings, state.library_mode);
-                    let (download_state, download_progress, download_error) =
+                    let (download_state, download_progress, download_detail) =
                         card_download_visual(&state, card.id);
                     GameCardData {
                         id: card.id.to_string().into(),
@@ -53,7 +53,7 @@ pub(super) fn rebuild_cards(ui: &MainWindow, state: &SharedState) {
                                 DownloadDisplayMode::CircleBottomRight
                             }
                         },
-                        download_error: download_error.into(),
+                        download_detail: download_detail.into(),
                     }
                 })
                 .collect::<Vec<_>>();

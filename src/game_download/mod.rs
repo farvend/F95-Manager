@@ -15,9 +15,14 @@ pub enum Progress {
     Pending(f32),
     Paused,
     Error(String),
+    /// Running, but the total is not known (e.g. no `Content-Length`).
     Unknown,
 }
 pub enum GameDownloadStatus {
+    /// Looking for the hosting link: thread page, F95's `/dl/` check,
+    /// Cloudflare or captcha windows. `host` names the mirror being tried,
+    /// `None` while the thread page itself is loaded.
+    Resolving { host: Option<String> },
     Downloading(Progress),
     // Signal UI to select a link (no platform parsed)
     SelectLinks(Vec<DownloadLink>),
@@ -138,6 +143,7 @@ pub fn create_download_task(page: F95PageUrl) -> mpsc::Receiver<GameDownloadStat
     let (tx, rx) = mpsc::channel();
 
     rt.spawn(async move {
+        let _ = tx.send(GameDownloadStatus::Resolving { host: None });
         let downloads = match load_download_page(&page).await {
             Ok(downloads) => downloads,
             Err(err) => {
@@ -186,6 +192,9 @@ pub fn create_download_task(page: F95PageUrl) -> mpsc::Receiver<GameDownloadStat
 
         let mut failures = Vec::new();
         for link in links {
+            let _ = tx.send(GameDownloadStatus::Resolving {
+                host: Some(link.host_label()),
+            });
             match start_download(link).await {
                 Ok(mut download_recv) => {
                     while let Some(status) = download_recv.recv().await {
@@ -250,6 +259,9 @@ pub fn create_download_from_link(link: DownloadLink) -> mpsc::Receiver<GameDownl
     let (tx, rx) = mpsc::channel();
 
     rt.spawn(async move {
+        let _ = tx.send(GameDownloadStatus::Resolving {
+            host: Some(link.host_label()),
+        });
         match start_download(&link).await {
             Ok(mut download_recv) => {
                 while let Some(status) = download_recv.recv().await {

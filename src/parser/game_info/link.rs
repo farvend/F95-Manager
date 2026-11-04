@@ -216,7 +216,6 @@ pub enum DownloadError {
     Request(reqwest::Error),
     MissingHeader(&'static str),
     Io(std::io::Error),
-    StartTask,
     InvalidUrl,
     InvalidRedirectUrl,
     JsonParse,
@@ -247,7 +246,6 @@ impl std::fmt::Display for DownloadError {
                 write!(f, "download response is missing the {name} header")
             }
             DownloadError::Io(error) => write!(f, "I/O error: {error}"),
-            DownloadError::StartTask => write!(f, "failed to start the download task"),
             DownloadError::InvalidUrl => write!(f, "invalid download URL"),
             DownloadError::InvalidRedirectUrl => write!(f, "invalid redirect URL"),
             DownloadError::JsonParse => write!(f, "could not parse the hosting response"),
@@ -275,7 +273,6 @@ impl std::error::Error for DownloadError {
             | DownloadError::UnsupportedHosting
             | DownloadError::Captcha
             | DownloadError::MissingHeader(_)
-            | DownloadError::StartTask
             | DownloadError::InvalidUrl
             | DownloadError::InvalidRedirectUrl
             | DownloadError::JsonParse
@@ -399,76 +396,46 @@ impl DownloadLink {
                 };
 
                 // 3) Pick first file node
-                let file_node = match nodes.iter().find(|n| n.kind().is_file()) {
-                    Some(n) => n,
-                    None => {
-                        log::warn!("no file node found in MEGA link");
-                        return Err(DownloadError::MegaNoFileNode);
-                    }
+                let Some(handle) = nodes
+                    .iter()
+                    .find(|n| n.kind().is_file())
+                    .map(|n| n.handle().to_string())
+                else {
+                    log::warn!("no file node found in MEGA link");
+                    return Err(DownloadError::MegaNoFileNode);
                 };
+                let file_node = nodes
+                    .get_node_by_handle(&handle)
+                    .ok_or(DownloadError::MegaNoFileNode)?;
 
                 // 4) Prepare output file path using node name
-                let filename = file_node.name().to_string();
-                let download_dir = {
-                    let s = APP_SETTINGS.read().unwrap();
-                    s.temp_dir.clone()
-                };
+                let download_dir = APP_SETTINGS.read().unwrap().temp_dir.clone();
                 tokio::fs::create_dir_all(&download_dir)
                     .await
                     .map_err(DownloadError::Io)?;
-                let filepath = download_dir.join(filename);
+                let filepath = download_dir.join(file_node.name());
                 let file = tokio::fs::File::create(&filepath)
                     .await
                     .map_err(DownloadError::Io)?;
 
-                // 5) Start MEGA download into writer that updates progress
-                let writer = MegaFileWriter::new(file, sd.clone(), file_node.size());
-                if let Err(e) = mega_client.download_node(file_node, writer).await {
-                    log::error!("mega download_node error: {:?}", e);
-                    return Err(DownloadError::MegaDownload);
-                }
-
-                // 6) Run extraction pipeline (reuse logic like in start_download_task)
-                // Notify that extraction started
-                let _ = sd.send(GameDownloadStatus::Unzipping(Progress::Pending(0.0)));
-
-                let archive_path = filepath.clone();
-                let sd_unzip = sd.clone();
-                let dest_base = {
-                    let s = APP_SETTINGS.read().unwrap();
-                    s.extract_dir.clone()
-                };
-
-                // Run potentially heavy extraction on a blocking thread
-                let path = archive_path.clone();
-                let unzip_res = tokio::task::spawn_blocking(move || {
-                    self::archive::extract_archive(&path, &dest_base, &sd_unzip)
-                })
-                .await;
-
-                match unzip_res {
-                    Ok(Ok((dest_dir, exe_path))) => {
-                        // Delete the original archive after successful extraction
-                        if let Err(e) = std::fs::remove_file(&archive_path) {
-                            log::warn!(
-                                "Failed to delete archive {}: {}",
-                                archive_path.display(),
-                                e
-                            );
-                        }
-                        let _ = sd.send(GameDownloadStatus::Completed { dest_dir, exe_path });
+                // 5) Download and extract in the background, so the UI gets
+                // the receiver (and the progress) right away.
+                let size = file_node.size();
+                let _ = sd.send(GameDownloadStatus::Downloading(Progress::Pending(0.0)));
+                tokio::spawn(async move {
+                    let Some(file_node) = nodes.get_node_by_handle(&handle) else {
+                        return;
+                    };
+                    let writer = MegaFileWriter::new(file, sd.clone(), size);
+                    if let Err(e) = mega_client.download_node(file_node, writer).await {
+                        log::error!("mega download_node error: {:?}", e);
+                        let _ = sd.send(GameDownloadStatus::Downloading(Progress::Error(
+                            DownloadError::MegaDownload.to_string(),
+                        )));
+                        return;
                     }
-                    Ok(Err(msg)) => {
-                        let _ = sd.send(GameDownloadStatus::Unzipping(Progress::Error(msg)));
-                    }
-                    Err(e) => {
-                        let _ = sd.send(GameDownloadStatus::Unzipping(Progress::Error(format!(
-                            "Unzip task join error: {e}"
-                        ))));
-                    }
-                }
-
-                // MEGA path completes here.
+                    download::extract_and_finish(filepath, &sd).await;
+                });
                 return Ok(rc);
             }
         };
@@ -505,9 +472,7 @@ impl DownloadLink {
 
         // Start streaming to disk
         log::info!("downloading from {}", resp.url().as_str());
-        if !download::start_download_task(resp, sd, file, filepath.clone()).await {
-            return Err(DownloadError::StartTask);
-        }
+        download::start_download_task(resp, sd, file, filepath);
 
         Ok(rc)
     }
