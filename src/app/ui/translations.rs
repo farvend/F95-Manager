@@ -150,6 +150,7 @@ pub(super) fn apply_translations(translations: &AppTranslations, version: &str) 
         "about-version",
         &[("version", version.to_string())],
     ));
+    translations.set_update_available(tr("update-available"));
 }
 
 pub(super) fn date_limit_label(index: i32) -> slint::SharedString {

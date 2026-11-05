@@ -189,6 +189,7 @@ delete-game-title = Удалить игру и её файлы?
 delete-game-warning = Это действие нельзя отменить.
 about-window-title = О программе
 about-version = Версия { $version }
+update-available = Доступна новая версия
 settings-folders = Папки
 settings-interface = Интерфейс
 settings-ui-scale = МАСШТАБ ИНТЕРФЕЙСА

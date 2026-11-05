@@ -189,6 +189,7 @@ delete-game-title = Delete the game and its files?
 delete-game-warning = This action cannot be undone.
 about-window-title = About
 about-version = Version { $version }
+update-available = Update available:
 settings-folders = Folders
 settings-interface = Interface
 settings-ui-scale = UI SCALE

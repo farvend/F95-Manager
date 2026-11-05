@@ -1,3 +1,4 @@
+pub mod app_update;
 pub mod config;
 // These subsystems have their own tests but are not wired into the current UI yet.
 #[allow(dead_code)]

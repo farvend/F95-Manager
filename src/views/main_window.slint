@@ -25,6 +25,9 @@ export component MainWindow inherits Window {
     in-out property <string> auth-password;
     in-out property <string> auth-cookies;
     in-out property <int> error-count: 0;
+    /// Newer app version on GitHub, e.g. "2.0.0-beta.4"; empty when none.
+    in property <string> update-version;
+    callback open-update();
 
     in property <[GameRowData]> game-rows;
     in property <[BookmarkData]> bookmarks;
@@ -284,9 +287,35 @@ export component MainWindow inherits Window {
         remove-pending(game-id) => { root.remove-pending(game-id); }
     }
 
+    // Bottom-right corner of the catalog (of the window on the login screen):
+    // the update notice first, the errors button stacked above it.
+    private property <length> corner-right: root.authenticated
+        ? root.catalog-x-value + root.catalog-width-value - 12px * Theme.scale
+        : root.width - 12px * Theme.scale;
+    private property <length> corner-bottom: root.authenticated
+        ? root.catalog-y-value + root.catalog-height-value - 12px * Theme.scale
+        : root.height - 12px * Theme.scale;
+
+    update-badge := Rectangle {
+        visible: root.update-version != "";
+        x: root.corner-right - self.width;
+        y: root.corner-bottom - self.height;
+        width: update-text.preferred-width + 22px * Theme.scale;
+        height: root.update-version != "" ? 32px * Theme.scale : 0px;
+        background: update-touch.has-hover ? #d65761 : #c8404a;
+        border-radius: 5px * Theme.scale;
+        z: 200;
+        update-text := Text {
+            text: Translations.update-available + " " + root.update-version;
+            color: white; font-size: 13px * Theme.scale;
+            horizontal-alignment: center; vertical-alignment: center;
+        }
+        update-touch := TouchArea { mouse-cursor: pointer; clicked => { root.open-update(); } }
+    }
+
     if root.authenticated && root.error-count > 0: Rectangle {
-        x: root.catalog-x-value + root.catalog-width-value - self.width - 12px * Theme.scale;
-        y: root.catalog-y-value + root.catalog-height-value - self.height - 12px * Theme.scale;
+        x: root.corner-right - self.width;
+        y: root.corner-bottom - update-badge.height - (root.update-version != "" ? 8px * Theme.scale : 0px) - self.height;
         width: error-text.preferred-width + 18px * Theme.scale;
         height: 32px * Theme.scale;
         background: #a03c3c;

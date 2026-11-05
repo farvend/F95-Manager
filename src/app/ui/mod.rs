@@ -149,9 +149,35 @@ pub fn run() -> Result<(), slint::PlatformError> {
     } else {
         ui.set_loading(false);
     }
+    check_for_app_update(&ui);
     ui.show()?;
     fit_height_to_filters(&ui);
     ui.run()
+}
+
+/// Ask GitHub once per launch whether a newer version is out and, if so, show
+/// the notice in the corner; clicking it opens that release's page.
+fn check_for_app_update(ui: &MainWindow) {
+    let weak = ui.as_weak();
+    crate::app::rt().spawn(async move {
+        let update = match crate::app::app_update::check().await {
+            Ok(Some(update)) => update,
+            Ok(None) => return,
+            Err(error) => {
+                log::warn!("update check failed: {error}");
+                return;
+            }
+        };
+        log::info!("update available: {} ({})", update.version, update.url);
+        let shown = weak.upgrade_in_event_loop(move |ui| {
+            ui.set_update_version(update.version.to_string().into());
+            let url = update.url;
+            ui.on_open_update(move || crate::app::settings::open_in_browser(&url));
+        });
+        if let Err(error) = shown {
+            log::warn!("cannot show the update notice: {error}");
+        }
+    });
 }
 
 /// Start tall enough for the whole right panel to fit without scrolling, but

@@ -11,6 +11,7 @@ derive_more = {version = "2.0.1", features = ["full"]}
 slint = { version = "1.17.1", default-features = false, features = ["std", "backend-winit", "renderer-software", "renderer-femtovg", "compat-1-2", "unstable-winit-030"] }
 reqwest = { version = "0.12.23", features = ["json", "rustls-tls", "stream", "cookies"] }
 serde = { version = "1.0.219", features = ["derive"] }
+semver = "1.0.28"
 strum = {version = "0.27.2", features = ["derive"]}
 tokio = { version = "1", features = ["rt-multi-thread", "fs", "io-util", "full"] }
 image = { version = "0.25.5", features = ["png", "jpeg", "webp", "gif"] }
